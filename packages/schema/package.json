@@ -1,0 +1,21 @@
+{
+  "name": "@h2f/schema",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "description": "CaptureDocument v1: the only contract between the extension and the Figma plugin (types, JSON Schema, CSP-safe validators)",
+  "exports": {
+    ".": "./src/index.ts",
+    "./capture.schema.json": "./capture.schema.json"
+  },
+  "scripts": {
+    "generate": "node scripts/generate.ts",
+    "check": "node scripts/generate.ts --check",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@sinclair/typebox": "0.34.52",
+    "ajv": "8.20.0"
+  }
+}

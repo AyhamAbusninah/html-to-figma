@@ -13,11 +13,12 @@ ID prefixes: `SCH` schema · `EXT` extension · `PLG` plugin · `NFR` non-functi
 
 | ID | Requirement |
 |---|---|
-| SYS-1 | The codebase MUST be a TypeScript monorepo with three packages: `packages/schema` (types, JSON Schema, validator, version constant), `packages/extension` (Chrome MV3), `packages/figma-plugin`. **[OQ-14]** |
+| SYS-1 | The codebase MUST be a TypeScript pnpm monorepo built with **Vite** **[OQ-14]**, with four packages: `packages/schema` (CaptureDocument contract: TypeBox source → JSON Schema, standalone validators, types), `packages/core` (conversion engine: pure `RawPageSnapshot → CaptureDocument`, no DOM lib), `packages/extension` (Chrome MV3: collector + UX), `packages/figma-plugin` (UI + main thread). Toolchain versions are pinned in `pnpm-lock.yaml` and installs MUST use `--frozen-lockfile`. |
+| SYS-1a | **CaptureDocument is the only cross-component contract.** `RawPageSnapshot` (extension → engine) and plugin-internal render plans are internal and unversioned. Conversion runs in the extension, so the plugin stays a thin renderer (plan §3). |
 | SYS-2 | Both components MUST import capture types from `packages/schema` only. Neither may define its own copy of the schema types. |
 | SYS-3 | The only interface between the components is the capture JSON (§2). Neither component may depend on the other at runtime. |
 | SYS-4 | `fixtures/` MUST contain static HTML test pages and their golden JSON captures (see §6). |
-| SYS-5 | **Universal engine [SC-1]:** code in `packages/extension` and `packages/figma-plugin` MUST NOT reference site-, framework-, or CSS-library-specific class names, IDs, selectors, attribute names, URL/path patterns, or JS globals. Every behavior MUST be derived from standard web APIs (DOM/flat-tree traversal, `getComputedStyle`, `getBoundingClientRect`, Range geometry, Fetch, Canvas) and expressed as rules over computed style and geometry. Values that are inherently names (icon-font family names in EXT-X-9, font alias and fallback tables in PLG-F-*) MUST live in one named, documented, configurable constants module, never inline in logic. |
+| SYS-5 | **Universal engine [SC-1]:** code in `packages/core`, `packages/extension` and `packages/figma-plugin` MUST NOT reference site-, framework-, or CSS-library-specific class names, IDs, selectors, attribute names, URL/path patterns, or JS globals. Every behavior MUST be derived from standard web APIs (DOM/flat-tree traversal, `getComputedStyle`, `getBoundingClientRect`, Range geometry, Fetch, Canvas) and expressed as rules over computed style and geometry. Values that are inherently names (icon-font family names in EXT-X-9, font alias and fallback tables in PLG-F-*) MUST live in one named, documented, configurable constants module, never inline in logic. |
 | SYS-6 | CI MUST run `scripts/check-universal.mjs`, which fails the build if engine sources (`packages/extension/src`, `packages/figma-plugin/src`) contain benchmark-specific tokens (initially: `frappe`, `erpnext`, `\bdesk\b`, `awesomplete`) outside the constants module, or contain any `querySelector*`/`closest`/`matches` call whose selector is a class or ID literal. Exceptions require an inline `// h2f-universal-exempt: <reason>` comment and code review. |
 | SYS-7 | Benchmark-specific material (Frappe bench Docker setup, login scripts, page URLs, expected node counts) MUST live only under `fixtures/` and test specs. |
 
@@ -37,7 +38,8 @@ ID prefixes: `SCH` schema · `EXT` extension · `PLG` plugin · `NFR` non-functi
 | SCH-6 | Base64 strings MUST NOT include a `data:` URI prefix. The MIME type goes in a separate `mime` field. |
 | SCH-7 | Children arrays MUST be in **paint order**, back to front (index 0 is painted first and sits bottom-most in Figma). |
 | SCH-8 | The plugin MUST accept any `1.x.y` version and reject any other major version (E-8). Adding fields is a minor version bump. Removing or changing fields is a major bump. |
-| SCH-9 | A JSON Schema file (`capture.schema.json`) MUST be generated from or kept in sync with the TS types, and used for validation in both CI and the plugin. |
+| SCH-9 | A JSON Schema file (`capture.schema.json`) MUST be generated from or kept in sync with the TS types, and used for validation in both CI and the plugin. `pnpm schema:check` fails CI on any drift between `src/schema.ts` and the committed generated files. |
+| SCH-10 | **Frozen baselines.** Each released schema version is frozen at `packages/schema/contract/capture-<version>.schema.json` and never edited. Compatibility tests MUST show that every sample document valid under each frozen 1.x baseline stays valid under the current schema and `validateCapture` (SCH-8: additive changes only within a major). |
 
 ### 2.2 Shape (normative TypeScript)
 
@@ -439,6 +441,9 @@ This lists generic web patterns, the generic requirement that handles each, and 
 | TST-4 | **Renderer tests:** the main-thread render logic MUST be written against a thin `FigmaAdapter` interface so it can be unit-tested with a mock that records created nodes and properties. |
 | TST-5 | **Fidelity self-check (dev mode):** after rendering, the plugin compares every created node's `absoluteBoundingBox` to its source `rect` and reports the % within ±2 px (this is metric O2). |
 | TST-6 | **Benchmarks [OQ-13, SC-1]:** before each release, fidelity (TST-5) and visual notes are recorded in `docs/benchmarks.md` for two equally weighted sets. **(A) Universal set:** the generic fixtures `landing-page`, `spa`, `dashboard`, `ecommerce`, `rtl-arabic`, plus **3–5 real public websites** chosen per release (a marketing site, an SPA, an e-commerce page, an RTL news or e-commerce site). These are captured manually because live sites change. **(B) Frappe stress test:** Desk Workspace, List View, Form View, POS (scroll expansion on), and Custom Web Page, each in English (LTR) and Arabic (RTL), giving 10 captures. A fix that improves (B) MUST NOT regress (A). |
+| TST-7 | **Verification levels (mandatory labelling).** Every test file and every verification report MUST state its level: **UNIT** (Node, pure logic) · **BROWSER INTEGRATION** (real Chromium, Playwright) · **FIGMA MOCK** (strict mock of the Plugin API: proves API usage, not rendering) · **REAL FIGMA** (Figma desktop on macOS/Windows, or browser Figma running a privately published build). A Figma-side feature MUST NOT be reported as validated until it passes at REAL FIGMA level. |
+| TST-8 | **Phase gates.** Each implementation phase ends with explicit acceptance criteria, automated tests, and a verification report in `docs/verification/<phase>.md` (results, levels, evidence, open risks). The next phase starts only after review. |
+| TST-9 | **Regression coverage for fidelity.** Every conversion change MUST add or update a measurable check against `fixtures/` pages or golden captures (`fixtures/golden/`, introduced in R2). |
 
 ---
 

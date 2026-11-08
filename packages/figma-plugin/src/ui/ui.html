@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>HTML to Figma</title>
+    <link rel="stylesheet" href="./ui.css" />
+    <script type="module" src="./ui.ts"></script>
+  </head>
+  <body>
+    <section id="load">
+      <label id="drop" class="drop" for="file">
+        <strong>Drop a capture .json here</strong>
+        <span>or click to browse</span>
+        <input id="file" type="file" accept=".json,application/json" />
+      </label>
+      <details>
+        <summary>Paste JSON instead (up to 5 MB)</summary>
+        <textarea
+          id="paste"
+          spellcheck="false"
+          placeholder='{"schemaVersion": "1.0.0", …}'
+        ></textarea>
+        <button id="parsePaste" type="button">Load pasted JSON</button>
+      </details>
+    </section>
+
+    <section id="preview" hidden>
+      <h2 id="pvTitle"></h2>
+      <dl id="pvStats"></dl>
+      <div class="actions">
+        <button id="render" class="primary" type="button">Render</button>
+        <button id="reset" type="button">Choose another file</button>
+      </div>
+    </section>
+
+    <p id="status" aria-live="polite"></p>
+    <div id="errors" class="errors" hidden></div>
+  </body>
+</html>

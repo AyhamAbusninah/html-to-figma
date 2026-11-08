@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HTML to Figma</title>
+    <link rel="stylesheet" href="./popup.css" />
+    <script type="module" src="./popup.ts"></script>
+  </head>
+  <body>
+    <header>
+      <h1>Capture for Figma</h1>
+      <p id="page" class="muted">Reading current tab…</p>
+    </header>
+
+    <main>
+      <section id="idle">
+        <button id="capture" class="primary" type="button" disabled>Capture page</button>
+        <p id="restricted" class="note" hidden>
+          Chrome doesn't allow extensions to capture this page.
+        </p>
+      </section>
+
+      <section id="busy" hidden>
+        <p id="busyText" aria-live="polite">Capturing…</p>
+      </section>
+
+      <section id="done" hidden>
+        <dl id="stats"></dl>
+        <div class="actions">
+          <button id="download" class="primary" type="button">Download JSON</button>
+          <button id="copy" type="button">Copy to clipboard</button>
+        </div>
+        <p id="copyNote" class="muted" aria-live="polite"></p>
+        <p class="note">This file contains page content. Handle it per internal data policy.</p>
+      </section>
+
+      <section id="error" hidden>
+        <p class="error" id="errorText"></p>
+        <button id="retry" type="button">Try again</button>
+      </section>
+    </main>
+  </body>
+</html>

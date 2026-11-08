@@ -56,3 +56,16 @@ New items raised by the decisions are listed in §2. Only **R-5** blocks impleme
 - If shaping and bidi are correct but base direction follows the first strong character, the plugin inserts an invisible directional mark (U+200F RLM or U+200E LRM) at the start (PLG-RTL-2). This is the expected outcome.
 - If shaping and bidi are correct and direction is detected well, no workaround is needed.
 - **If shaping or bidi is broken**, I'll come back to you with options: (a) accept with warnings, (b) rasterize affected Arabic text (correct visuals, not editable), (c) a hybrid of editable text plus a hidden raster reference layer. **This is the only path that needs another decision from you.**
+
+---
+
+## 3. Re-architecture decisions & blocking items (2026-11-08)
+
+| ID | Item | Status | Notes |
+|---|---|---|---|
+| A-1 | Architecture: collector (extension) → conversion engine (`@h2f/core`) → CaptureDocument → plugin (planner + adapter) | ✅ Approved | PRD AD-11, REQUIREMENTS SYS-1/1a |
+| A-2 | Transfer: file-based JSON (clipboard ≤ 5 MB). No backend, relay, or other infrastructure until the file workflow shows a concrete limitation. | ✅ Approved | PRD AD-12 |
+| A-3 | Verification levels UNIT / BROWSER INTEGRATION / FIGMA MOCK / REAL FIGMA. No Figma feature is "validated" on mocks alone. | ✅ Approved | REQUIREMENTS TST-7/8/9 |
+| **B-1** | **macOS/Windows environment** for running the plugin in Figma (development plugins and every publish need the desktop app) | 🔴 **Open: none available** | Blocks R5/R6. Options: Windows 11 VM on Fedora (KVM), a borrowed/teammate machine, or a rented cloud desktop |
+| **B-2** | **Actual Figma plan** (Organization/Enterprise needed for private plugins) and **proof that Fedora employees can run a private plugin in browser Figma** | 🔴 **Open: unknown** | Must be verified before committing to a distribution strategy (R6). The first private publish itself needs B-1. |
+| R-5 | Arabic/RTL text in Figma | 🟡 Two stages | **S4-A** (R1): browser-Figma proxy on Fedora using the existing classifier. **S4-B** (R5): the unchanged `spikes/s4-rtl/` plugin on macOS/Windows. Final only after S4-B. |

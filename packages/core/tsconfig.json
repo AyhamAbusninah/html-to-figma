@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // Deliberately no DOM lib: the engine must stay pure and runnable in Node (plan §3).
+    "lib": ["ES2022"],
+    "types": []
+  },
+  "include": ["src"]
+}

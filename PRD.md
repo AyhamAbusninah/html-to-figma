@@ -82,6 +82,8 @@ Today, recreating an existing internal screen in Figma (for a redesign, an audit
 | AD-8 | RTL & Arabic are first-class (MVP-blocking) | OQ-18. Absolute positioning covers mirrored layout automatically. The work is in text direction, alignment, and an Arabic font chain (Tajawal → Cairo → Noto Sans Arabic). |
 | AD-9 | Pruned DOM hierarchy, one text layer per DOM text node | OQ-6, OQ-11. Keeps layer counts usable. Merged rich-text runs come in v1.1. |
 | AD-10 | **Universal engine: no site-specific logic** | SC-1. Every behavior is derived from standard web APIs and expressed in terms of computed style and geometry, never class names, IDs, URL patterns, or framework globals. Frappe/ERPNext exists only in `fixtures/` as a benchmark. |
+| AD-11 | **Three logical components, conversion in the extension** | Re-architecture 2026-11-08. Collector (extension, browser-bound reads) → Conversion engine (`@h2f/core`, pure TS) → CaptureDocument → Figma plugin (pure planner + thin `figma.*` adapter). Maximizes what can be built and tested on Fedora, because the Figma plugin runtime is macOS/Windows-only. |
+| AD-12 | **File-based transfer only, no backend** | JSON file (primary) and clipboard (≤ 5 MB). A relay or other infrastructure is added only after the file workflow shows a concrete, documented limitation. |
 
 ### Architecture review notes (amendments proposed by the Lead Architect)
 
@@ -160,12 +162,19 @@ These amend the original brief and are reflected in `REQUIREMENTS.md`. Items nee
 | Figma's SVG parser rejects some SVGs | Medium | Low | Per-SVG raster fallback |
 | App-shell layouts with inner scroll containers only capture the viewport | High (SaaS/admin apps) | High | Opt-in, auto-suggested scroll-area expansion (OQ-5) |
 | Over-fitting to the benchmark (rules that pass Frappe but break other sites) | Medium | High | Generic benchmark set given equal weight (O8), CI guard against site-specific code (SYS-6), real public sites checked per release |
+| **No macOS/Windows environment** (B-1): Figma plugin development, testing, and every publish require the macOS/Windows desktop app | Certain (today) | **High**: blocks real-Figma validation (R5) and distribution (R6) | Do everything else on Fedora with mocks clearly labelled (TST-7). Acquire a Windows VM or Mac access before R5. |
+| **Fedora employees can't run the plugin** unless the Figma plan allows private org plugins (B-2) | Unknown | **High** for adoption | Verify the actual plan and test a private plugin in browser Figma on Fedora before committing to a distribution strategy |
 | Figma renders Arabic/bidi text created through the Plugin API incorrectly (shaping, base direction) | Medium | **High** (AD-8 is blocking) | Spike S4 in P1, before renderer work. Pre-agreed workaround with directional marks. Escalation path in OQ R-5. |
 | Substituted fonts shift right-aligned (RTL) text | High | Medium | Aligned-edge anchoring (PLG-R-9a) |
 | Very large DOMs (10k+ nodes) slow capture or rendering | Medium | Medium | Pruning of non-visual wrappers, batched rendering with progress, documented limits |
 | The extension's host permissions alarm security review | Medium | Medium | Optional host permissions requested at runtime, or a fixed allow-list of internal domains (OQ) |
 
 ## 10. Milestones (proposed)
+
+> **Superseded (2026-11-08)** by the R0–R6 phase plan (architecture assessment for the Fedora environment):
+> R0 Reconstruct & stabilise ✅ (see `docs/verification/R0.md`) · R1 S4-A browser proxy + decisions B-1/B-2 ·
+> R2 Collector + engine · R3 Planner + adapter · R4 Assets · R5 Real-Figma validation (macOS/Windows) ·
+> R6 Distribution & pilot. The table below is kept for history.
 
 | Phase | Deliverable | Exit criteria |
 |---|---|---|

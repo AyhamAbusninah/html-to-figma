@@ -7,3 +7,9 @@ fixtures/
 *.md
 spikes/
 .impeccable/
+# Verified/frozen artifacts: never reformat
+spikes/
+recovery/
+packages/schema/contract/
+test-results/
+playwright-report/

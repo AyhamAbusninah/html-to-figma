@@ -1,0 +1,53 @@
+# HTML-to-Figma (H2F)
+
+Internal Arkan Tech tool. A Chrome extension captures any web page (public or behind company login) into a
+versioned **CaptureDocument** JSON file, and a Figma plugin rebuilds it as native, editable layers.
+
+Product docs: [PRD](PRD.md) · [User flows](USER_FLOWS.md) · [Requirements](REQUIREMENTS.md) ·
+[Decisions & open questions](OPEN_QUESTIONS.md) · Phase reports: [`docs/verification/`](docs/verification/)
+
+## Architecture
+
+```
+Chrome extension                                       Figma plugin
+  collector (DOM reads) → @h2f/core (pure engine) ──CaptureDocument v1 (.json)──▶ UI (import/validate) → main (render)
+```
+
+| Package | Role |
+|---|---|
+| `packages/schema` | The only cross-component contract: TypeBox source → `capture.schema.json`, CSP-safe standalone validators, types. Frozen baselines in `contract/`. |
+| `packages/core` | Conversion engine: pure functions, `RawPageSnapshot → CaptureDocument`, no DOM lib. |
+| `packages/extension` | Chrome MV3 extension: popup, on-demand content script (collector), service worker. |
+| `packages/figma-plugin` | Figma plugin: UI iframe (import, validate, preview) and main thread (render). |
+| `fixtures/` | Generic test pages (3-origin server) and the Frappe/ERPNext v15 stress-test bench. |
+| `spikes/s4-rtl/` | Spike S4: Arabic/RTL text via the Plugin API. |
+| `recovery/2026-11-08/` | Pre-loss build outputs, kept as behavioral references (see `docs/verification/R0.md`). |
+
+## Commands
+
+```bash
+pnpm install --frozen-lockfile
+pnpm exec playwright install chromium           # once: browser for integration tests
+node fixtures/scripts/fetch-assets.mjs           # once: fixture fonts/icons (not committed)
+
+pnpm run verify    # everything CI runs: schema check, universality guard, typecheck, lint, format, build, tests
+pnpm build         # → packages/extension/dist, packages/figma-plugin/dist
+pnpm test          # unit + Figma-mock tests (Vitest); run `pnpm build` first
+pnpm test:e2e      # browser integration tests (Playwright + real Chromium)
+pnpm schema:generate   # after editing packages/schema/src/schema.ts
+```
+
+- **Extension:** `chrome://extensions` → Developer mode → *Load unpacked* → `packages/extension/dist`.
+- **Plugin:** Figma **desktop app (macOS/Windows only)** → Plugins → Development → *Import plugin from manifest* →
+  `packages/figma-plugin/manifest.json`. There's no Linux desktop app, so it can't be run on Fedora (see OPEN_QUESTIONS B-1).
+
+## Verification levels (REQUIREMENTS TST-7)
+
+| Level | Where | Proves |
+|---|---|---|
+| UNIT | Node / Vitest | pure logic |
+| BROWSER INTEGRATION | real Chromium / Playwright | extension and plugin UI behavior in a browser |
+| FIGMA MOCK | Node vm + strict API mock | correct Plugin-API usage, **not** rendering |
+| REAL FIGMA | Figma desktop (macOS/Windows) or browser Figma with a privately published build | actual rendering |
+
+No Figma feature counts as validated until it passes at REAL FIGMA level.

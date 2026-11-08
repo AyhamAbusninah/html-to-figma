@@ -1,0 +1,17 @@
+{
+  "name": "@h2f/figma-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Figma plugin: imports a CaptureDocument and renders native layers",
+  "scripts": {
+    "build": "vite build --config vite.main.config.ts && vite build --config vite.ui.config.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@h2f/schema": "workspace:*"
+  },
+  "devDependencies": {
+    "@figma/plugin-typings": "1.142.0"
+  }
+}
