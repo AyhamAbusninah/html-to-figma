@@ -19,6 +19,7 @@ Chrome extension                                       Figma plugin
 | `packages/core` | Conversion engine: pure functions, `RawPageSnapshot → CaptureDocument`, no DOM lib. |
 | `packages/extension` | Chrome MV3 extension: popup, on-demand content script (collector), service worker. |
 | `packages/figma-plugin` | Figma plugin: UI iframe (import, validate, preview) and main thread (render). |
+| `packages/preview` | Local CaptureDocument preview for Fedora: the plugin's render plan drawn with HTML/CSS. |
 | `fixtures/` | Generic test pages (3-origin server) and the Frappe/ERPNext v15 stress-test bench. |
 | `spikes/s4-rtl/` | Spike S4: Arabic/RTL text via the Plugin API. |
 | `recovery/2026-11-08/` | Pre-loss build outputs, kept as behavioral references (see `docs/verification/R0.md`). |
@@ -29,6 +30,12 @@ Chrome extension                                       Figma plugin
 node tree, verified in Chromium and against a strict Figma API mock on 7 generic pages and 4 Frappe/ERPNext pages
 (EN + AR). **Not yet run in real Figma** (no macOS/Windows, OPEN_QUESTIONS B-1). Images/SVG are explicit placeholders
 for now. Full supported/unsupported list: [`docs/verification/R2.md`](docs/verification/R2.md).
+
+## See a capture on Fedora (no Figma)
+
+`pnpm preview:open` builds and opens a local preview. Load a downloaded `figma-capture_*.json` to see what the plugin
+would create (same validation and render plan, drawn by the browser; not a Figma rendering). Real Figma import steps
+and status: [`docs/FIGMA_IMPORT.md`](docs/FIGMA_IMPORT.md).
 
 ## Install the extension (Fedora / Chrome)
 

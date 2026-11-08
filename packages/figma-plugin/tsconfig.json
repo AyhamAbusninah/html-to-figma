@@ -4,5 +4,5 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["@figma/plugin-typings", "node"]
   },
-  "include": ["src", "test", "vite.main.config.ts", "vite.ui.config.ts"]
+  "include": ["src", "test", "vite.main.config.ts", "vite.ui.config.ts", "../../build"]
 }

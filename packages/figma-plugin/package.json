@@ -13,5 +13,11 @@
   },
   "devDependencies": {
     "@figma/plugin-typings": "1.142.0"
-  }
+  },
+  "exports": {
+    "./plan": "./src/plan/plan.ts",
+    "./fonts": "./src/plan/fonts.ts",
+    "./known-figma-fonts": "./src/config/known-figma-fonts.ts"
+  },
+  "sideEffects": false
 }

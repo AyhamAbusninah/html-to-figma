@@ -1,45 +1,12 @@
 /**
  * Build 2/2: plugin UI as ONE self-contained dist/ui.html. Figma loads the UI file as a string (`__html__`), so
- * scripts and styles must be inlined. A small local plugin inlines the emitted JS/CSS, so no extra dependency is needed.
+ * scripts and styles must be inlined (shared plugin: build/vite-inline-html.ts).
  */
 import { resolve } from 'node:path';
-import { defineConfig, type Plugin } from 'vite';
+import { defineConfig } from 'vite';
+import { inlineIntoHtml } from '../../build/vite-inline-html.ts';
 
 const here = import.meta.dirname;
-
-function inlineIntoHtml(): Plugin {
-  return {
-    name: 'h2f-inline-into-html',
-    apply: 'build',
-    enforce: 'post',
-    generateBundle(_options, bundle) {
-      const html = Object.values(bundle).find(
-        (f) => f.type === 'asset' && f.fileName.endsWith('.html'),
-      );
-      if (!html || html.type !== 'asset') return;
-      let source = String(html.source);
-      for (const [fileName, file] of Object.entries(bundle)) {
-        if (file.type === 'chunk' && fileName.endsWith('.js')) {
-          const code = file.code.replaceAll('</script', '<\\/script');
-          source = source.replace(
-            new RegExp(`<script type="module"[^>]*src="[^"]*${escapeRe(fileName)}"[^>]*></script>`),
-            () => `<script type="module">${code}</script>`,
-          );
-          delete bundle[fileName];
-        } else if (file.type === 'asset' && fileName.endsWith('.css')) {
-          source = source.replace(
-            new RegExp(`<link rel="stylesheet"[^>]*href="[^"]*${escapeRe(fileName)}"[^>]*>`),
-            () => `<style>${String(file.source)}</style>`,
-          );
-          delete bundle[fileName];
-        }
-      }
-      html.source = source;
-    },
-  };
-}
-
-const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 export default defineConfig({
   root: resolve(here, 'src/ui'),

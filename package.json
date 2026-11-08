@@ -19,6 +19,8 @@
     "schema:check": "pnpm --filter @h2f/schema run check",
     "check:universal": "node scripts/check-universal.mjs",
     "package:extension": "node scripts/package-extension.mjs",
+    "preview:build": "pnpm --filter @h2f/preview build",
+    "preview:open": "pnpm --filter @h2f/preview build && xdg-open packages/preview/dist/index.html",
     "verify": "pnpm schema:check && pnpm check:universal && pnpm typecheck && pnpm lint && pnpm format:check && pnpm build && pnpm package:extension && pnpm test && pnpm test:e2e"
   },
   "devDependencies": {

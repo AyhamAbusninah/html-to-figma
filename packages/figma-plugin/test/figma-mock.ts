@@ -8,6 +8,7 @@
  */
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { KNOWN_FIGMA_FONTS } from '../src/config/known-figma-fonts.ts';
 
 const in01 = (v: unknown) => typeof v === 'number' && v >= 0 && v <= 1;
 const num = (v: unknown, min = -Infinity) =>
@@ -43,37 +44,8 @@ export interface MockFont {
   style: string;
 }
 
-/** A realistic subset of Figma's font list (Google Fonts are available in Figma). */
-export const MOCK_FONTS: MockFont[] = [
-  ...[
-    'Thin',
-    'Extra Light',
-    'Light',
-    'Regular',
-    'Medium',
-    'Semi Bold',
-    'Bold',
-    'Extra Bold',
-    'Black',
-  ].flatMap((s) => [
-    { family: 'Inter', style: s },
-    { family: 'Inter', style: s === 'Regular' ? 'Italic' : `${s} Italic` },
-  ]),
-  ...['Regular', 'Medium', 'Bold'].map((style) => ({ family: 'Roboto', style })),
-  ...['Regular', 'Bold'].map((style) => ({ family: 'Roboto Mono', style })),
-  ...['Regular', 'Bold', 'Italic'].map((style) => ({ family: 'Noto Serif', style })),
-  ...['Regular', 'Medium', 'SemiBold', 'Bold'].map((style) => ({
-    family: 'Noto Sans Arabic',
-    style,
-  })),
-  ...['ExtraLight', 'Light', 'Regular', 'Medium', 'Bold', 'ExtraBold', 'Black'].map((style) => ({
-    family: 'Tajawal',
-    style,
-  })),
-  ...['ExtraLight', 'Light', 'Regular', 'Medium', 'SemiBold', 'Bold', 'ExtraBold', 'Black'].map(
-    (style) => ({ family: 'Cairo', style }),
-  ),
-];
+/** Font list the mock reports (shared with the local preview, see src/config/known-figma-fonts.ts). */
+export const MOCK_FONTS: MockFont[] = KNOWN_FIGMA_FONTS;
 
 function assertSolidPaints(paints: unknown, what: string) {
   if (!Array.isArray(paints)) fail(`${what} must be an array`);

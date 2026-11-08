@@ -1,0 +1,15 @@
+{
+  "name": "@h2f/preview",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local CaptureDocument preview: renders the Figma plugin's own render plan with HTML/CSS (Fedora-friendly, no Figma). NOT a Figma rendering.",
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@h2f/figma-plugin": "workspace:*",
+    "@h2f/schema": "workspace:*"
+  }
+}

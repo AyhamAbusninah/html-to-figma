@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>H2F Capture Preview</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script type="module" src="./main.ts"></script>
+  </head>
+  <body>
+    <header class="bar">
+      <strong class="brand">H2F Capture Preview</strong>
+      <label class="btn primary" for="file">Open capture JSON…</label>
+      <input id="file" type="file" accept=".json,application/json" hidden />
+      <span id="fileName" class="muted">No file loaded. Drop a figma-capture_*.json anywhere.</span>
+      <span class="spacer"></span>
+      <div class="group" role="group" aria-label="Zoom">
+        <button id="zoomOut" type="button" title="Zoom out (−)">−</button>
+        <span id="zoomLabel" class="zoom">100%</span>
+        <button id="zoomIn" type="button" title="Zoom in (+)">+</button>
+        <button id="zoomFit" type="button" title="Fit width (F)">Fit</button>
+        <button id="zoom100" type="button" title="Actual size (0)">100%</button>
+      </div>
+      <label class="toggle"
+        ><input id="showLabels" type="checkbox" checked /> Placeholder labels</label
+      >
+      <label class="toggle"><input id="showOutlines" type="checkbox" /> Outline frames</label>
+    </header>
+
+    <p class="disclaimer">
+      Browser preview of what the H2F Figma plugin <em>would</em> create from this file (same
+      validation and render plan as the plugin). It is <strong>not</strong> a Figma rendering: text
+      layout, RTL/bidi, fonts and effects are drawn by this browser and have not been verified in
+      Figma.
+    </p>
+
+    <main class="layout">
+      <section
+        id="canvas"
+        class="canvas"
+        tabindex="0"
+        aria-label="Preview canvas (drag to pan, Ctrl+wheel to zoom)"
+      >
+        <div id="empty" class="empty">
+          <p>
+            <strong>Open a capture file</strong> (Download JSON from the H2F extension), or drop it
+            here.
+          </p>
+          <p class="muted">The file is only read, never modified or uploaded.</p>
+        </div>
+        <div id="errors" class="errors" hidden></div>
+        <div id="viewport" class="viewport" hidden>
+          <div id="stage" class="stage"></div>
+        </div>
+      </section>
+
+      <aside class="side">
+        <section id="docInfo" hidden>
+          <h2>Document</h2>
+          <dl id="docList"></dl>
+        </section>
+        <section id="statsBox" hidden>
+          <h2>Contents</h2>
+          <dl id="statsList"></dl>
+        </section>
+        <section id="fontsBox" hidden>
+          <h2>Fonts the plugin would use</h2>
+          <ul id="fontsList"></ul>
+        </section>
+        <section id="warnBox" hidden>
+          <h2>Not captured / not rendered</h2>
+          <ul id="warnList"></ul>
+        </section>
+        <section id="hoverBox" hidden>
+          <h2>Layer</h2>
+          <dl id="hoverList"></dl>
+        </section>
+      </aside>
+    </main>
+  </body>
+</html>

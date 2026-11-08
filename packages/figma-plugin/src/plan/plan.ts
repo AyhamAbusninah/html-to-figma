@@ -67,6 +67,8 @@ export interface PlanBox extends PlanBase {
 export interface PlanText extends PlanBase {
   kind: 'text';
   characters: string;
+  /** Paragraph direction from the page (used by the local preview; Figma infers direction itself, unverified). */
+  direction: 'ltr' | 'rtl';
   font: FontName;
   fontSize: number;
   lineHeight: { unit: 'AUTO' } | { unit: 'PIXELS'; value: number };
@@ -244,6 +246,7 @@ export function buildPlan(doc: CaptureDocument, availableFonts: readonly FontNam
       ...base(n, parent),
       kind: 'text',
       characters: withDirectionMark(n.characters, s.direction),
+      direction: s.direction,
       font: r.font,
       fontSize: Math.max(1, s.fontSize), // Figma requires >= 1
       lineHeight:

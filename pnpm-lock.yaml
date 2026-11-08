@@ -68,6 +68,15 @@ importers:
         specifier: 1.142.0
         version: 1.142.0
 
+  packages/preview:
+    dependencies:
+      '@h2f/figma-plugin':
+        specifier: workspace:*
+        version: link:../figma-plugin
+      '@h2f/schema':
+        specifier: workspace:*
+        version: link:../schema
+
   packages/schema:
     devDependencies:
       '@sinclair/typebox':
