@@ -23,6 +23,13 @@ Chrome extension                                       Figma plugin
 | `spikes/s4-rtl/` | Spike S4: Arabic/RTL text via the Plugin API. |
 | `recovery/2026-11-08/` | Pre-loss build outputs, kept as behavioral references (see `docs/verification/R0.md`). |
 
+## Status (2026-11-08)
+
+**MVP vertical slice working (R2):** real page → extension capture → CaptureDocument → plugin import → editable
+node tree, verified in Chromium and against a strict Figma API mock on 7 generic pages and 4 Frappe/ERPNext pages
+(EN + AR). **Not yet run in real Figma** (no macOS/Windows, OPEN_QUESTIONS B-1). Images/SVG are explicit placeholders
+for now. Full supported/unsupported list: [`docs/verification/R2.md`](docs/verification/R2.md).
+
 ## Commands
 
 ```bash

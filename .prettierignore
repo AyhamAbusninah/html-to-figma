@@ -13,3 +13,4 @@ recovery/
 packages/schema/contract/
 test-results/
 playwright-report/
+docs/verification/r2-evidence/
