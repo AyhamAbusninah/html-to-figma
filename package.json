@@ -18,7 +18,8 @@
     "schema:generate": "pnpm --filter @h2f/schema run generate",
     "schema:check": "pnpm --filter @h2f/schema run check",
     "check:universal": "node scripts/check-universal.mjs",
-    "verify": "pnpm schema:check && pnpm check:universal && pnpm typecheck && pnpm lint && pnpm format:check && pnpm build && pnpm test && pnpm test:e2e"
+    "package:extension": "node scripts/package-extension.mjs",
+    "verify": "pnpm schema:check && pnpm check:universal && pnpm typecheck && pnpm lint && pnpm format:check && pnpm build && pnpm package:extension && pnpm test && pnpm test:e2e"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

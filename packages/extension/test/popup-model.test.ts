@@ -75,3 +75,55 @@ describe('statsRows (EXT-O-5)', () => {
     ]);
   });
 });
+
+describe('restrictedMessage / friendlyError / warningSummary (popup UX)', async () => {
+  const { friendlyError, restrictedMessage, warningSummary } =
+    await import('../src/shared/popup-model.ts');
+  it('explains restricted pages; unknown URL covers chrome pages and local files', () => {
+    expect(restrictedMessage('chrome://version')).toBe(
+      "Chrome doesn't allow extensions to capture this page.",
+    );
+    expect(restrictedMessage(undefined)).toContain('Allow access to file URLs');
+  });
+  it('maps raw errors to actionable messages and keeps the raw text as detail', () => {
+    expect(
+      friendlyError('Cannot access contents of url "file:///x.html".', 'file:///x.html').title,
+    ).toContain('Allow access to file URLs');
+    expect(friendlyError('Cannot access a chrome:// URL', 'chrome://x').title).toBe(
+      "Chrome doesn't allow extensions to capture this page.",
+    );
+    expect(friendlyError('Frame with ID 0 was removed.', 'https://a.example').title).toContain(
+      'Reload it',
+    );
+    expect(
+      friendlyError(
+        'Page has more than 10000 visible elements. Capture a section instead.',
+        'https://a.example',
+      ),
+    ).toEqual({
+      title: 'Page has more than 10000 visible elements. Capture a section instead.',
+      detail: '',
+    });
+    expect(friendlyError('boom', 'https://a.example')).toEqual({
+      title: 'Capture failed.',
+      detail: 'boom',
+    });
+  });
+  it('summarizes warnings by count, most frequent first, with readable labels', () => {
+    expect(
+      warningSummary([
+        { code: 'SVG_NOT_CAPTURED', message: 'x' },
+        {
+          code: 'PSEUDO_ELEMENT_NOT_CAPTURED',
+          message: '::before/::after content is not captured yet. (14×)',
+        },
+        { code: 'SVG_NOT_CAPTURED', message: 'x' },
+        { code: 'SOMETHING_NEW', message: 'y' },
+      ]),
+    ).toEqual([
+      '14 × ::before/::after decorations',
+      '2 × SVG icons/graphics (placeholders)',
+      '1 × SOMETHING_NEW',
+    ]);
+  });
+});

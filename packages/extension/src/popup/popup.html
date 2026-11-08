@@ -26,17 +26,29 @@
       </section>
 
       <section id="done" hidden>
+        <p class="ok" id="doneTitle">
+          Capture complete. Download the file and import it in the Figma plugin.
+        </p>
         <dl id="stats"></dl>
+        <div id="notCaptured" class="note" hidden>
+          <strong>Not captured yet</strong>
+          <ul id="notCapturedList"></ul>
+        </div>
         <div class="actions">
           <button id="download" class="primary" type="button">Download JSON</button>
           <button id="copy" type="button">Copy to clipboard</button>
         </div>
+        <p id="downloadNote" class="muted" aria-live="polite"></p>
         <p id="copyNote" class="muted" aria-live="polite"></p>
         <p class="note">This file contains page content. Handle it per internal data policy.</p>
       </section>
 
       <section id="error" hidden>
         <p class="error" id="errorText"></p>
+        <details id="errorDetailsBox" hidden>
+          <summary>Technical details</summary>
+          <pre id="errorDetails"></pre>
+        </details>
         <button id="retry" type="button">Try again</button>
       </section>
     </main>

@@ -130,3 +130,24 @@ dd {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+
+.ok {
+  margin: 0;
+  font-weight: 600;
+}
+
+.note ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+details pre {
+  max-height: 140px;
+  overflow: auto;
+  margin: 6px 0 0;
+  font:
+    11px/1.4 ui-monospace,
+    monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

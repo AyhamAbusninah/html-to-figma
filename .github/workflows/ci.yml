@@ -30,8 +30,19 @@ jobs:
       - name: Fetch fixture fonts/icons (OFL/MIT, not committed)
         run: node fixtures/scripts/fetch-assets.mjs
 
-      - name: T0 static · T1 unit · T5 Figma-mock · T2/T4 browser integration
+      - name: T0 static · T1 unit · T5 Figma-mock · package · T2/T4 browser integration (incl. production artifact)
         run: pnpm run verify
+
+      - name: Upload extension package (installable ZIP + checksum + install guide)
+        uses: actions/upload-artifact@v4
+        with:
+          name: html-to-figma-extension
+          path: |
+            release/*.zip
+            release/*.sha256
+            release/BUILD-INFO.json
+            release/README-INSTALL.md
+          if-no-files-found: error
 
       - name: Upload test results
         if: always()

@@ -30,6 +30,12 @@ node tree, verified in Chromium and against a strict Figma API mock on 7 generic
 (EN + AR). **Not yet run in real Figma** (no macOS/Windows, OPEN_QUESTIONS B-1). Images/SVG are explicit placeholders
 for now. Full supported/unsupported list: [`docs/verification/R2.md`](docs/verification/R2.md).
 
+## Install the extension (Fedora / Chrome)
+
+`node scripts/package-extension.mjs --build` produces `release/html-to-figma-extension-<version>/` (Load unpacked) and a
+reproducible ZIP. CI uploads the same ZIP as the **html-to-figma-extension** artifact. Step-by-step guide:
+[`packages/extension/INSTALL.md`](packages/extension/INSTALL.md). Release report: [`docs/verification/EXT-0.2.0.md`](docs/verification/EXT-0.2.0.md).
+
 ## Commands
 
 ```bash

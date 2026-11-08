@@ -1,5 +1,5 @@
 /** Manifest and version consistency (EXT-P-1..5, OQ-2). Verification level: UNIT (Node, static files). */
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { EXTENSION_VERSION } from '../src/config/version.ts';
@@ -20,13 +20,8 @@ describe('manifest.json', () => {
   });
 
   it('requests exactly the permissions in EXT-P-3, with no always-on content scripts (EXT-P-5)', () => {
-    expect(manifest.permissions).toEqual([
-      'activeTab',
-      'scripting',
-      'downloads',
-      'clipboardWrite',
-      'storage',
-    ]);
+    // `storage` removed in 0.2.0 packaging: nothing uses chrome.storage (no unnecessary permissions).
+    expect(manifest.permissions).toEqual(['activeTab', 'scripting', 'downloads', 'clipboardWrite']);
     expect(manifest).not.toHaveProperty('content_scripts');
   });
 
@@ -37,7 +32,18 @@ describe('manifest.json', () => {
       '*://127.0.0.1/*',
       '*://*.localhost/*',
     ]);
-    expect(manifest.optional_host_permissions).toEqual(['<all_urls>']);
+    // OQ-2's optional runtime grant returns with the Tier-2 image fetch (R4); unused until then.
+    expect(manifest).not.toHaveProperty('optional_host_permissions');
+  });
+
+  it('declares icons and every icon file exists', () => {
+    const icons = {
+      ...(manifest.icons as object),
+      ...((manifest.action as { default_icon?: object }).default_icon ?? {}),
+    };
+    expect(Object.keys(manifest.icons as object)).toEqual(['16', '32', '48', '128']);
+    for (const f of Object.values(icons) as string[])
+      expect(existsSync(join(pkgDir, 'public', f)), f).toBe(true);
   });
 
   it('version is consistent across manifest, package.json and code', () => {
