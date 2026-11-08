@@ -1,41 +1,48 @@
 /**
  * Plugin main thread (Figma sandbox). Built as one IIFE: dist/code.js.
- *
- * R0: walking skeleton. Renders only the root frame (name, size, placement, background, clipping), then selects it
- * and scrolls it into view. The node renderer (planner + adapter) arrives in R3.
+ * CaptureDocument → buildPlan (pure) → executePlan (figma.*) → select + report.
+ * Verification: FIGMA MOCK only. Real-Figma behavior unverified until R5 (B-1).
  */
 import type { CaptureDocument } from '@h2f/schema';
+import { executePlan } from '../adapter/render.ts';
+import { buildPlan } from '../plan/plan.ts';
 import type { MainToUi, UiToMain } from '../shared/messages.ts';
-import { placementX, rootFrameName, solidPaint } from '../shared/naming.ts';
+import { placementX, rootFrameName } from '../shared/naming.ts';
 
 const post = (msg: MainToUi) => figma.ui.postMessage(msg);
 
 async function render(doc: CaptureDocument): Promise<void> {
   const started = Date.now();
-  post({ type: 'progress', text: 'Creating root frame…' });
+  post({ type: 'progress', text: 'Resolving fonts…' });
+  const available = (await figma.listAvailableFontsAsync()).map((f) => f.fontName);
+  const plan = buildPlan(doc, available);
+  plan.root.width = Math.max(plan.root.width, 1);
+  plan.root.height = Math.max(plan.root.height, 1);
 
-  // Snapshot positions before creating the frame (createFrame appends to the page).
+  // Snapshot positions before creating the root (createFrame appends to the page).
   const existing = figma.currentPage.children.map((n) => ({ x: n.x, width: n.width }));
-  const root = figma.createFrame();
-  root.name = rootFrameName(doc.meta);
-  root.resize(Math.max(doc.root.rect.width, 1), Math.max(doc.root.rect.height, 1));
-  root.x = placementX(existing);
-  root.y = 0;
-  root.clipsContent = doc.root.clipsContent;
-  const solid = doc.root.fills.find((p) => p.type === 'SOLID');
-  root.fills = [
-    solidPaint(solid && solid.type === 'SOLID' ? solid.color : { r: 1, g: 1, b: 1, a: 1 }),
-  ];
+  post({ type: 'progress', text: `Creating ${plan.counts.total} layers…` });
+  const outcome = await executePlan(plan, {
+    rootName: rootFrameName(doc.meta),
+    rootX: placementX(existing),
+    onProgress: (done, total) =>
+      post({ type: 'progress', text: `Creating layers ${done} / ${total}…` }),
+  });
 
-  figma.currentPage.selection = [root];
-  figma.viewport.scrollAndZoomIntoView([root]);
+  figma.currentPage.selection = [outcome.root];
+  figma.viewport.scrollAndZoomIntoView([outcome.root]);
   post({
     type: 'rendered',
     report: {
-      rootName: root.name,
-      layersCreated: 1,
-      layersFailed: [],
+      rootName: outcome.root.name,
+      layersCreated: outcome.layersCreated,
+      layersFailed: outcome.layersFailed,
       durationMs: Date.now() - started,
+      fontSubstitutions: plan.substitutions,
+      fontsFallback: outcome.fontsFallback,
+      placeholders: plan.counts.placeholders,
+      unsupported: plan.unsupported,
+      captureWarnings: doc.meta.warnings.length,
     },
   });
 }

@@ -5,7 +5,7 @@ import {
   type CaptureDocument,
   type CaptureIssue,
 } from '@h2f/schema';
-import type { MainToUi, UiToMain } from '../shared/messages.ts';
+import type { MainToUi, RenderReport, UiToMain } from '../shared/messages.ts';
 
 const PASTE_MAX_BYTES = 5 * 1024 * 1024;
 
@@ -119,5 +119,30 @@ window.addEventListener('message', (event: MessageEvent<{ pluginMessage?: MainTo
     setStatus(
       `Created "${r.rootName}": ${r.layersCreated} layer(s), ${r.layersFailed.length} failed, ${r.durationMs} ms.`,
     );
+    showReport(r);
   }
 });
+
+/** Render report details (PLG-RP-1): failures, font substitutions, placeholders, unsupported features. */
+function showReport(r: RenderReport) {
+  const lines: string[] = [];
+  for (const f of r.layersFailed) lines.push(`✗ ${f.path}: ${f.error}`);
+  for (const s of r.fontSubstitutions ?? []) {
+    const req = `${s.requested} ${s.weight}${s.italic ? ' italic' : ''}`;
+    lines.push(
+      `${s.arabicRule ? 'ℹ' : '⚠'} Font ${req} → ${s.used.family} ${s.used.style} (${s.count} layer(s))`,
+    );
+  }
+  for (const f of r.fontsFallback ?? [])
+    lines.push(
+      `⚠ Could not load ${f.requested.family} ${f.requested.style} → ${f.used.family} ${f.used.style}`,
+    );
+  if (r.placeholders)
+    lines.push(`⚠ ${r.placeholders} placeholder(s) for content not captured yet (images/SVG)`);
+  for (const u of r.unsupported ?? []) lines.push(`⚠ Not rendered yet: ${u}`);
+  if (r.captureWarnings)
+    lines.push(`ℹ ${r.captureWarnings} capture warning(s) recorded in the file (meta.warnings)`);
+  const box = $('details');
+  box.textContent = lines.join('\n');
+  box.hidden = lines.length === 0;
+}
