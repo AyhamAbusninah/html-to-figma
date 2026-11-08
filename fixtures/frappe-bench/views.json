@@ -1,0 +1,15 @@
+{
+  "$comment": "Frappe/ERPNext v15 stress-test benchmark views (TST-6 set B). Benchmark-only data (SYS-7): consumed by e2e specs, never by packages/*. Users and passwords come from BENCH_USERS in seed.mjs. '{first:<DocType>}' is resolved at test time to the newest document's name; '{lang}' to the user's language.",
+  "baseUrl": "http://127.0.0.1:8085",
+  "users": [
+    { "id": "en", "email": "bench-en@example.com", "direction": "ltr" },
+    { "id": "ar", "email": "bench-ar@example.com", "direction": "rtl" }
+  ],
+  "views": [
+    { "id": "workspace", "path": "/app/accounting", "notes": "Number cards, shortcuts, charts (SVG), sticky navbar" },
+    { "id": "list", "path": "/app/sales-invoice", "notes": "Indicator pills (::before), filters, sticky list header, realtime refresh" },
+    { "id": "form", "path": "/app/sales-invoice/{first:Sales Invoice}", "notes": "Sections, child-table grid, link fields, timeline" },
+    { "id": "pos", "path": "/app/point-of-sale", "expandScrollAreas": true, "notes": "Fixed app shell; item grid and cart scroll independently" },
+    { "id": "web-page", "path": "/h2f-benchmark-{lang}", "notes": "Website shell + Cairo/Tajawal web fonts, grid/flex marketing layout" }
+  ]
+}

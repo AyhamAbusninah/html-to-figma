@@ -1,0 +1,200 @@
+<!doctype html>
+<!--
+  Fixture: rtl-arabic
+  Purpose: right-to-left Arabic document — Arabic web fonts (Tajawal, Cairo, Noto Sans Arabic)
+           loaded from local files, a stack that starts with a Latin-only font (Inter), start/end
+           and explicit alignment, wrapping Arabic paragraphs, mixed bidi strings, Arabic-Indic
+           digits, bidi control characters, a word split across inline elements, Arabic
+           letter-spacing, Arabic inputs / placeholders, an LTR island, dir="auto", an inline SVG
+           chart with Arabic <text>, and a table with Arabic headers.
+  Requirements: EXT-RTL-1, EXT-RTL-2, EXT-RTL-3, EXT-RTL-5, EXT-RTL-6, EXT-X-1, EXT-X-4, EXT-X-6,
+                EXT-S-2, PLG-F-6, PLG-RTL-1, PLG-RTL-2, PLG-RTL-4, PLG-R-9a, AC-EXT-11, AC-PLG-10,
+                AC-PLG-12, TST-3
+  Expected capture behaviour (data-testid):
+    - meta.direction = "rtl", meta.lang = "ar" (EXT-RTL-1).
+    - AC-EXT-11: every TextNode EXCEPT those inside [data-align-explicit] (explicit physical alignment
+      or direction:ltr), [data-testid=ltr-island], [data-testid=input-ltr-email],
+      [data-testid=code-snippet], the bdi/dir="auto" elements that resolve to LTR has
+      direction "rtl" and textAlign "right", and `characters` equals the DOM text in logical order
+      (never visually reordered).
+    - align-start → right; align-end → left; align-left / align-center / align-right / justify
+      keep their physical value (EXT-RTL-2).
+    - font-tajawal / font-cairo / font-noto: fontFamily stacks start with that family; paragraphs
+      wrap to ≥ 3 lines (lineCount ≥ 3) in a 560px column. Figma renders with the same family.
+    - stack-inter-first: stack ["Inter","Tajawal","sans-serif"]. Chrome draws Latin in Inter and
+      Arabic in Tajawal; the plugin MUST use Tajawal for the whole node (never Inter) (PLG-F-6).
+    - stack-latin-only: stack ["Inter","sans-serif"] with Arabic text → plugin falls back to
+      Tajawal (meta.lang = ar) — reported as informational (AC-PLG-12).
+    - bidi-*: characters are byte-identical to the DOM, e.g. "فاتورة INV-2026-00042 بتاريخ 08/11/2026".
+      Strings starting with Latin (bidi-brand) or digits (bidi-digits) are the S4 test cases for
+      the RLM prefix (PLG-RTL-2).
+    - bidi-controls: the U+200F (RLM) and U+2066/U+2069 (LRI/PDI) characters are preserved (EXT-RTL-3);
+      bidi-contact contains a U+200E (LRM) before the phone number, also preserved.
+    - split-word: "مرحبا" is split as مر<mark>حبا</mark> → two TEXT nodes ("مر", "حبا"). Known
+      limitation: in Figma the letters across the split will not join (Chrome joins them).
+    - letter-spacing-ar: Arabic text with letter-spacing 2px → emitted as 0 +
+      ARABIC_LETTER_SPACING_IGNORED (EXT-RTL-5). letter-spacing-latin (Latin text, same page)
+      keeps 2px.
+    - inputs: Arabic value text, Arabic placeholder (::placeholder colour), select showing the
+      selected Arabic option — all right-aligned (EXT-RTL-6). The dir="ltr" email input stays left.
+    - ltr-island: dir="ltr" block → direction "ltr", textAlign "left"; code-snippet likewise.
+    - dir-auto-*: dir="auto" resolves per content: Latin-first → ltr/left, Arabic-first → rtl/right.
+    - svg-chart-ar: one SvgNode; <text> labels contain Arabic; font-family "Tajawal" inlined.
+    - table-ar: header cells use text-align:start (UA default for th would be centre) → right;
+      the amount cells are direction:ltr + right-aligned (marked data-align-explicit).
+-->
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>اختبار: العربية والاتجاه من اليمين إلى اليسار</title>
+<style>
+  @font-face { font-family: "Tajawal"; font-weight: 400; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/tajawal/Tajawal-Regular.ttf) format("truetype"); }
+  @font-face { font-family: "Tajawal"; font-weight: 500; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/tajawal/Tajawal-Medium.ttf) format("truetype"); }
+  @font-face { font-family: "Tajawal"; font-weight: 700; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/tajawal/Tajawal-Bold.ttf) format("truetype"); }
+  @font-face { font-family: "Cairo"; font-weight: 200 1000; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/cairo/Cairo-Variable.ttf) format("truetype"); }
+  @font-face { font-family: "Noto Sans Arabic"; font-weight: 100 900; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/noto-sans-arabic/NotoSansArabic-Variable.ttf) format("truetype"); }
+  @font-face { font-family: "Inter"; font-weight: 400; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/inter/Inter-400.woff2) format("woff2"); }
+  @font-face { font-family: "Inter"; font-weight: 600; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/inter/Inter-600.woff2) format("woff2"); }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px 32px; font: 16px/1.7 "Tajawal", sans-serif; color: #111827; background: #fff; width: 1100px; }
+  h1 { font: 700 28px/1.4 "Tajawal", sans-serif; margin: 0 0 4px; }
+  h2 { font: 700 17px/1.4 "Tajawal", sans-serif; margin: 32px 0 10px; color: #1e3a8a; border-bottom: 2px solid #dbeafe; padding-bottom: 4px; }
+  .lead { color: #4b5563; margin: 0 0 8px; }
+  .col { width: 560px; }
+  .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 16px; margin: 8px 0; }
+  .row { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; }
+  .font-tajawal { font-family: "Tajawal", sans-serif; }
+  .font-cairo { font-family: "Cairo", sans-serif; font-weight: 600; }
+  .font-noto { font-family: "Noto Sans Arabic", sans-serif; }
+  .stack-inter-first { font-family: "Inter", "Tajawal", sans-serif; }
+  .stack-latin-only { font-family: "Inter", sans-serif; }
+  .tag { display: inline-block; font: 600 12px/1.6 "Inter", sans-serif; background: #e0e7ff; color: #3730a3; padding: 0 8px; border-radius: 6px; margin-inline-end: 8px; direction: ltr; }
+  .align { width: 420px; background: #f8fafc; border: 1px dashed #cbd5e1; padding: 6px 12px; margin: 6px 0; }
+  mark { background: #fde68a; color: inherit; padding: 0; }
+  .ls { letter-spacing: 2px; }
+  label.f { display: flex; flex-direction: column; gap: 6px; font-weight: 500; width: 300px; }
+  input, textarea, select { font: 16px/1.5 "Tajawal", sans-serif; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #111827; width: 100%; }
+  input::placeholder, textarea::placeholder { color: #94a3b8; }
+  textarea { height: 76px; resize: none; }
+  button { font: 700 16px "Tajawal", sans-serif; padding: 10px 20px; border: 0; border-radius: 8px; background: #1d4ed8; color: #fff; }
+  .ltr-island { direction: ltr; text-align: left; font-family: "Inter", sans-serif; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 12px 16px; width: 560px; }
+  pre { margin: 8px 0 0; background: #0f172a; color: #e2e8f0; padding: 12px 16px; border-radius: 8px; font: 13px/1.6 ui-monospace, monospace; width: 560px; }
+  table { border-collapse: collapse; width: 760px; font-size: 15px; }
+  th, td { border-bottom: 1px solid #e2e8f0; padding: 10px 12px; }
+  th { background: #f1f5f9; font-weight: 700; color: #334155; text-align: start; }
+  td.num { font-family: "Inter", "Tajawal", sans-serif; direction: ltr; text-align: right; }
+  .status { display: inline-block; padding: 0 10px; border-radius: 999px; font-size: 13px; font-weight: 500; }
+  .paid { background: #dcfce7; color: #166534; } .due { background: #fef3c7; color: #92400e; } .late { background: #fee2e2; color: #991b1b; }
+</style>
+</head>
+<body>
+<h1 data-testid="title">لوحة التحكم — اختبار النص العربي</h1>
+<p class="lead" data-testid="lead">صفحة اختبار للتحقق من التقاط النصوص العربية والاتجاه من اليمين إلى اليسار.</p>
+
+<h2>الخطوط العربية</h2>
+<div class="row">
+  <div class="col">
+    <p class="card font-tajawal" data-testid="font-tajawal"><span class="tag" data-align-explicit>Tajawal</span>تتيح لك لوحة التحكم متابعة المبيعات والمخزون والعملاء في مكان واحد. يمكنك إنشاء الفواتير وإرسالها مباشرةً إلى العملاء، ومتابعة حالة الدفع لكل فاتورة دون الحاجة إلى أي أدوات إضافية.</p>
+    <p class="card font-cairo" data-testid="font-cairo"><span class="tag" data-align-explicit>Cairo 600</span>خط القاهرة خط عربي حديث يدعم أوزانًا متعددة، وهو مناسب للعناوين والنصوص الطويلة على حد سواء. هذه الفقرة مكتوبة بعدة أسطر لاختبار التفاف النص داخل عمود ثابت العرض.</p>
+    <p class="card font-noto" data-testid="font-noto"><span class="tag" data-align-explicit>Noto Sans Arabic</span>نوتو سانس العربي خط واضح ومقروء على الشاشات الصغيرة والكبيرة. تُستخدم هذه الفقرة لاختبار التفاف النص العربي عبر عدة أسطر، مع الحفاظ على اتصال الحروف وتشكيلها الصحيح.</p>
+  </div>
+  <div style="width:440px">
+    <p class="card stack-inter-first" data-testid="stack-inter-first">Inter أولاً ثم Tajawal: الحروف اللاتينية بخط Inter والعربية بخط Tajawal — Invoice 2026.</p>
+    <p class="card stack-latin-only" data-testid="stack-latin-only">نص عربي بخط لاتيني فقط (Inter, sans-serif) — يعتمد المتصفح على خط النظام.</p>
+    <p class="card" style="font-weight:700" data-testid="weight-bold">نص عريض بوزن ٧٠٠ بخط Tajawal.</p>
+    <p class="card" style="font-weight:500" data-testid="weight-medium">نص متوسط بوزن ٥٠٠ بخط Tajawal.</p>
+    <p class="card font-cairo" style="font-weight:900;font-size:22px" data-testid="weight-cairo-black">القاهرة بوزن ٩٠٠</p>
+  </div>
+</div>
+
+<h2>المحاذاة</h2>
+<p class="align" data-testid="align-default">محاذاة افتراضية (start) ← يمين</p>
+<p class="align" style="text-align:start" data-testid="align-start">text-align: start ← يمين</p>
+<p class="align" style="text-align:end" data-align-explicit data-testid="align-end">text-align: end ← يسار</p>
+<p class="align" style="text-align:left" data-align-explicit data-testid="align-left">محاذاة إلى اليسار</p>
+<p class="align" style="text-align:center" data-align-explicit data-testid="align-center">محاذاة في المنتصف</p>
+<p class="align" style="text-align:right" data-testid="align-right">محاذاة إلى اليمين</p>
+<p class="align" style="text-align:justify" data-align-explicit data-testid="align-justify">محاذاة ضبط: تمتد الكلمات لتملأ عرض السطر بالكامل في جميع الأسطر ما عدا السطر الأخير من الفقرة.</p>
+
+<h2>النصوص ثنائية الاتجاه</h2>
+<div class="col">
+  <p class="card" data-testid="bidi-invoice">فاتورة INV-2026-00042 بتاريخ 08/11/2026</p>
+  <p class="card" data-testid="bidi-brand">Acme Cloud هي منصة متكاملة لإدارة الأعمال الصغيرة والمتوسطة.</p>
+  <p class="card" data-testid="bidi-digits">2026 هو عام التحول الرقمي للشركة، بنسبة نمو 35%.</p>
+  <p class="card" data-testid="bidi-parens">يدعم النظام تسجيل الدخول الموحد (Single Sign-On) لجميع المستخدمين.</p>
+  <p class="card" data-testid="bidi-indic">المبلغ المستحق: ١٬٢٥٠٫٧٥ دينار — الأرقام: ٠١٢٣٤٥٦٧٨٩</p>
+  <p class="card" data-testid="bidi-contact">راسلنا على support@example.com أو اتصل على &#x200E;+962 6 555 0100</p>
+  <p class="card" data-testid="bidi-controls">&#x200F;الملف &#x2066;report-final.pdf&#x2069; جاهز للتنزيل.</p>
+</div>
+
+<h2>كلمة مقسومة بين عناصر</h2>
+<p class="card col" data-testid="split-word">كلمة مقسومة: مر<mark>حبا</mark> بكم — الحروف متصلة في المتصفح.</p>
+
+<h2>تباعد الأحرف</h2>
+<p class="card col ls" data-testid="letter-spacing-ar">تباعد أحرف ٢ بكسل على نص عربي</p>
+<p class="card col ls" style="font-family:Inter,sans-serif" data-testid="letter-spacing-latin" dir="ltr" data-align-explicit>Letter spacing 2px on Latin text</p>
+
+<h2>حقول الإدخال</h2>
+<form class="row" onsubmit="return false" data-testid="inputs">
+  <label class="f">الاسم الكامل<input type="text" value="أحمد عبد الله" data-testid="input-ar-value"></label>
+  <label class="f">البحث<input type="search" placeholder="ابحث عن عميل أو فاتورة…" data-testid="input-ar-placeholder"></label>
+  <label class="f">البريد الإلكتروني<input type="email" dir="ltr" value="ahmad@example.com" data-testid="input-ltr-email"></label>
+  <label class="f">ملاحظات<textarea placeholder="اكتب ملاحظاتك هنا…" data-testid="textarea-ar-placeholder"></textarea></label>
+  <label class="f">المدينة
+    <select data-testid="select-ar">
+      <option>عمّان</option>
+      <option selected>الرياض</option>
+      <option>القاهرة</option>
+    </select>
+  </label>
+  <div style="align-self:flex-end"><button type="submit">حفظ الفاتورة</button></div>
+</form>
+
+<h2>جزيرة من اليسار إلى اليمين</h2>
+<div class="ltr-island" dir="ltr" data-testid="ltr-island">
+  <strong>English block (dir="ltr")</strong> inside the RTL page. Text here is left-aligned and flows left to right, including the number 1,250.75.
+</div>
+<pre dir="ltr" data-testid="code-snippet"><code>const total = items.reduce((sum, i) =&gt; sum + i.qty * i.price, 0);
+console.log(`Total: ${total.toFixed(2)}`);</code></pre>
+
+<h2>dir="auto"</h2>
+<p class="card col" dir="auto" data-testid="dir-auto-ltr">Hello — this paragraph starts with Latin, so dir="auto" makes it LTR.</p>
+<p class="card col" dir="auto" data-testid="dir-auto-rtl">مرحبا — هذه الفقرة تبدأ بحرف عربي، لذلك يكون اتجاهها من اليمين إلى اليسار.</p>
+<p class="card col" data-testid="dir-auto-inline">اسم المستخدم: <bdi dir="auto">john_doe_99</bdi> — آخر دخول: <bdi dir="auto">أمس</bdi></p>
+
+<h2>مخطط SVG بعناوين عربية</h2>
+<svg width="520" height="240" viewBox="0 0 520 240" font-family="Tajawal, sans-serif" data-testid="svg-chart-ar">
+  <rect width="520" height="240" rx="12" fill="#f8fafc"/>
+  <text x="260" y="32" text-anchor="middle" font-size="18" font-weight="700" fill="#0f172a">المبيعات الشهرية (بالألف)</text>
+  <line x1="40" y1="200" x2="490" y2="200" stroke="#94a3b8"/>
+  <g fill="#3b82f6">
+    <rect x="410" y="110" width="50" height="90" rx="4"/>
+    <rect x="320" y="80" width="50" height="120" rx="4"/>
+    <rect x="230" y="130" width="50" height="70" rx="4"/>
+    <rect x="140" y="60" width="50" height="140" rx="4"/>
+    <rect x="50" y="95" width="50" height="105" rx="4"/>
+  </g>
+  <g font-size="14" fill="#334155" text-anchor="middle">
+    <text x="435" y="222">يناير</text>
+    <text x="345" y="222">فبراير</text>
+    <text x="255" y="222">مارس</text>
+    <text x="165" y="222">أبريل</text>
+    <text x="75" y="222">مايو</text>
+  </g>
+  <g font-size="12" fill="#1e3a8a" text-anchor="middle">
+    <text x="435" y="104">٩٠</text><text x="345" y="74">١٢٠</text><text x="255" y="124">٧٠</text><text x="165" y="54">١٤٠</text><text x="75" y="89">١٠٥</text>
+  </g>
+</svg>
+
+<h2>جدول بعناوين عربية</h2>
+<table data-testid="table-ar">
+  <thead><tr><th>رقم الفاتورة</th><th>العميل</th><th>التاريخ</th><th>المبلغ</th><th>الحالة</th></tr></thead>
+  <tbody>
+    <tr><td>INV-2026-00042</td><td>شركة النور للتجارة</td><td>08/11/2026</td><td class="num" data-align-explicit>1,250.75</td><td><span class="status paid">مدفوعة</span></td></tr>
+    <tr><td>INV-2026-00043</td><td>مؤسسة الأفق</td><td>09/11/2026</td><td class="num" data-align-explicit>980.00</td><td><span class="status due">غير مدفوعة</span></td></tr>
+    <tr><td>INV-2026-00044</td><td>مكتب الريادة</td><td>10/11/2026</td><td class="num" data-align-explicit>4,320.10</td><td><span class="status late">متأخرة</span></td></tr>
+  </tbody>
+</table>
+</body>
+</html>

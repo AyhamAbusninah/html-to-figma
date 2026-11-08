@@ -1,0 +1,3 @@
+# Third-party fonts downloaded by scripts/fetch-assets.mjs
+assets/vendor/
+*.part

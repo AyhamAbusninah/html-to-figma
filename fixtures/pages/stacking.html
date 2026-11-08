@@ -1,0 +1,125 @@
+<!doctype html>
+<!--
+  Fixture: stacking
+  Purpose: paint order — z-index (negative / auto / positive), stacking contexts created by
+           opacity, transform and positioned z-index, DOM order ≠ paint order, a position:fixed
+           header and a position:sticky subheader on a long scrolling page.
+  Requirements: EXT-T-8, EXT-T-9, EXT-C-1, EXT-G-1, EXT-G-4, PLG-R-3, AC-EXT-7
+  Expected capture behaviour (data-testid). Figma children order = paint order (last = top):
+    - zorder-demo: DOM order is A(z:3), B(z:-1), C(no z / static), D(z:auto, positioned),
+      E(z:1). Paint (bottom→top): B(-1) → C(static block) → D(auto) → E(1) → A(3).
+      Visually: A (red) is on top of everything; B (blue) is behind the static C (grey).
+      Every .stage has isolation:isolate (its own stacking context), so B paints above the white
+      stage background — without it B would vanish behind the stage.
+    - context-opacity: parent with opacity .9 forms a stacking context; its child with z-index 999
+      must NOT rise above sibling "context-sibling" (z-index 2) which is painted later/higher.
+      Visually: the yellow sibling covers the purple z:999 child.
+    - context-transform: same rule with transform: translateZ(0) on the parent.
+    - context-zindex: positioned parent z-index 1 groups its child (z 50); sibling z-index 2 wins.
+    - negative-in-context: z-index:-1 child of an isolated parent (isolation:isolate) is painted
+      above the parent's background but below the parent's in-flow text.
+    - fixed-header: position:fixed, top 0 — captured at y = 0 after scroll-to-top (EXT-T-9) and
+      hoisted to the root; it appears ONCE at the top of the document, not repeated.
+    - sticky-subheader: position:sticky top 56px — captured at its scroll-top position (in flow,
+      directly under the intro), regardless of where the user had scrolled (AC-EXT-7).
+    - The page is ~3200px tall; scroll to the middle before capturing to test AC-EXT-7: the output
+      must match a capture started at the top, and the scroll position must be restored.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fixture: stacking</title>
+<style>
+  @font-face { font-family: "Inter"; font-weight: 400; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/inter/Inter-400.woff2) format("woff2"); }
+  @font-face { font-family: "Inter"; font-weight: 600; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/inter/Inter-600.woff2) format("woff2"); }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.5 "Inter", sans-serif; color: #111827; background: #f8fafc; }
+  .fixed-header { position: fixed; top: 0; left: 0; right: 0; height: 56px; z-index: 100; background: #0f172a; color: #f8fafc; display: flex; align-items: center; padding: 0 24px; font-weight: 600; box-shadow: 0 2px 8px rgba(0,0,0,.25); }
+  .fixed-header .spacer { flex: 1; }
+  .fixed-header .pill { background: #38bdf8; color: #0c4a6e; padding: 2px 10px; border-radius: 999px; font-size: 12px; }
+  main { padding: 80px 24px 40px; width: 1000px; }
+  h1 { font-size: 24px; margin: 0 0 8px; font-weight: 600; }
+  h2 { font-size: 15px; margin: 32px 0 12px; font-weight: 600; }
+  .sticky-subheader { position: sticky; top: 56px; z-index: 50; background: #e0f2fe; border-bottom: 1px solid #7dd3fc; padding: 10px 16px; margin: 0 -24px; font-weight: 600; color: #075985; }
+  .stage { position: relative; isolation: isolate; width: 520px; height: 260px; background: #fff; border: 1px solid #cbd5e1; margin-bottom: 8px; } /* isolate: keeps z-index:-1 children above the stage background */
+  .card { position: absolute; width: 180px; height: 120px; border-radius: 10px; padding: 10px; color: #fff; font-weight: 600; box-shadow: 0 6px 16px rgba(0,0,0,.2); }
+  .a { left: 40px; top: 30px; background: #dc2626; z-index: 3; }
+  .b { left: 100px; top: 70px; background: #2563eb; z-index: -1; }
+  .c { position: static; display: block; width: 200px; height: 110px; margin: 100px 0 0 150px; background: #94a3b8; border-radius: 10px; padding: 10px; color: #fff; font-weight: 600; }
+  .d { left: 230px; top: 110px; background: #16a34a; }
+  .e { left: 300px; top: 40px; background: #9333ea; z-index: 1; }
+  .ctx-parent { position: absolute; left: 40px; top: 40px; width: 240px; height: 160px; background: #ede9fe; border: 2px solid #7c3aed; border-radius: 12px; padding: 8px; color: #4c1d95; font-weight: 600; }
+  .ctx-opacity { opacity: 0.9; }
+  .ctx-transform { transform: translateZ(0); }
+  .ctx-zindex { z-index: 1; }
+  .ctx-child { position: absolute; left: 120px; top: 50px; width: 160px; height: 90px; background: #7c3aed; color: #fff; z-index: 999; border-radius: 8px; padding: 8px; }
+  .ctx-sibling { position: absolute; left: 230px; top: 90px; width: 220px; height: 120px; background: #facc15; color: #713f12; z-index: 2; border-radius: 8px; padding: 8px; font-weight: 600; }
+  .iso { position: relative; isolation: isolate; width: 300px; height: 140px; margin: 20px; padding: 16px; background: #fef3c7; border: 2px solid #f59e0b; color: #78350f; font-weight: 600; }
+  .iso .under { position: absolute; z-index: -1; left: 60px; top: 30px; width: 200px; height: 90px; background: #fb923c; border-radius: 8px; }
+  .filler { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin: 12px 0; color: #475569; }
+  .filler strong { color: #0f172a; }
+</style>
+</head>
+<body>
+<header class="fixed-header" data-testid="fixed-header">Acme Console <span class="spacer"></span><span class="pill">position: fixed</span></header>
+
+<main>
+  <h1>Stacking &amp; positioning</h1>
+  <p>Long page. Scroll to the middle before capturing to test scroll-position independence.</p>
+  <div class="sticky-subheader" data-testid="sticky-subheader">Sticky subheader (top: 56px)</div>
+
+  <h2>z-index ordering (DOM order: A, B, C, D, E)</h2>
+  <div class="stage" data-testid="zorder-demo">
+    <div class="card a" data-testid="z-a">A · z-index 3</div>
+    <div class="card b" data-testid="z-b">B · z-index -1</div>
+    <div class="c" data-testid="z-c">C · static block</div>
+    <div class="card d" data-testid="z-d">D · positioned, z auto</div>
+    <div class="card e" data-testid="z-e">E · z-index 1</div>
+  </div>
+
+  <h2>Stacking context: opacity</h2>
+  <div class="stage" data-testid="context-opacity">
+    <div class="ctx-parent ctx-opacity">opacity .9 parent<div class="ctx-child">child z 999</div></div>
+    <div class="ctx-sibling" data-testid="context-sibling">sibling z 2 (on top)</div>
+  </div>
+
+  <h2>Stacking context: transform</h2>
+  <div class="stage" data-testid="context-transform">
+    <div class="ctx-parent ctx-transform">transform parent<div class="ctx-child">child z 999</div></div>
+    <div class="ctx-sibling">sibling z 2 (on top)</div>
+  </div>
+
+  <h2>Stacking context: positioned z-index</h2>
+  <div class="stage" data-testid="context-zindex">
+    <div class="ctx-parent ctx-zindex">z-index 1 parent<div class="ctx-child">child z 999</div></div>
+    <div class="ctx-sibling">sibling z 2 (on top)</div>
+  </div>
+
+  <h2>Negative z-index inside an isolated parent</h2>
+  <div class="iso" data-testid="negative-in-context">isolation: isolate — text above the orange box<div class="under"></div></div>
+
+  <h2>Filler content</h2>
+  <div class="filler"><strong>Section 1.</strong> Filler paragraph to make the page long enough to scroll. The fixed header stays at the top of the viewport while this content moves underneath it.</div>
+  <div class="filler"><strong>Section 2.</strong> The sticky subheader sticks 56px from the top once its normal position scrolls past that line.</div>
+  <div class="filler"><strong>Section 3.</strong> Capture output must not depend on the scroll position at the time Capture is clicked.</div>
+  <div class="filler"><strong>Section 4.</strong> Filler paragraph.</div>
+  <div class="filler"><strong>Section 5.</strong> Filler paragraph.</div>
+  <div class="filler"><strong>Section 6.</strong> Filler paragraph.</div>
+  <div class="filler"><strong>Section 7.</strong> Filler paragraph.</div>
+  <div class="filler"><strong>Section 8.</strong> Filler paragraph.</div>
+  <div class="filler"><strong>Section 9.</strong> Filler paragraph.</div>
+  <div class="filler"><strong>Section 10.</strong> Filler paragraph.</div>
+  <div class="filler"><strong>Section 11.</strong> Filler paragraph.</div>
+  <div class="filler"><strong>Section 12.</strong> Filler paragraph.</div>
+  <div class="filler"><strong>Section 13.</strong> Filler paragraph.</div>
+  <div class="filler"><strong>Section 14.</strong> Filler paragraph.</div>
+  <div class="filler"><strong>Section 15.</strong> Filler paragraph.</div>
+  <div class="filler"><strong>Section 16.</strong> Filler paragraph.</div>
+  <div class="filler"><strong>Section 17.</strong> Filler paragraph.</div>
+  <div class="filler"><strong>Section 18.</strong> Filler paragraph.</div>
+  <div class="filler"><strong>Section 19.</strong> Filler paragraph.</div>
+  <div class="filler"><strong>Section 20.</strong> End of page.</div>
+</main>
+</body>
+</html>

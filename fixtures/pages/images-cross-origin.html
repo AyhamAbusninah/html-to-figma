@@ -1,0 +1,116 @@
+<!doctype html>
+<!--
+  Fixture: images-cross-origin
+  Purpose: images that Tier 1 (canvas) cannot read — no-CORS images from other origins, a
+           cross-origin CSS background, a cookie-protected image, and a tainted canvas.
+  Origins (see fixtures/serve.mjs):
+    second = http://127.0.0.1:4174  on the extension host allow-list (EXT-P-4a), no CORS headers
+    third  = http://127.0.0.2:4175  NOT on the allow-list (needs optional permission), no CORS
+  Requirements: EXT-I-1, EXT-I-2, EXT-I-3, EXT-I-4, EXT-I-5, EXT-I-8, EXT-P-4, AC-EXT-2, AC-EXT-3
+  Expected capture behaviour (data-testid):
+    - xo-allowlisted: Tier 1 throws SecurityError (caught, never surfaced) → Tier 2 privileged
+      fetch → asset with source "fetch", label "ORIGIN B" (AC-EXT-2).
+    - xo-allowlisted-cors-attr: crossorigin="anonymous" on a server WITHOUT CORS headers → the
+      browser itself refuses to load the image (broken icon on screen). Expected: Tier 2 fetch
+      still succeeds (the extension fetch is not subject to CORS) or IMAGE_FETCH_FAILED.
+    - xo-not-allowlisted: popup must request http://127.0.0.2/* via chrome.permissions.request;
+      granted → source "fetch" ("ORIGIN C"); denied → Tier 3 screenshot crop (source
+      "screenshot") (EXT-P-4b, EXT-I-4).
+    - xo-background: CSS background-image from the second origin, repeated 120px tiles on a
+      360×140 box → pre-composited to one IMAGE paint (EXT-I-8) using Tier 2 bytes.
+    - xo-protected: http://127.0.0.1:4174/protected/img/protected.png returns 401 without the
+      h2f_session cookie. Steps: open http://127.0.0.1:4174/login once, then capture. The page
+      itself usually shows a BROKEN image even after login, because the cookie is SameSite=Lax
+      and this is a cross-site subresource request; the Tier 2 fetch with credentials:"include"
+      from the extension is what must succeed ("PRIVATE" label) (AC-EXT-3). Without login →
+      IMAGE_FETCH_FAILED (or Tier 3 crop of the broken icon).
+    - tainted-canvas: canvas drawn with a cross-origin image (no crossorigin attribute) → the
+      canvas is tainted; toDataURL throws → Tier 3 screenshot crop of the canvas.
+    - xo-svg-img: <img src="http://127.0.0.1:4174/assets/img/logo.svg"> → SVG text via Tier 2 →
+      SvgNode (EXT-S-5), else raster.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fixture: images (cross origin)</title>
+<style>
+  @font-face { font-family: "Inter"; font-weight: 400; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/inter/Inter-400.woff2) format("woff2"); }
+  @font-face { font-family: "Inter"; font-weight: 600; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/inter/Inter-600.woff2) format("woff2"); }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px; font: 13px/1.4 "Inter", sans-serif; color: #111827; background: #fff; width: 1000px; }
+  h1 { font-size: 22px; margin: 0 0 4px; font-weight: 600; }
+  h2 { font-size: 14px; margin: 28px 0 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: #4b5563; }
+  .row { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; }
+  figure { margin: 0; }
+  figcaption { margin-top: 6px; font-size: 12px; color: #4b5563; width: 220px; }
+  img, canvas { display: block; }
+  .frame { border: 1px solid #d1d5db; background: #f9fafb; }
+  .xo-background { width: 360px; height: 140px; border-radius: 12px; border: 1px solid #d1d5db;
+    background: #ede9fe url(http://127.0.0.1:4174/assets/img/remote-bg.png) 10px 10px / 120px 120px repeat-x; }
+  .note { background: #fffbeb; border: 1px solid #fcd34d; padding: 10px 14px; border-radius: 8px; width: 760px; }
+  code { font: 12px ui-monospace, monospace; background: #f3f4f6; padding: 1px 4px; }
+</style>
+</head>
+<body>
+<h1>Images — cross origin</h1>
+<p class="note">Requires <code>node fixtures/serve.mjs</code> (three origins). For the protected image, first open <a href="http://127.0.0.1:4174/login">http://127.0.0.1:4174/login</a>.</p>
+
+<h2>Second origin (allow-listed, no CORS)</h2>
+<div class="row">
+  <figure data-testid="xo-allowlisted">
+    <img class="frame" src="http://127.0.0.1:4174/assets/img/remote-b.png" width="200" height="120" alt="Cross-origin image B">
+    <figcaption>127.0.0.1:4174 — Tier 2 fetch</figcaption>
+  </figure>
+  <figure data-testid="xo-allowlisted-cors-attr">
+    <img class="frame" src="http://127.0.0.1:4174/assets/img/remote-b.png?cors" crossorigin="anonymous" width="200" height="120" alt="Blocked: crossorigin without CORS headers">
+    <figcaption>crossorigin="anonymous" but no CORS headers (browser blocks)</figcaption>
+  </figure>
+  <figure data-testid="xo-svg-img">
+    <img class="frame" src="http://127.0.0.1:4174/assets/img/logo.svg" width="200" height="50" alt="Cross-origin SVG">
+    <figcaption>cross-origin &lt;img src=*.svg&gt;</figcaption>
+  </figure>
+  <figure data-testid="xo-background">
+    <div class="xo-background"></div>
+    <figcaption>CSS background-image from 127.0.0.1:4174, repeat-x</figcaption>
+  </figure>
+</div>
+
+<h2>Third origin (not allow-listed)</h2>
+<div class="row">
+  <figure data-testid="xo-not-allowlisted">
+    <img class="frame" src="http://127.0.0.2:4175/assets/img/remote-c.png" width="200" height="120" alt="Cross-origin image C">
+    <figcaption>127.0.0.2:4175 — permission request or Tier 3</figcaption>
+  </figure>
+</div>
+
+<h2>Cookie-protected</h2>
+<div class="row">
+  <figure data-testid="xo-protected">
+    <img class="frame" src="http://127.0.0.1:4174/protected/img/protected.png" width="200" height="120" alt="Protected image (needs login cookie)">
+    <figcaption>/protected/ — 401 without h2f_session cookie</figcaption>
+  </figure>
+</div>
+
+<h2>Tainted canvas</h2>
+<div class="row">
+  <figure data-testid="tainted-canvas">
+    <canvas id="tainted" width="240" height="160" class="frame"></canvas>
+    <figcaption>canvas with a cross-origin drawImage (toDataURL throws)</figcaption>
+  </figure>
+</div>
+
+<script>
+  const cv = document.getElementById("tainted");
+  const ctx = cv.getContext("2d");
+  ctx.fillStyle = "#fef3c7";
+  ctx.fillRect(0, 0, 240, 160);
+  const img = new Image(); // no crossOrigin → taints the canvas
+  img.onload = () => {
+    ctx.drawImage(img, 20, 20, 200, 120);
+    ctx.strokeStyle = "#b45309"; ctx.lineWidth = 4; ctx.strokeRect(2, 2, 236, 156);
+  };
+  img.src = "http://127.0.0.1:4174/assets/img/remote-b.png?canvas";
+</script>
+</body>
+</html>

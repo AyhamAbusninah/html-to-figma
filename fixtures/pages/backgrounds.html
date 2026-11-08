@@ -1,0 +1,174 @@
+<!doctype html>
+<!--
+  Fixture: backgrounds
+  Purpose: CSS background images and gradients — size, position, repeat, origin, clip, layered
+           url()+gradient backgrounds, and every gradient function.
+  Requirements: EXT-I-8, EXT-V-2, EXT-V-3, EXT-I-2, EXT-I-6, PLG-R-4
+  Expected capture behaviour (data-testid; every box is 240×150 except size-cover / size-contain /
+  size-percent, which are 240×190 so the photo's 1.6 aspect ratio does not match the box):
+    - size-* / pos-* / rep-*: url() layers are pre-composited by the extension onto a canvas of
+      the padding box, honouring size/position/repeat/origin, and emitted as ONE IMAGE paint with
+      scaleMode FILL (EXT-I-8). The composited bitmap must look like the on-screen box:
+        size-cover: quadrants 1–4 visible, cropped left/right; size-contain: letterboxed top/bottom;
+        size-auto: natural 800×500 cropped at top-left (magenta corner visible);
+        size-explicit: 100×60 single tile at top-left;
+        pos-center / pos-right-bottom / pos-offset (20px 30px) / pos-percent (75% 25%);
+        rep-repeat / rep-x / rep-y / rep-none / rep-space / rep-round with the 32px checker tile.
+    - origin-*: content-box origin offsets the image by padding (20px); clip-content-box clips the
+      background colour to the content box; clip-padding-box excludes the 10px dashed border;
+      clip-text: background-clip:text (expected: unsupported → solid text colour or warning).
+    - layered: one IMAGE paint (url layers composited) PLUS native gradient paints for gradient
+      layers, in CSS order (top layer first in CSS = top-most in Figma).
+    - lin-*: GRADIENT_LINEAR with angleDeg 90 / 135 / 0 / 180 ("to bottom") and stops in 0–1;
+      lin-hard: hard stops (two stops at the same position); lin-alpha: transparent stop.
+    - rad-*: GRADIENT_RADIAL (circle / ellipse / at position / farthest-corner).
+    - rep-lin, rep-rad, conic-*: SOLID of the first stop + GRADIENT_UNSUPPORTED warning (EXT-V-3).
+    - svg-bg: background-image of an .svg file → rasterised into the composite (EXT-I-6).
+    - data-bg: data: URI SVG background (Tier 1).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fixture: backgrounds</title>
+<style>
+  @font-face { font-family: "Inter"; font-weight: 400; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/inter/Inter-400.woff2) format("woff2"); }
+  @font-face { font-family: "Inter"; font-weight: 600; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/inter/Inter-600.woff2) format("woff2"); }
+  @font-face { font-family: "Inter"; font-weight: 700; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/inter/Inter-700.woff2) format("woff2"); }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px; font: 12px/1.4 "Inter", sans-serif; color: #111827; background: #fff; width: 1100px; }
+  h1 { font-size: 22px; margin: 0 0 4px; font-weight: 600; }
+  h2 { font-size: 14px; margin: 28px 0 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: #4b5563; }
+  .grid { display: grid; grid-template-columns: repeat(4, 240px); gap: 24px 20px; }
+  .b { width: 240px; height: 150px; border: 1px solid #9ca3af; background-color: #f3f4f6; }
+  .cap { margin-top: 5px; color: #4b5563; }
+  .photo { background-image: url(../assets/img/photo-800x500.png); background-repeat: no-repeat; }
+  .tile { background-image: url(../assets/img/tile-32.png); }
+
+  .size-cover, .size-contain, .size-percent { height: 190px; } /* aspect ≠ 1.6 so cover and contain differ */
+  .size-cover { background-size: cover; }
+  .size-contain { background-size: contain; background-position: center; }
+  .size-auto { background-size: auto; }
+  .size-explicit { background-size: 100px 60px; }
+  .size-percent { background-size: 50% auto; background-position: center; }
+  .pos-center { background-size: 160px 100px; background-position: center; }
+  .pos-right-bottom { background-size: 160px 100px; background-position: right bottom; }
+  .pos-offset { background-size: 160px 100px; background-position: 20px 30px; }
+  .pos-percent { background-size: 160px 100px; background-position: 75% 25%; }
+  .pos-edge { background-size: 160px 100px; background-position: right 10px bottom 15px; }
+
+  .rep-repeat { background-repeat: repeat; }
+  .rep-x { background-repeat: repeat-x; background-position: 0 50%; }
+  .rep-y { background-repeat: repeat-y; background-position: 50% 0; }
+  .rep-none { background-repeat: no-repeat; background-position: center; }
+  .rep-space { background-repeat: space; }
+  .rep-round { background-repeat: round; }
+
+  .origin-padding { padding: 20px; border: 10px dashed rgba(17,24,39,.4); background-size: 80px 50px; background-origin: padding-box; }
+  .origin-content { padding: 20px; border: 10px dashed rgba(17,24,39,.4); background-size: 80px 50px; background-origin: content-box; }
+  .origin-border { padding: 20px; border: 10px dashed rgba(17,24,39,.4); background-size: 80px 50px; background-origin: border-box; }
+  .clip-content { padding: 20px; border: 10px dashed #6b7280; background: #fb923c content-box; }
+  .clip-padding { padding: 20px; border: 10px dashed #6b7280; background: #38bdf8 padding-box; }
+  .clip-border { padding: 20px; border: 10px dashed #6b7280; background: #a3e635 border-box; }
+  .clip-text { border: none; background: linear-gradient(90deg, #db2777, #7c3aed) text; -webkit-background-clip: text; color: transparent; font: 700 44px/150px "Inter", sans-serif; text-align: center; }
+
+  .layered { background:
+      url(../assets/img/alpha-256.png) right 10px center / 100px 100px no-repeat,
+      linear-gradient(rgba(15,23,42,.0), rgba(15,23,42,.6)),
+      url(../assets/img/photo-800x500.png) center / cover no-repeat,
+      #111827; }
+  .layered-two-urls { background:
+      url(../assets/img/dot-24.png) 12px 12px / 24px 24px repeat,
+      url(../assets/img/photo-800x500.png) center / cover no-repeat; }
+
+  .lin-90 { background-image: linear-gradient(90deg, #f43f5e, #6366f1); }
+  .lin-135 { background-image: linear-gradient(135deg, #22d3ee 0%, #a855f7 50%, #f97316 100%); }
+  .lin-0 { background-image: linear-gradient(0deg, #065f46, #a7f3d0); }
+  .lin-to-bottom { background-image: linear-gradient(to bottom, #1e3a8a, #93c5fd); }
+  .lin-to-corner { background-image: linear-gradient(to top right, #fde047, #dc2626); }
+  .lin-hard { background-image: linear-gradient(90deg, #2563eb 0 33%, #ffffff 33% 66%, #dc2626 66% 100%); }
+  .lin-alpha { background-color: #fbbf24; background-image: linear-gradient(180deg, rgba(0,0,0,.7), transparent 70%); }
+  .lin-px-stops { background-image: linear-gradient(90deg, #0f172a 20px, #38bdf8 20px, #38bdf8 120px, #f8fafc 200px); }
+  .rad-circle { background-image: radial-gradient(circle, #fef08a, #ca8a04); }
+  .rad-ellipse { background-image: radial-gradient(ellipse at center, #e0f2fe 0%, #0369a1 100%); }
+  .rad-at { background-image: radial-gradient(circle at 25% 30%, #ffffff 0 10%, #f472b6 40%, #831843 100%); }
+  .rad-size { background-image: radial-gradient(60px 40px at 70% 60%, #34d399, transparent); background-color: #064e3b; }
+  .rep-lin { background-image: repeating-linear-gradient(45deg, #fbbf24 0 12px, #1f2937 12px 24px); }
+  .rep-rad { background-image: repeating-radial-gradient(circle, #c084fc 0 10px, #faf5ff 10px 20px); }
+  .conic { background-image: conic-gradient(#ef4444, #f59e0b, #22c55e, #3b82f6, #a855f7, #ef4444); }
+  .conic-pie { background-image: conic-gradient(from 90deg at 50% 50%, #0ea5e9 0 40%, #e2e8f0 40% 100%); border-radius: 50%; width: 150px; }
+  .svg-bg { background: #f8fafc url(../assets/img/pattern-dots.svg) 0 0 / 20px 20px repeat; }
+  .data-bg { background: #f0fdf4 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Cpath d='M0 40L40 0' stroke='%2316a34a' stroke-width='3'/%3E%3C/svg%3E") 0 0 / 40px 40px repeat; }
+</style>
+</head>
+<body>
+<h1>Backgrounds</h1>
+
+<h2>background-size (photo 800×500)</h2>
+<div class="grid">
+  <div><div class="b photo size-cover" data-testid="size-cover"></div><div class="cap">cover</div></div>
+  <div><div class="b photo size-contain" data-testid="size-contain"></div><div class="cap">contain, center</div></div>
+  <div><div class="b photo size-auto" data-testid="size-auto"></div><div class="cap">auto (natural size)</div></div>
+  <div><div class="b photo size-explicit" data-testid="size-explicit"></div><div class="cap">100px 60px</div></div>
+  <div><div class="b photo size-percent" data-testid="size-percent"></div><div class="cap">50% auto, center</div></div>
+</div>
+
+<h2>background-position (160×100)</h2>
+<div class="grid">
+  <div><div class="b photo pos-center" data-testid="pos-center"></div><div class="cap">center</div></div>
+  <div><div class="b photo pos-right-bottom" data-testid="pos-right-bottom"></div><div class="cap">right bottom</div></div>
+  <div><div class="b photo pos-offset" data-testid="pos-offset"></div><div class="cap">20px 30px</div></div>
+  <div><div class="b photo pos-percent" data-testid="pos-percent"></div><div class="cap">75% 25%</div></div>
+  <div><div class="b photo pos-edge" data-testid="pos-edge"></div><div class="cap">right 10px bottom 15px</div></div>
+</div>
+
+<h2>background-repeat (32px tile)</h2>
+<div class="grid">
+  <div><div class="b tile rep-repeat" data-testid="rep-repeat"></div><div class="cap">repeat</div></div>
+  <div><div class="b tile rep-x" data-testid="rep-x"></div><div class="cap">repeat-x</div></div>
+  <div><div class="b tile rep-y" data-testid="rep-y"></div><div class="cap">repeat-y</div></div>
+  <div><div class="b tile rep-none" data-testid="rep-none"></div><div class="cap">no-repeat, center</div></div>
+  <div><div class="b tile rep-space" data-testid="rep-space"></div><div class="cap">space</div></div>
+  <div><div class="b tile rep-round" data-testid="rep-round"></div><div class="cap">round</div></div>
+  <div><div class="b svg-bg" data-testid="svg-bg"></div><div class="cap">SVG file, repeat</div></div>
+  <div><div class="b data-bg" data-testid="data-bg"></div><div class="cap">data: SVG, repeat</div></div>
+</div>
+
+<h2>background-origin &amp; background-clip</h2>
+<div class="grid">
+  <div><div class="b photo origin-padding" data-testid="origin-padding"></div><div class="cap">origin padding-box (default)</div></div>
+  <div><div class="b photo origin-content" data-testid="origin-content"></div><div class="cap">origin content-box</div></div>
+  <div><div class="b photo origin-border" data-testid="origin-border"></div><div class="cap">origin border-box</div></div>
+  <div><div class="b clip-text" data-testid="clip-text">Clip text</div><div class="cap">background-clip: text</div></div>
+  <div><div class="b clip-content" data-testid="clip-content"></div><div class="cap">clip content-box</div></div>
+  <div><div class="b clip-padding" data-testid="clip-padding"></div><div class="cap">clip padding-box</div></div>
+  <div><div class="b clip-border" data-testid="clip-border"></div><div class="cap">clip border-box</div></div>
+</div>
+
+<h2>Layered backgrounds</h2>
+<div class="grid">
+  <div><div class="b layered" data-testid="layered"></div><div class="cap">url + gradient + cover photo + colour</div></div>
+  <div><div class="b layered-two-urls" data-testid="layered-two-urls"></div><div class="cap">two url() layers</div></div>
+</div>
+
+<h2>Gradients</h2>
+<div class="grid">
+  <div><div class="b lin-90" data-testid="lin-90"></div><div class="cap">linear 90deg</div></div>
+  <div><div class="b lin-135" data-testid="lin-135"></div><div class="cap">linear 135deg, 3 stops</div></div>
+  <div><div class="b lin-0" data-testid="lin-0"></div><div class="cap">linear 0deg</div></div>
+  <div><div class="b lin-to-bottom" data-testid="lin-to-bottom"></div><div class="cap">to bottom</div></div>
+  <div><div class="b lin-to-corner" data-testid="lin-to-corner"></div><div class="cap">to top right</div></div>
+  <div><div class="b lin-hard" data-testid="lin-hard"></div><div class="cap">hard stops</div></div>
+  <div><div class="b lin-alpha" data-testid="lin-alpha"></div><div class="cap">alpha → transparent over colour</div></div>
+  <div><div class="b lin-px-stops" data-testid="lin-px-stops"></div><div class="cap">px stop positions</div></div>
+  <div><div class="b rad-circle" data-testid="rad-circle"></div><div class="cap">radial circle</div></div>
+  <div><div class="b rad-ellipse" data-testid="rad-ellipse"></div><div class="cap">radial ellipse</div></div>
+  <div><div class="b rad-at" data-testid="rad-at"></div><div class="cap">radial at 25% 30%</div></div>
+  <div><div class="b rad-size" data-testid="rad-size"></div><div class="cap">radial 60px 40px</div></div>
+  <div><div class="b rep-lin" data-testid="rep-lin"></div><div class="cap">repeating-linear (unsupported)</div></div>
+  <div><div class="b rep-rad" data-testid="rep-rad"></div><div class="cap">repeating-radial (unsupported)</div></div>
+  <div><div class="b conic" data-testid="conic"></div><div class="cap">conic (unsupported)</div></div>
+  <div><div class="b conic-pie" data-testid="conic-pie"></div><div class="cap">conic pie, round</div></div>
+</div>
+</body>
+</html>

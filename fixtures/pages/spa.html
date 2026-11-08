@@ -1,0 +1,207 @@
+<!doctype html>
+<!--
+  Fixture: spa (universal benchmark)
+  Purpose: a client-side-rendered single-page app. <body> ships EMPTY except for the mount
+           points; a script renders the whole UI after DOMContentLoaded, the way React/Vue apps
+           do. Includes CSS-in-JS (a <style> element created by script with hashed class names),
+           a modal rendered into a portal container at the end of <body> (open state, with a
+           fixed backdrop), a toast, a tabs component, and a web component with shadow DOM.
+  Requirements: EXT-C-2, EXT-C-3, EXT-T-1, EXT-T-8, EXT-T-9, EXT-V-1, EXT-V-6, EXT-V-9, NFR-2
+  Expected capture behaviour:
+    - Capture after <html data-ready="true"> is set (the test harness waits for it). Nothing in
+      the capture depends on timing; class names are deterministic hashes (css-xxxxxx).
+    - The injected <style> is skipped (EXT-T-2) but its rules apply — the capture looks styled.
+    - app shell: header, sidebar nav (active item highlighted), tabs ("Overview" active with a 2px
+      indigo underline), a list of 6 tasks rendered from data.
+    - portal: #portal-root (last child of body) contains a position:fixed backdrop
+      rgba(15,23,42,.45) with backdrop-filter blur(2px) covering the viewport and a centred dialog
+      (radius 16, large shadow). Paint order: dialog above backdrop above the app (EXT-T-8);
+      fixed elements are hoisted to the root (EXT-T-9).
+    - toast: position:fixed bottom-right, z-index above the modal, with a ✓ icon (SVG) and text
+      "Changes saved".
+    - <user-chip> web component (open shadow root): avatar IMAGE + name, rendered in the header.
+    - DOM_MUTATED_DURING_CAPTURE must NOT fire (the app is idle after render) (EXT-C-3).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Taskflow — Sprint 24</title>
+<style>
+  @font-face { font-family: "Inter"; font-weight: 400; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/inter/Inter-400.woff2) format("woff2"); }
+  @font-face { font-family: "Inter"; font-weight: 600; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/inter/Inter-600.woff2) format("woff2"); }
+  @font-face { font-family: "Inter"; font-weight: 700; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/inter/Inter-700.woff2) format("woff2"); }
+  html, body { margin: 0; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<div id="portal-root"></div>
+
+<script>
+  // ---- tiny deterministic CSS-in-JS -------------------------------------------------------
+  const sheet = document.createElement("style");
+  sheet.setAttribute("data-css-in-js", "");
+  document.head.appendChild(sheet);
+  const cache = new Map();
+  function hash(str) { // djb2 → base36, deterministic
+    let h = 5381;
+    for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) >>> 0;
+    return h.toString(36);
+  }
+  function css(strings, ...vals) {
+    const body = strings.reduce((acc, s, i) => acc + s + (vals[i] ?? ""), "").trim();
+    if (cache.has(body)) return cache.get(body);
+    const cls = "css-" + hash(body);
+    // "&" is replaced with the generated class (nested selectors, like styled-components).
+    const rules = body.includes("&") ? body.replaceAll("&", "." + cls) : `.${cls}{${body}}`;
+    sheet.textContent += rules + "\n";
+    cache.set(body, cls);
+    return cls;
+  }
+  function h(tag, props, ...children) {
+    const el = document.createElement(tag);
+    for (const [k, v] of Object.entries(props ?? {})) {
+      if (k === "class") el.className = v;
+      else if (k.startsWith("on")) el.addEventListener(k.slice(2).toLowerCase(), v);
+      else el.setAttribute(k, v);
+    }
+    for (const c of children.flat()) if (c != null) el.append(c.nodeType ? c : document.createTextNode(String(c)));
+    return el;
+  }
+  function svg(markup, cls) {
+    const t = document.createElement("template");
+    t.innerHTML = markup.trim();
+    const el = t.content.firstChild;
+    if (cls) el.setAttribute("class", cls);
+    return el;
+  }
+
+  // ---- web component ------------------------------------------------------------------------
+  customElements.define("user-chip", class extends HTMLElement {
+    connectedCallback() {
+      if (this.shadowRoot) return;
+      this.attachShadow({ mode: "open" }).innerHTML = `
+        <style>
+          :host { display: inline-flex; }
+          div { display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px 4px 4px; border-radius: 999px; background: #f1f5f9; border: 1px solid #e2e8f0; font: 600 13px Inter, sans-serif; color: #0f172a; }
+          img { width: 28px; height: 28px; border-radius: 50%; display: block; }
+        </style>
+        <div><img src="${this.getAttribute("avatar")}" alt=""><span>${this.getAttribute("name")}</span></div>`;
+    }
+  });
+
+  // ---- styles -------------------------------------------------------------------------------
+  const S = {
+    global: css`& { font: 14px/1.5 Inter, system-ui, sans-serif; color: #0f172a; background: #f8fafc; min-height: 100vh; display: grid; grid-template-columns: 232px 1fr; grid-template-rows: 60px 1fr; }`,
+    header: css`grid-column: 1 / -1; display: flex; align-items: center; gap: 16px; padding: 0 20px; background: #fff; border-bottom: 1px solid #e2e8f0;`,
+    brand: css`font-weight: 700; font-size: 17px; display: flex; align-items: center; gap: 10px;`,
+    brandMark: css`width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(135deg, #22d3ee, #6366f1);`,
+    spacer: css`flex: 1;`,
+    side: css`background: #fff; border-right: 1px solid #e2e8f0; padding: 16px 12px; display: flex; flex-direction: column; gap: 2px;`,
+    navItem: css`display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 8px; color: #475569; font-weight: 600;`,
+    navActive: css`background: #eef2ff; color: #4338ca;`,
+    navIcon: css`width: 18px; height: 18px;`,
+    main: css`padding: 24px 32px;`,
+    h1: css`margin: 0 0 4px; font-size: 24px; font-weight: 700;`,
+    meta: css`color: #64748b; margin: 0 0 20px;`,
+    tabs: css`display: flex; gap: 24px; border-bottom: 1px solid #e2e8f0; margin-bottom: 20px;`,
+    tab: css`padding: 10px 2px; color: #64748b; font-weight: 600; border-bottom: 2px solid transparent; margin-bottom: -1px;`,
+    tabActive: css`color: #4338ca; border-bottom-color: #4f46e5;`,
+    count: css`margin-left: 6px; padding: 0 7px; border-radius: 999px; background: #e2e8f0; color: #334155; font-size: 12px;`,
+    list: css`background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; width: 760px;`,
+    row: css`display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-bottom: 1px solid #f1f5f9;`,
+    check: css`width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid #cbd5e1; flex: none;`,
+    checkDone: css`background: #10b981; border-color: #10b981;`,
+    title: css`flex: 1; font-weight: 600;`,
+    titleDone: css`color: #94a3b8; text-decoration: line-through;`,
+    tag: css`font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 6px;`,
+    avatar: css`width: 26px; height: 26px; border-radius: 50%;`,
+    backdrop: css`position: fixed; inset: 0; background: rgba(15, 23, 42, .45); backdrop-filter: blur(2px); z-index: 1000; display: grid; place-items: center;`,
+    dialog: css`width: 440px; background: #fff; border-radius: 16px; box-shadow: 0 24px 64px rgba(15,23,42,.35), 0 2px 6px rgba(15,23,42,.12); overflow: hidden;`,
+    dHead: css`padding: 20px 24px 8px; font-size: 18px; font-weight: 700; display: flex; justify-content: space-between; align-items: center;`,
+    dBody: css`padding: 0 24px 20px; color: #475569;`,
+    field: css`display: block; margin-top: 14px; font-weight: 600; color: #0f172a; font-size: 13px;`,
+    input: css`display: block; width: 100%; box-sizing: border-box; margin-top: 6px; padding: 9px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font: 14px Inter, sans-serif; color: #0f172a;`,
+    dFoot: css`padding: 14px 24px; background: #f8fafc; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end; gap: 10px;`,
+    btn: css`font: 600 14px Inter, sans-serif; padding: 9px 16px; border-radius: 8px; border: 1px solid #cbd5e1; background: #fff; color: #0f172a;`,
+    btnPrimary: css`background: #4f46e5; border-color: #4f46e5; color: #fff;`,
+    toast: css`position: fixed; right: 24px; bottom: 24px; z-index: 1100; display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: #0f172a; color: #f8fafc; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.3); font-weight: 600;`,
+    toastIcon: css`width: 20px; height: 20px; color: #34d399;`,
+  };
+  const TAG = { Design: ["#fdf2f8", "#be185d"], Backend: ["#eff6ff", "#1d4ed8"], Frontend: ["#f0fdf4", "#15803d"], QA: ["#fffbeb", "#b45309"] };
+  const TASKS = [
+    { t: "Finalize onboarding copy", tag: "Design", done: true, a: 1 },
+    { t: "Paginate the invoices endpoint", tag: "Backend", done: true, a: 3 },
+    { t: "Empty states for reports", tag: "Design", done: false, a: 5 },
+    { t: "Migrate settings page to new form kit", tag: "Frontend", done: false, a: 2 },
+    { t: "Regression pass on checkout", tag: "QA", done: false, a: 4 },
+    { t: "Rate-limit webhook retries", tag: "Backend", done: false, a: 6 },
+  ];
+  const ICONS = {
+    board: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="18" rx="1.5"/><rect x="14" y="3" width="7" height="11" rx="1.5"/></svg>',
+    inbox: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 13h5l2 3h4l2-3h5M5 5h14l2 8v6H3v-6z"/></svg>',
+    chart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-7M21 20H3"/></svg>',
+    gear: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>',
+    x: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+    ok: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg>',
+  };
+
+  // ---- render -------------------------------------------------------------------------------
+  function App() {
+    const nav = [["board", "Sprint board", true], ["inbox", "Inbox"], ["chart", "Reports"], ["gear", "Settings"]];
+    return [
+      h("header", { class: S.header, "data-testid": "spa-header" },
+        h("div", { class: S.brand }, h("span", { class: S.brandMark }), "Taskflow"),
+        h("div", { class: S.spacer }),
+        h("user-chip", { name: "Dana Novak", avatar: "../assets/img/avatar-4.png", "data-testid": "web-component" })),
+      h("aside", { class: S.side },
+        nav.map(([ic, label, active]) => h("a", { class: S.navItem + (active ? " " + S.navActive : "") }, svg(ICONS[ic], S.navIcon), label))),
+      h("main", { class: S.main },
+        h("h1", { class: S.h1 }, "Sprint 24"),
+        h("p", { class: S.meta }, "Nov 3 – Nov 14 · 6 tasks · 2 completed"),
+        h("div", { class: S.tabs, role: "tablist", "data-testid": "tabs" },
+          h("span", { class: S.tab + " " + S.tabActive, role: "tab", "aria-selected": "true" }, "Overview"),
+          h("span", { class: S.tab, role: "tab" }, "Tasks", h("span", { class: S.count }, "6")),
+          h("span", { class: S.tab, role: "tab" }, "Activity"),
+          h("span", { class: S.tab, role: "tab" }, "Files")),
+        h("div", { class: S.list, "data-testid": "task-list" },
+          TASKS.map((x) => {
+            const [bg, fg] = TAG[x.tag];
+            const tag = h("span", { class: S.tag }, x.tag);
+            tag.style.cssText = `background:${bg};color:${fg}`;
+            return h("div", { class: S.row },
+              h("span", { class: S.check + (x.done ? " " + S.checkDone : "") }),
+              h("span", { class: S.title + (x.done ? " " + S.titleDone : "") }, x.t),
+              tag,
+              h("img", { class: S.avatar, src: `../assets/img/avatar-${x.a}.png`, alt: "" }));
+          }))),
+    ];
+  }
+  function Modal() {
+    return h("div", { class: S.backdrop, "data-testid": "modal-backdrop" },
+      h("div", { class: S.dialog, role: "dialog", "aria-modal": "true", "data-testid": "modal" },
+        h("div", { class: S.dHead }, "Rename sprint", svg(ICONS.x)),
+        h("div", { class: S.dBody },
+          "Sprint names appear on boards, reports and notifications.",
+          h("label", { class: S.field }, "Sprint name", h("input", { class: S.input, value: "Sprint 24 — Checkout polish" }))),
+        h("div", { class: S.dFoot },
+          h("button", { class: S.btn, type: "button" }, "Cancel"),
+          h("button", { class: S.btn + " " + S.btnPrimary, type: "button" }, "Save"))));
+  }
+  function Toast() {
+    return h("div", { class: S.toast, role: "status", "data-testid": "toast" }, svg(ICONS.ok, S.toastIcon), "Changes saved");
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    const root = document.getElementById("root");
+    document.body.classList.add(S.global);
+    // Body is the grid; #root uses display:contents so its children become grid items.
+    root.style.display = "contents";
+    root.append(...App());
+    document.getElementById("portal-root").append(Modal(), Toast());
+    requestAnimationFrame(() => { document.documentElement.dataset.ready = "true"; });
+  });
+</script>
+</body>
+</html>

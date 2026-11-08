@@ -1,0 +1,192 @@
+<!doctype html>
+<!--
+  Fixture: dashboard (universal benchmark)
+  Purpose: an analytics dashboard — CSS grid of KPI cards (with sparklines and delta badges),
+           an inline-SVG bar chart and a two-series line chart with gridlines and <text> axis
+           labels, a data table inside a fixed-height scroll container with a sticky header,
+           status badges (dot via ::before), an overlapping avatar group, and progress bars.
+  Requirements: EXT-S-1, EXT-S-2, EXT-S-4, EXT-T-8, EXT-T-9, EXT-T-11, EXT-V-5, EXT-V-6, EXT-V-8,
+                EXT-X-1, EXT-X-8, EXT-C-5, TST-5
+  Expected capture behaviour:
+    - kpi-*: 4 cards in a 4-column grid; each value TEXT (28px/700), a delta badge (rounded,
+      tinted) and a sparkline SvgNode with a stroke-only polyline.
+    - chart-bars / chart-lines: one SvgNode each; gridlines, axis <text> labels (font-family
+      inlined), a legend made of HTML (line chart). Each bar carries a <title> (native tooltip),
+      which is harmless in the serialized SVG. Both SVGs carry width="572" attributes but are scaled
+      by CSS (width:100%) to the card width, so the serialized width/height must be the RENDERED
+      size, not the attribute values (EXT-S-2d).
+    - table-wrap: overflow:auto, height 320px → clipsContent true, captured at scrollTop 0; the
+      <th> cells are position:sticky top 0. Its area (~760×320 = 243k px²) is ≥ 15% of a 1280×800
+      viewport, so the popup offers "1 scroll area found" (EXT-C-5); with expansion ON all 20
+      rows (#10421 … #10402) appear.
+    - status badges: "::before" 6×6 dots (EXT-T-11); text colours from the status palette.
+    - avatar-group: 5 circular IMAGE nodes overlapping by 10px (negative margins) with 2px white
+      ring borders; a "+3" counter circle. DOM order = paint order (later avatars on top).
+    - progress: track FRAME (radius 999 → clamped to h/2 = 4) with a fill FRAME at 72% width.
+    - customer names in the table truncate with ellipsis at 180px (EXT-X-8).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Analytics — Overview</title>
+<style>
+  @font-face { font-family: "Inter"; font-weight: 400; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/inter/Inter-400.woff2) format("woff2"); }
+  @font-face { font-family: "Inter"; font-weight: 600; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/inter/Inter-600.woff2) format("woff2"); }
+  @font-face { font-family: "Inter"; font-weight: 700; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/inter/Inter-700.woff2) format("woff2"); }
+  :root { --surface: #ffffff; --page: #f5f6f8; --line: #e5e7eb; --ink: #111827; --ink-2: #4b5563; --ink-3: #6b7280; --s1: #2a78d6; --s2: #eb6834; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.5 "Inter", system-ui, sans-serif; color: var(--ink); background: var(--page); width: 1240px; }
+  .top { height: 64px; background: var(--surface); border-bottom: 1px solid var(--line); display: flex; align-items: center; padding: 0 28px; gap: 24px; position: sticky; top: 0; z-index: 5; }
+  .top h1 { font-size: 18px; margin: 0; font-weight: 700; }
+  .top nav { display: flex; gap: 4px; }
+  .top nav a { padding: 6px 12px; border-radius: 8px; color: var(--ink-2); font-weight: 600; text-decoration: none; }
+  .top nav a.on { background: #eef4fd; color: #1c5cab; }
+  .top .range { margin-left: auto; display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .top .range span { padding: 6px 12px; font-size: 13px; font-weight: 600; color: var(--ink-2); border-left: 1px solid var(--line); }
+  .top .range span:first-child { border-left: 0; }
+  .top .range span.on { background: var(--ink); color: #fff; }
+  main { padding: 24px 28px 40px; display: grid; gap: 20px; }
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; box-shadow: 0 1px 2px rgba(17,24,39,.04); }
+  .kpi .label { color: var(--ink-3); font-size: 13px; font-weight: 600; }
+  .kpi .value { font-size: 28px; font-weight: 700; letter-spacing: -0.01em; margin: 4px 0 8px; font-variant-numeric: tabular-nums; }
+  .kpi .foot { display: flex; align-items: center; justify-content: space-between; }
+  .delta { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+  .delta.up { background: #e7f6ee; color: #0b6b3a; }
+  .delta.down { background: #fdecec; color: #a32020; }
+  .spark { width: 96px; height: 28px; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .card h2 { margin: 0; font-size: 15px; font-weight: 700; }
+  .card .sub { color: var(--ink-3); font-size: 13px; margin: 2px 0 12px; }
+  .legend { display: flex; gap: 16px; font-size: 13px; color: var(--ink-2); margin-bottom: 6px; }
+  .legend i { display: inline-block; width: 12px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+  .chart { display: block; width: 100%; height: auto; }
+  .chart text { font-family: Inter, sans-serif; font-size: 11px; fill: #6b7280; }
+  .row3 { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
+  .table-wrap { height: 320px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
+  table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
+  th { position: sticky; top: 0; background: #f9fafb; text-align: left; font-weight: 600; color: var(--ink-2); padding: 10px 14px; border-bottom: 1px solid var(--line); z-index: 1; }
+  td { padding: 10px 14px; border-bottom: 1px solid #f1f2f4; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td .cust { display: block; width: 180px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+  .status { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .s-paid { background: #e7f6ee; color: #0b6b3a; }
+  .s-pending { background: #fff4db; color: #8a5300; }
+  .s-failed { background: #fdecec; color: #a32020; }
+  .s-refunded { background: #eef0f3; color: #4b5563; }
+  .team h3 { margin: 18px 0 8px; font-size: 13px; color: var(--ink-3); font-weight: 600; }
+  .avatar-group { display: flex; align-items: center; }
+  .avatar-group img, .avatar-group .more { width: 36px; height: 36px; border-radius: 50%; border: 2px solid #fff; margin-left: -10px; }
+  .avatar-group img:first-child { margin-left: 0; }
+  .avatar-group .more { display: grid; place-items: center; background: #e5e7eb; color: var(--ink-2); font-size: 12px; font-weight: 700; }
+  .goal { margin-top: 16px; }
+  .goal .lbl { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px; }
+  .goal .lbl b { font-variant-numeric: tabular-nums; }
+  .progress { height: 8px; background: #eef0f3; border-radius: 999px; overflow: hidden; }
+  .progress > div { height: 100%; background: var(--s1); border-radius: 999px; }
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>Analytics</h1>
+  <nav><a class="on" href="#">Overview</a><a href="#">Revenue</a><a href="#">Customers</a><a href="#">Reports</a></nav>
+  <div class="range"><span>7D</span><span class="on">30D</span><span>90D</span><span>12M</span></div>
+</header>
+
+<main>
+  <section class="kpis">
+    <div class="card kpi" data-testid="kpi-revenue"><div class="label">Revenue</div><div class="value">$84,120</div>
+      <div class="foot"><span class="delta up">+12.4%</span><svg class="spark" viewBox="0 0 96 28"><polyline points="0,22 12,20 24,21 36,15 48,16 60,11 72,12 84,7 96,5" fill="none" stroke="#2a78d6" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg></div></div>
+    <div class="card kpi" data-testid="kpi-orders"><div class="label">Orders</div><div class="value">1,936</div>
+      <div class="foot"><span class="delta up">+4.1%</span><svg class="spark" viewBox="0 0 96 28"><polyline points="0,18 12,19 24,15 36,16 48,13 60,14 72,12 84,12 96,10" fill="none" stroke="#2a78d6" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg></div></div>
+    <div class="card kpi" data-testid="kpi-aov"><div class="label">Avg. order value</div><div class="value">$43.45</div>
+      <div class="foot"><span class="delta down">−2.3%</span><svg class="spark" viewBox="0 0 96 28"><polyline points="0,8 12,9 24,8 36,12 48,11 60,14 72,13 84,16 96,17" fill="none" stroke="#2a78d6" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg></div></div>
+    <div class="card kpi" data-testid="kpi-conversion"><div class="label">Conversion rate</div><div class="value">3.82%</div>
+      <div class="foot"><span class="delta up">+0.4 pt</span><svg class="spark" viewBox="0 0 96 28"><polyline points="0,20 12,18 24,19 36,17 48,14 60,15 72,11 84,10 96,9" fill="none" stroke="#2a78d6" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg></div></div>
+  </section>
+
+  <section class="row2">
+    <div class="card">
+      <h2>Revenue by month</h2><p class="sub">Thousands of USD, last 6 months</p>
+      <svg class="chart" data-testid="chart-bars" width="572" height="230" viewBox="0 0 572 230" role="img" aria-label="Revenue by month bar chart">
+        <g stroke="#eceef1" stroke-width="1">
+          <line x1="40" y1="20" x2="560" y2="20"/><line x1="40" y1="65" x2="560" y2="65"/><line x1="40" y1="110" x2="560" y2="110"/><line x1="40" y1="155" x2="560" y2="155"/>
+        </g>
+        <line x1="40" y1="200" x2="560" y2="200" stroke="#9ca3af" stroke-width="1"/>
+        <g text-anchor="end"><text x="32" y="204">0</text><text x="32" y="159">25</text><text x="32" y="114">50</text><text x="32" y="69">75</text><text x="32" y="24">100</text></g>
+        <g fill="#2a78d6">
+          <path d="M66 200V112a4 4 0 0 1 4-4h40a4 4 0 0 1 4 4v88z"><title>Jun: $51k</title></path>
+          <path d="M152 200V97a4 4 0 0 1 4-4h40a4 4 0 0 1 4 4v103z"><title>Jul: $59k</title></path>
+          <path d="M238 200V122a4 4 0 0 1 4-4h40a4 4 0 0 1 4 4v78z"><title>Aug: $45k</title></path>
+          <path d="M324 200V79a4 4 0 0 1 4-4h40a4 4 0 0 1 4 4v121z"><title>Sep: $69k</title></path>
+          <path d="M410 200V65a4 4 0 0 1 4-4h40a4 4 0 0 1 4 4v135z"><title>Oct: $77k</title></path>
+          <path d="M496 200V53a4 4 0 0 1 4-4h40a4 4 0 0 1 4 4v147z"><title>Nov: $84k</title></path>
+        </g>
+        <text x="520" y="42" text-anchor="middle" style="fill:#111827;font-weight:600">84</text>
+        <g text-anchor="middle"><text x="90" y="218">Jun</text><text x="176" y="218">Jul</text><text x="262" y="218">Aug</text><text x="348" y="218">Sep</text><text x="434" y="218">Oct</text><text x="520" y="218">Nov</text></g>
+      </svg>
+    </div>
+    <div class="card">
+      <h2>Sessions vs. sign-ups</h2><p class="sub">Indexed to week 1 = 100</p>
+      <div class="legend"><span><i style="background:#2a78d6"></i>Sessions</span><span><i style="background:#eb6834"></i>Sign-ups</span></div>
+      <svg class="chart" data-testid="chart-lines" width="572" height="204" viewBox="0 0 572 204" role="img" aria-label="Sessions and sign-ups line chart">
+        <g stroke="#eceef1"><line x1="40" y1="14" x2="540" y2="14"/><line x1="40" y1="58" x2="540" y2="58"/><line x1="40" y1="102" x2="540" y2="102"/><line x1="40" y1="146" x2="540" y2="146"/></g>
+        <line x1="40" y1="180" x2="540" y2="180" stroke="#9ca3af"/>
+        <g text-anchor="end"><text x="32" y="184">80</text><text x="32" y="150">100</text><text x="32" y="106">120</text><text x="32" y="62">140</text><text x="32" y="18">160</text></g>
+        <polyline points="40,146 111,138 183,130 254,118 326,112 397,96 469,90 540,78" fill="none" stroke="#2a78d6" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+        <polyline points="40,146 111,150 183,136 254,128 326,104 397,92 469,70 540,46" fill="none" stroke="#eb6834" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+        <circle cx="540" cy="78" r="4" fill="#2a78d6" stroke="#fff" stroke-width="2"/>
+        <circle cx="540" cy="46" r="4" fill="#eb6834" stroke="#fff" stroke-width="2"/>
+        <text x="548" y="82" style="fill:#4b5563">131</text><text x="548" y="50" style="fill:#4b5563">145</text>
+        <g text-anchor="middle"><text x="40" y="198">W1</text><text x="111" y="198">W2</text><text x="183" y="198">W3</text><text x="254" y="198">W4</text><text x="326" y="198">W5</text><text x="397" y="198">W6</text><text x="469" y="198">W7</text><text x="540" y="198">W8</text></g>
+      </svg>
+    </div>
+  </section>
+
+  <section class="row3">
+    <div class="card">
+      <h2>Recent transactions</h2><p class="sub">Sticky header inside a scroll container</p>
+      <div class="table-wrap" data-testid="table-wrap">
+        <table>
+          <thead><tr><th>Invoice</th><th>Customer</th><th>Date</th><th>Status</th><th class="num">Amount</th></tr></thead>
+          <tbody>
+            <tr><td>#10421</td><td><span class="cust">Brightline Logistics International</span></td><td>Nov 8, 2026</td><td><span class="status s-paid">Paid</span></td><td class="num">$1,240.00</td></tr>
+            <tr><td>#10420</td><td><span class="cust">Okafor &amp; Daughters</span></td><td>Nov 8, 2026</td><td><span class="status s-pending">Pending</span></td><td class="num">$312.50</td></tr>
+            <tr><td>#10419</td><td><span class="cust">Northwind Traders</span></td><td>Nov 7, 2026</td><td><span class="status s-paid">Paid</span></td><td class="num">$88.20</td></tr>
+            <tr><td>#10418</td><td><span class="cust">Hartmann Engineering GmbH &amp; Co. KG</span></td><td>Nov 7, 2026</td><td><span class="status s-failed">Failed</span></td><td class="num">$2,045.00</td></tr>
+            <tr><td>#10417</td><td><span class="cust">Lumen Labs</span></td><td>Nov 6, 2026</td><td><span class="status s-paid">Paid</span></td><td class="num">$640.00</td></tr>
+            <tr><td>#10416</td><td><span class="cust">Sato Design Office</span></td><td>Nov 6, 2026</td><td><span class="status s-refunded">Refunded</span></td><td class="num">$129.99</td></tr>
+            <tr><td>#10415</td><td><span class="cust">Fernway Corporation</span></td><td>Nov 5, 2026</td><td><span class="status s-paid">Paid</span></td><td class="num">$4,310.75</td></tr>
+            <tr><td>#10414</td><td><span class="cust">Kestrel</span></td><td>Nov 5, 2026</td><td><span class="status s-pending">Pending</span></td><td class="num">$57.00</td></tr>
+            <tr><td>#10413</td><td><span class="cust">Brightside Industries</span></td><td>Nov 4, 2026</td><td><span class="status s-paid">Paid</span></td><td class="num">$980.00</td></tr>
+            <tr><td>#10412</td><td><span class="cust">Willow Health Services</span></td><td>Nov 4, 2026</td><td><span class="status s-paid">Paid</span></td><td class="num">$1,575.40</td></tr>
+            <tr><td>#10411</td><td><span class="cust">Costa &amp; Ferreira Lda.</span></td><td>Nov 3, 2026</td><td><span class="status s-failed">Failed</span></td><td class="num">$210.00</td></tr>
+            <tr><td>#10410</td><td><span class="cust">Halcyon</span></td><td>Nov 3, 2026</td><td><span class="status s-paid">Paid</span></td><td class="num">$6,020.00</td></tr>
+            <tr><td>#10409</td><td><span class="cust">Prairie Coffee Roasters</span></td><td>Nov 2, 2026</td><td><span class="status s-paid">Paid</span></td><td class="num">$45.60</td></tr>
+            <tr><td>#10408</td><td><span class="cust">Kowalski Print House</span></td><td>Nov 2, 2026</td><td><span class="status s-pending">Pending</span></td><td class="num">$730.00</td></tr>
+            <tr><td>#10407</td><td><span class="cust">Atlas Dynamics</span></td><td>Nov 1, 2026</td><td><span class="status s-paid">Paid</span></td><td class="num">$3,300.00</td></tr>
+            <tr><td>#10406</td><td><span class="cust">Acme Corp</span></td><td>Nov 1, 2026</td><td><span class="status s-refunded">Refunded</span></td><td class="num">$99.00</td></tr>
+            <tr><td>#10405</td><td><span class="cust">Redwood Partners</span></td><td>Oct 31, 2026</td><td><span class="status s-paid">Paid</span></td><td class="num">$12,400.00</td></tr>
+            <tr><td>#10404</td><td><span class="cust">Granite Supply Co.</span></td><td>Oct 31, 2026</td><td><span class="status s-paid">Paid</span></td><td class="num">$870.25</td></tr>
+            <tr><td>#10403</td><td><span class="cust">Meridian Bio Research Laboratories</span></td><td>Oct 30, 2026</td><td><span class="status s-failed">Failed</span></td><td class="num">$1,050.00</td></tr>
+            <tr><td>#10402</td><td><span class="cust">Cobalt Systems</span></td><td>Oct 30, 2026</td><td><span class="status s-paid">Paid</span></td><td class="num">$2,199.00</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card team">
+      <h2>Team &amp; goals</h2><p class="sub">Q4 targets</p>
+      <h3>Account managers</h3>
+      <div class="avatar-group" data-testid="avatar-group">
+        <img src="../assets/img/avatar-1.png" alt=""><img src="../assets/img/avatar-2.png" alt=""><img src="../assets/img/avatar-3.png" alt=""><img src="../assets/img/avatar-4.png" alt=""><img src="../assets/img/avatar-5.png" alt=""><span class="more">+3</span>
+      </div>
+      <div class="goal" data-testid="progress"><div class="lbl"><span>Quarterly revenue</span><b>72%</b></div><div class="progress"><div style="width:72%"></div></div></div>
+      <div class="goal"><div class="lbl"><span>New customers</span><b>45%</b></div><div class="progress"><div style="width:45%"></div></div></div>
+      <div class="goal"><div class="lbl"><span>Churn below 2%</span><b>90%</b></div><div class="progress"><div style="width:90%"></div></div></div>
+    </div>
+  </section>
+</main>
+</body>
+</html>

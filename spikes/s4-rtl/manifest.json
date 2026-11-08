@@ -1,0 +1,13 @@
+{
+  "name": "H2F Spike S4 — RTL/Arabic",
+  "id": "h2f-spike-s4-rtl",
+  "api": "1.0.0",
+  "main": "code.js",
+  "ui": "ui.html",
+  "editorType": ["figma"],
+  "documentAccess": "dynamic-page",
+  "networkAccess": {
+    "allowedDomains": ["https://fonts.googleapis.com", "https://fonts.gstatic.com"],
+    "reasoning": "Spike only: loads the same Google Fonts inside the plugin UI to render Chromium reference images. The production plugin uses networkAccess none (PLG-P-1)."
+  }
+}

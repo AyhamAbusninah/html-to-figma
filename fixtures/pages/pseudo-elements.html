@@ -1,0 +1,129 @@
+<!doctype html>
+<!--
+  Fixture: pseudo-elements
+  Purpose: ::before / ::after materialisation — string content, counter(), attr(), url() image
+           content, empty-content decorative boxes, status-dot pill badges, breadcrumb
+           separators, quotes, custom checkbox marks, and a clearfix that must be ignored.
+  Requirements: EXT-T-11, EXT-C-4, EXT-X-1, EXT-I-2, EXT-T-5, AC-EXT-8, AC-EXT-13
+  Expected capture behaviour (data-testid):
+    - string-content: nodes named "::before" (TEXT "★ ") and "::after" (TEXT " →") around the
+      element's own text, with their own colours (#f59e0b / #6366f1).
+    - counters: ordered steps with ::before TEXT "1", "2", "3" (counter values resolved, not the
+      literal "counter(step)") inside 28px indigo circles (FRAME with radius 14).
+    - attr-content: ::after TEXT equals the data-unit attribute value ("kg", "pcs").
+    - url-content: ::before content:url(icon-star.svg) → IMAGE (or SVG) node 24×24 (EXT-T-11 step 2).
+    - decorative-bar: ::before with content:"" but width/height/background → FRAME 48×4 #22c55e.
+    - status-pills: each badge has a "::before" FRAME 8×8, radius 4, filled with the status colour
+      (#16a34a Paid, #d97706 Unpaid, #dc2626 Overdue, #64748b Draft) followed by the label TEXT
+      (AC-EXT-13 equivalent).
+    - breadcrumb: separators "/" (::before on each item after the first) as TEXT #94a3b8; the
+      chevron variant uses a rotated bordered box (::after, TRANSFORM_UNSUPPORTED warning).
+    - quotes: ::before / ::after open-quote / close-quote → TEXT “ and ”.
+    - custom-check: label::after check mark drawn with borders + rotate(45deg) on checked items.
+    - clearfix: ::after { content:""; display:table; clear:both } has no size/paint → NOT
+      materialised (no node).
+    - hidden-pseudo: ::before on a display:none element → nothing.
+    - After capture: no data-h2f-* attributes, no <style data-h2f>, no injected spans remain
+      (AC-EXT-8).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fixture: pseudo-elements</title>
+<style>
+  @font-face { font-family: "Inter"; font-weight: 400; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/inter/Inter-400.woff2) format("woff2"); }
+  @font-face { font-family: "Inter"; font-weight: 600; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/inter/Inter-600.woff2) format("woff2"); }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px; font: 14px/1.5 "Inter", sans-serif; color: #111827; background: #fff; width: 900px; }
+  h1 { font-size: 22px; margin: 0 0 4px; font-weight: 600; }
+  h2 { font-size: 14px; margin: 28px 0 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: #4b5563; }
+
+  .string-content::before { content: "★ "; color: #f59e0b; }
+  .string-content::after { content: " →"; color: #6366f1; font-weight: 600; }
+
+  .steps { counter-reset: step; list-style: none; padding: 0; margin: 0; display: flex; gap: 32px; }
+  .steps li { counter-increment: step; display: flex; align-items: center; gap: 10px; }
+  .steps li::before { content: counter(step); width: 28px; height: 28px; border-radius: 50%; background: #4f46e5; color: #fff; display: grid; place-items: center; font-weight: 600; font-size: 13px; }
+
+  .unit::after { content: attr(data-unit); margin-left: 4px; color: #6b7280; font-size: 12px; }
+
+  .url-content::before { content: url(../assets/img/icon-star.svg); display: inline-block; width: 24px; height: 24px; vertical-align: middle; margin-right: 8px; }
+
+  .decorative-bar { font-weight: 600; font-size: 18px; }
+  .decorative-bar::before { content: ""; display: block; width: 48px; height: 4px; background: #22c55e; border-radius: 2px; margin-bottom: 8px; }
+
+  .pills { display: flex; gap: 12px; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .pill.green { background: #dcfce7; color: #16a34a; }
+  .pill.orange { background: #fef3c7; color: #d97706; }
+  .pill.red { background: #fee2e2; color: #dc2626; }
+  .pill.gray { background: #f1f5f9; color: #64748b; }
+
+  .breadcrumb { list-style: none; display: flex; padding: 0; margin: 0 0 10px; font-size: 14px; }
+  .breadcrumb li + li::before { content: "/"; color: #94a3b8; padding: 0 8px; }
+  .breadcrumb a { color: #4f46e5; text-decoration: none; }
+  .breadcrumb-chevron { list-style: none; display: flex; padding: 0; margin: 0; gap: 18px; }
+  .breadcrumb-chevron li { position: relative; }
+  .breadcrumb-chevron li:not(:last-child)::after { content: ""; position: absolute; right: -12px; top: 50%; width: 6px; height: 6px; border-top: 2px solid #94a3b8; border-right: 2px solid #94a3b8; transform: translateY(-50%) rotate(45deg); }
+
+  q { font-style: italic; color: #334155; }
+  q::before { content: open-quote; color: #db2777; font-size: 1.3em; }
+  q::after { content: close-quote; color: #db2777; font-size: 1.3em; }
+
+  .checklist { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+  .checklist li { position: relative; padding-left: 30px; }
+  .checklist li::before { content: ""; position: absolute; left: 0; top: 2px; width: 18px; height: 18px; border: 1.5px solid #9ca3af; border-radius: 5px; background: #fff; }
+  .checklist li.done::before { background: #0d9488; border-color: #0d9488; }
+  .checklist li.done::after { content: ""; position: absolute; left: 6px; top: 5px; width: 5px; height: 10px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+  .checklist li.done { color: #6b7280; text-decoration: line-through; }
+
+  .clearfix::after { content: ""; display: table; clear: both; }
+  .float-l { float: left; width: 120px; height: 50px; background: #e0e7ff; margin-right: 10px; }
+  .hidden-pseudo { display: none; }
+  .hidden-pseudo::before { content: "MUST NOT APPEAR"; }
+</style>
+</head>
+<body>
+<h1>Pseudo-elements</h1>
+
+<h2>String content</h2>
+<p class="string-content" data-testid="string-content">Featured item</p>
+
+<h2>counter()</h2>
+<ol class="steps" data-testid="counters"><li>Cart</li><li>Shipping</li><li>Payment</li></ol>
+
+<h2>attr()</h2>
+<p data-testid="attr-content">Weight: <span class="unit" data-unit="kg">12.5</span> · Quantity: <span class="unit" data-unit="pcs">40</span></p>
+
+<h2>url() content</h2>
+<p class="url-content" data-testid="url-content">Starred via content: url()</p>
+
+<h2>Empty-content decorative bar</h2>
+<div class="decorative-bar" data-testid="decorative-bar">Section heading with accent bar</div>
+
+<h2>Status pills (dot via ::before)</h2>
+<div class="pills" data-testid="status-pills">
+  <span class="pill green">Paid</span>
+  <span class="pill orange">Unpaid</span>
+  <span class="pill red">Overdue</span>
+  <span class="pill gray">Draft</span>
+</div>
+
+<h2>Breadcrumb separators</h2>
+<ol class="breadcrumb" data-testid="breadcrumb"><li><a href="#">Home</a></li><li><a href="#">Accounts</a></li><li><a href="#">Invoices</a></li><li>INV-00042</li></ol>
+<ol class="breadcrumb-chevron" data-testid="breadcrumb-chevron"><li>Settings</li><li>Team</li><li>Members</li></ol>
+
+<h2>Quotes</h2>
+<p data-testid="quotes"><q>Simple tools beat clever ones.</q></p>
+
+<h2>Custom checkbox marks</h2>
+<ul class="checklist" data-testid="custom-check"><li class="done">Create workspace</li><li class="done">Invite team</li><li>Connect billing</li></ul>
+
+<h2>Clearfix (ignored) &amp; hidden</h2>
+<div class="clearfix" data-testid="clearfix"><div class="float-l"></div><div class="float-l"></div></div>
+<div class="hidden-pseudo" data-testid="hidden-pseudo">hidden</div>
+<p>After the clearfix.</p>
+</body>
+</html>

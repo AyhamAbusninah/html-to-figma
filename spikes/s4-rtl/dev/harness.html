@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>S4 UI harness</title>
+<!-- Dev-only harness: plays the role of Figma's main thread for ../ui.html so the classifier can be validated in
+     Chromium with exports of known ground truth. Serve spikes/s4-rtl/ over http and open dev/harness.html?scenario=A
+     Scenarios: A = first-strong base direction, RLM fixes it · B = RTL auto-detected · C = bidi not applied.
+     Exports are offset by 3px and rendered at 28.6px instead of 28px to mimic engine differences. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&family=Cairo:wght@400;700&family=Noto+Sans+Arabic:wght@400;700&display=block">
+</head>
+<body>
+<iframe id="ui" src="../ui.html" style="width:620px;height:760px;border:1px solid #ccc"></iframe>
+<script>
+'use strict';
+const params = new URLSearchParams(location.search);
+const scenario = params.get('scenario') || 'A';
+const SIZE_DELTA = Number(params.get('sizeDelta') || 0.6); // px added to the font size of simulated exports
+const OFFSET = Number(params.get('offset') || 3);          // px the simulated export is shifted left
+const frame = document.getElementById('ui');
+let init = null;
+window.__harness = { scenario, done: false };
+
+function post(msg) { frame.contentWindow.postMessage({ pluginMessage: msg }, '*'); }
+
+// Captures the init message the real code.js would send (cases copied from code.js at runtime is not possible
+// without a build, so the harness fetches code.js and evaluates only its constants).
+async function loadCodeConstants() {
+  const src = await (await fetch('../code.js')).text();
+  const consts = src.slice(0, src.indexOf('function progress'));
+  return new Function(consts + '; return { BIDI_CASES, ARABIC_FONTS, FONT_SIZE, LINE_HEIGHT, BOX_W, RLM };')();
+}
+
+function behaviourFor(c, variant) {
+  if (scenario === 'C') return 'nobidi';
+  if (scenario === 'B') return 'rtl';
+  // A: first-strong-character base direction; RLM prefix makes it RTL.
+  return c.firstStrong === 'L' && variant === 'asIs' ? 'ltr' : 'rtl';
+}
+
+async function renderExport(text, font, mode, K) {
+  await document.fonts.load(`400 28px "${font}"`, 'بسم abc');
+  const c = document.createElement('canvas');
+  c.width = K.BOX_W * 2; c.height = K.LINE_HEIGHT * 2;
+  const ctx = c.getContext('2d');
+  ctx.scale(2, 2);
+  ctx.font = `400 ${K.FONT_SIZE + SIZE_DELTA}px "${font}"`;
+  ctx.direction = mode === 'rtl' ? 'rtl' : 'ltr';
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  const t = mode === 'nobidi' ? '‭' + text + '‬' : text;
+  ctx.fillText(t, K.BOX_W - OFFSET, K.LINE_HEIGHT / 2);
+  const blob = await new Promise((r) => c.toBlob(r, 'image/png'));
+  return new Uint8Array(await blob.arrayBuffer());
+}
+
+window.addEventListener('message', async (e) => {
+  const msg = e.data && e.data.pluginMessage;
+  if (!msg || msg.type !== 'references') return;
+  const K = init;
+  const exportsOut = [];
+  for (const font of K.ARABIC_FONTS) for (const c of K.BIDI_CASES) for (const variant of ['asIs', 'rlm']) {
+    const text = (variant === 'rlm' ? K.RLM : '') + c.text;
+    exportsOut.push({ key: `${c.id}|${font}|${variant}`, caseId: c.id, font, variant, height: 48, png: await renderExport(text, font, behaviourFor(c, variant), K) });
+  }
+  const shapedRatio = scenario === 'C' ? 1.0 : 0.72;
+  const report = {
+    spike: 'S4-rtl-arabic', spikeVersion: 'harness', apiVersion: 'harness', editorType: 'figma', fonts: {}, wrapped: [], errors: [], apiProbe: null,
+    shaping: K.ARABIC_FONTS.flatMap((f) => ['S1', 'S2', 'S3'].map((id) => ({ font: f, caseId: id, ratio: shapedRatio }))),
+  };
+  post({ type: 'results', report, exports: exportsOut });
+  const poll = setInterval(() => {
+    const ta = frame.contentDocument.getElementById('report');
+    if (ta && ta.value) {
+      clearInterval(poll);
+      const r = JSON.parse(ta.value);
+      window.__harness = { scenario, done: true, verdict: r.verdict, misclassified: r.bidi.filter((b) => b.directionTestable !== false && b.class !== expected(b)).map((b) => `${b.key}: got ${b.class} (${JSON.stringify(b.scores)})`), lowConfidence: r.bidi.filter((b) => !b.confident).map((b) => b.key) };
+    }
+  }, 200);
+});
+
+function expected(b) {
+  const c = init.BIDI_CASES.find((x) => x.id === b.caseId);
+  const mode = behaviourFor(c, b.variant);
+  return mode === 'rtl' ? 'RTL' : mode === 'ltr' ? 'LTR_BASE' : 'NO_BIDI';
+}
+
+frame.addEventListener('load', async () => {
+  init = await loadCodeConstants();
+  post({ type: 'init', spikeVersion: 'harness', fonts: init.ARABIC_FONTS, cases: init.BIDI_CASES, box: { w: init.BOX_W, h: init.LINE_HEIGHT, fontSize: init.FONT_SIZE } });
+});
+</script>
+</body>
+</html>

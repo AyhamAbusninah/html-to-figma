@@ -1,0 +1,203 @@
+<!doctype html>
+<!--
+  Fixture: boxes
+  Purpose: box-model paint — backgrounds, colour syntaxes, borders, radii, shadows, opacity,
+           blend modes, filters, transforms and the visibility / display / zero-size rules.
+  Requirements: EXT-V-1, EXT-V-2, EXT-V-4, EXT-V-5, EXT-V-6, EXT-V-7, EXT-V-9, EXT-G-1, EXT-G-3,
+                EXT-T-2, EXT-T-3, EXT-T-4, EXT-T-5, EXT-T-6, AC-EXT-1, AC-EXT-6, AC-PLG-1
+  Expected capture behaviour (cells are identified by data-testid):
+    - bg-rgba: SOLID fill rgb(37,99,235) with alpha 0.5.
+    - bg-oklch / bg-colormix / bg-lab: converted to sRGB via 1×1 canvas readback (EXT-V-1);
+      oklch(0.7 0.15 150) ≈ rgb(84,177,108); color-mix(in srgb, #ef4444 50%, #3b82f6) ≈ rgb(149,99,155).
+    - bg-transparent-wrapper: no fill, no border → pruned (EXT-T-6); its child hoisted.
+    - border-sides: four different side widths/colours; dashed / dotted / double cells keep their
+      style (double → solid + warning, EXT-V-4).
+    - radius-*: per-corner px values; radius-percent 50% of a 160×100 box → 80/50 reduced to the
+      horizontal value then clamped to min(w,h)/2 = 50 (EXT-V-5); elliptical "40px / 20px" → 40.
+    - shadow-multi: 3 layers in CSS order (2 DROP_SHADOW incl. spread, 1 INNER_SHADOW).
+    - opacity-60: node opacity 0.6. blend-multiply: blendMode MULTIPLY.
+    - filter-blur: LAYER_BLUR radius 4. backdrop-glass: BACKGROUND_BLUR radius 8.
+    - filter-grayscale: FILTER_UNSUPPORTED warning.
+    - rotated: AABB of the rotated box + TRANSFORM_UNSUPPORTED warning (EXT-G-3);
+      translated (translate only) has no warning.
+    - zero-size: the 0×0 wrapper emits no paint, its visible child is present at its own rect (EXT-T-5).
+    - display-none subtree (testid hidden-display): completely absent, incl. its text (AC-EXT-6).
+    - visibility-hidden parent: parent paint absent, the visibility:visible child is present (AC-EXT-6).
+    - opacity-zero: skipped with its subtree; text "INVISIBLE OPACITY 0" must not appear (EXT-T-4).
+    - offscreen: positioned at left:-9999px → outside the root rect → skipped (EXT-T-4).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fixture: boxes</title>
+<style>
+  @font-face { font-family: "Inter"; font-weight: 400; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/inter/Inter-400.woff2) format("woff2"); }
+  @font-face { font-family: "Inter"; font-weight: 600; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/inter/Inter-600.woff2) format("woff2"); }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px; font: 13px/1.4 "Inter", sans-serif; color: #111827; background: #ffffff; }
+  h1 { font-size: 22px; margin: 0 0 4px; font-weight: 600; }
+  h2 { font-size: 14px; margin: 28px 0 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: #4b5563; }
+  .grid { display: grid; grid-template-columns: repeat(5, 200px); gap: 20px; }
+  .cell { width: 200px; }
+  .cell > .box { width: 160px; height: 100px; margin: 10px 20px 6px; }
+  .cell > .cap { padding: 0 20px; font-size: 12px; color: #374151; }
+
+  /* backgrounds & colours */
+  .bg-solid { background: #2563eb; }
+  .bg-rgba { background: rgba(37, 99, 235, 0.5); }
+  .bg-oklch { background: oklch(0.7 0.15 150); }
+  .bg-colormix { background: color-mix(in srgb, #ef4444 50%, #3b82f6); }
+  .bg-lab { background: lab(60% 40 -30); }
+  .bg-hsl { background: hsl(330 80% 60% / 0.8); }
+  .bg-currentcolor { color: #0d9488; background: currentColor; }
+  .bg-transparent-wrapper { background: transparent; padding: 15px; }
+  .bg-transparent-wrapper > div { width: 100%; height: 100%; background: #f59e0b; }
+  .nested-1 { background: #e0e7ff; padding: 12px; }
+  .nested-2 { background: #a5b4fc; padding: 12px; height: 100%; }
+  .nested-3 { background: #4f46e5; height: 100%; }
+
+  /* borders */
+  .border-sides { border-style: solid; border-width: 2px 6px 10px 14px; border-color: #ef4444 #22c55e #3b82f6 #a855f7; }
+  .border-dashed { border: 4px dashed #0f766e; }
+  .border-dotted { border: 5px dotted #b45309; }
+  .border-double { border: 8px double #1e3a8a; }
+  .border-mixed { border-top: 3px solid #111827; border-right: 3px dashed #dc2626; border-bottom: 3px dotted #2563eb; border-left: 0 none; background: #f3f4f6; }
+  .border-groove { border: 6px groove #9ca3af; }
+  .border-hidden { border: 6px hidden #000; background: #fde68a; }
+
+  /* radii */
+  .radius-uniform { background: #10b981; border-radius: 16px; }
+  .radius-corners { background: #f97316; border-radius: 0 12px 32px 48px; }
+  .radius-percent { background: #8b5cf6; border-radius: 50%; }
+  .radius-elliptical { background: #ec4899; border-radius: 40px / 20px; }
+  .radius-huge { background: #06b6d4; border-radius: 999px; }
+  .radius-border { background: #fff; border: 4px solid #0ea5e9; border-radius: 24px 4px; }
+
+  /* shadows */
+  .shadow-simple { background: #fff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25); }
+  .shadow-multi { background: #fff; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 20px 4px rgba(79,70,229,.35), inset 0 0 0 3px #fbbf24; }
+  .shadow-inset { background: #f3f4f6; box-shadow: inset 4px 6px 10px rgba(0, 0, 0, 0.35); }
+  .shadow-spread { background: #fff; box-shadow: 0 0 0 6px #fecaca, 0 0 0 12px #fee2e2; }
+  .shadow-colored { background: #1e293b; box-shadow: -8px 8px 0 #22d3ee; }
+
+  /* effects */
+  .opacity-60 { background: #2563eb; opacity: 0.6; }
+  .blend-backdrop { background: linear-gradient(90deg, #fde047, #f472b6); padding: 18px; }
+  .blend-multiply { background: #38bdf8; mix-blend-mode: multiply; width: 100%; height: 100%; }
+  .blend-screen { background: #4338ca; mix-blend-mode: screen; width: 100%; height: 100%; }
+  .filter-blur { background: #16a34a; filter: blur(4px); }
+  .filter-grayscale { background: #dc2626; filter: grayscale(1); }
+  .backdrop-holder { position: relative; background: repeating-linear-gradient(45deg, #1d4ed8 0 10px, #fbbf24 10px 20px); }
+  .backdrop-glass { position: absolute; inset: 20px 30px; background: rgba(255,255,255,.35); backdrop-filter: blur(8px); border-radius: 10px; border: 1px solid rgba(255,255,255,.6); }
+  .rotated { background: #f43f5e; transform: rotate(15deg); }
+  .skewed { background: #84cc16; transform: skewX(-12deg); }
+  .translated { background: #0891b2; transform: translate(10px, 6px); }
+  .scaled { background: #a16207; transform: scale(0.8); }
+
+  /* visibility rules */
+  .zero-size { width: 0; height: 0; overflow: visible; position: relative; }
+  .zero-size > .child { position: absolute; left: 0; top: 0; width: 120px; height: 60px; background: #14b8a6; color: #fff; padding: 6px; }
+  .hidden-display { display: none; }
+  .vis-hidden { visibility: hidden; background: #ef4444; border: 3px solid #7f1d1d; padding: 12px; }
+  .vis-hidden > .vis-visible { visibility: visible; background: #22c55e; height: 40px; color: #fff; padding: 6px; }
+  .opacity-zero { opacity: 0; background: #000; color: #fff; }
+  .offscreen { position: absolute; left: -9999px; top: 0; width: 100px; height: 40px; background: #000; color: #fff; }
+  .label-in { color: #fff; font-weight: 600; padding: 8px; }
+</style>
+</head>
+<body>
+<h1>Boxes</h1>
+<p>Each cell is 160×100 unless noted. Cells are identified by <code>data-testid</code>.</p>
+
+<h2>Backgrounds &amp; colour syntaxes</h2>
+<div class="grid">
+  <div class="cell"><div class="box bg-solid" data-testid="bg-solid"></div><div class="cap">solid #2563eb</div></div>
+  <div class="cell"><div class="box bg-rgba" data-testid="bg-rgba"></div><div class="cap">rgba(…, 0.5)</div></div>
+  <div class="cell"><div class="box bg-oklch" data-testid="bg-oklch"></div><div class="cap">oklch(0.7 0.15 150)</div></div>
+  <div class="cell"><div class="box bg-colormix" data-testid="bg-colormix"></div><div class="cap">color-mix(in srgb)</div></div>
+  <div class="cell"><div class="box bg-lab" data-testid="bg-lab"></div><div class="cap">lab(60% 40 -30)</div></div>
+  <div class="cell"><div class="box bg-hsl" data-testid="bg-hsl"></div><div class="cap">hsl(… / 0.8)</div></div>
+  <div class="cell"><div class="box bg-currentcolor" data-testid="bg-currentcolor"></div><div class="cap">background: currentColor</div></div>
+  <div class="cell"><div class="box bg-transparent-wrapper" data-testid="bg-transparent-wrapper"><div data-testid="bg-hoisted-child"></div></div><div class="cap">transparent wrapper (pruned)</div></div>
+  <div class="cell"><div class="box nested-1" data-testid="nested-1"><div class="nested-2"><div class="nested-3"></div></div></div><div class="cap">3 nested divs</div></div>
+</div>
+
+<h2>Borders</h2>
+<div class="grid">
+  <div class="cell"><div class="box border-sides" data-testid="border-sides"></div><div class="cap">2/6/10/14 px, 4 colours</div></div>
+  <div class="cell"><div class="box border-dashed" data-testid="border-dashed"></div><div class="cap">4px dashed</div></div>
+  <div class="cell"><div class="box border-dotted" data-testid="border-dotted"></div><div class="cap">5px dotted</div></div>
+  <div class="cell"><div class="box border-double" data-testid="border-double"></div><div class="cap">8px double (→ solid)</div></div>
+  <div class="cell"><div class="box border-mixed" data-testid="border-mixed"></div><div class="cap">mixed styles, no left</div></div>
+  <div class="cell"><div class="box border-groove" data-testid="border-groove"></div><div class="cap">6px groove (→ solid)</div></div>
+  <div class="cell"><div class="box border-hidden" data-testid="border-hidden"></div><div class="cap">border hidden (→ 0)</div></div>
+</div>
+
+<h2>Border radius</h2>
+<div class="grid">
+  <div class="cell"><div class="box radius-uniform" data-testid="radius-uniform"></div><div class="cap">16px</div></div>
+  <div class="cell"><div class="box radius-corners" data-testid="radius-corners"></div><div class="cap">0 12 32 48</div></div>
+  <div class="cell"><div class="box radius-percent" data-testid="radius-percent"></div><div class="cap">50% (→ 50 clamped)</div></div>
+  <div class="cell"><div class="box radius-elliptical" data-testid="radius-elliptical"></div><div class="cap">40px / 20px</div></div>
+  <div class="cell"><div class="box radius-huge" data-testid="radius-huge"></div><div class="cap">999px (→ 50)</div></div>
+  <div class="cell"><div class="box radius-border" data-testid="radius-border"></div><div class="cap">24px 4px + border</div></div>
+</div>
+
+<h2>Box shadows</h2>
+<div class="grid">
+  <div class="cell"><div class="box shadow-simple" data-testid="shadow-simple"></div><div class="cap">single drop</div></div>
+  <div class="cell"><div class="box shadow-multi" data-testid="shadow-multi"></div><div class="cap">3 layers incl. inset</div></div>
+  <div class="cell"><div class="box shadow-inset" data-testid="shadow-inset"></div><div class="cap">inset</div></div>
+  <div class="cell"><div class="box shadow-spread" data-testid="shadow-spread"></div><div class="cap">spread rings</div></div>
+  <div class="cell"><div class="box shadow-colored" data-testid="shadow-colored"></div><div class="cap">hard offset</div></div>
+</div>
+
+<h2>Opacity, blend, filters, transforms</h2>
+<div class="grid">
+  <div class="cell"><div class="box opacity-60" data-testid="opacity-60"><div class="label-in">opacity .6</div></div><div class="cap">opacity 0.6</div></div>
+  <div class="cell"><div class="box blend-backdrop"><div class="blend-multiply" data-testid="blend-multiply"></div></div><div class="cap">mix-blend-mode multiply</div></div>
+  <div class="cell"><div class="box blend-backdrop"><div class="blend-screen" data-testid="blend-screen"></div></div><div class="cap">mix-blend-mode screen</div></div>
+  <div class="cell"><div class="box filter-blur" data-testid="filter-blur"></div><div class="cap">filter: blur(4px)</div></div>
+  <div class="cell"><div class="box filter-grayscale" data-testid="filter-grayscale"></div><div class="cap">grayscale (unsupported)</div></div>
+  <div class="cell"><div class="box backdrop-holder"><div class="backdrop-glass" data-testid="backdrop-glass"></div></div><div class="cap">backdrop-filter blur(8px)</div></div>
+  <div class="cell"><div class="box rotated" data-testid="rotated"><div class="label-in">rotate 15°</div></div><div class="cap">rotate(15deg)</div></div>
+  <div class="cell"><div class="box skewed" data-testid="skewed"></div><div class="cap">skewX(-12deg)</div></div>
+  <div class="cell"><div class="box translated" data-testid="translated"></div><div class="cap">translate(10px, 6px)</div></div>
+  <div class="cell"><div class="box scaled" data-testid="scaled"></div><div class="cap">scale(0.8)</div></div>
+</div>
+
+<h2>Visibility rules</h2>
+<div class="grid">
+  <div class="cell">
+    <div class="box" style="background:#f3f4f6">
+      <div class="zero-size" data-testid="zero-size"><div class="child">0×0 parent</div></div>
+    </div>
+    <div class="cap">zero-size wrapper, visible child</div>
+  </div>
+  <div class="cell">
+    <div class="box" style="background:#f3f4f6">
+      <div class="hidden-display" data-testid="hidden-display"><div style="background:#000;height:50px;color:#fff">HIDDEN DISPLAY NONE</div></div>
+    </div>
+    <div class="cap">display:none subtree (absent)</div>
+  </div>
+  <div class="cell">
+    <div class="box vis-hidden" data-testid="vis-hidden">
+      HIDDEN PARENT TEXT
+      <div class="vis-visible" data-testid="vis-visible">visible child</div>
+    </div>
+    <div class="cap">visibility hidden → visible child</div>
+  </div>
+  <div class="cell">
+    <div class="box" style="background:#f3f4f6">
+      <div class="opacity-zero" data-testid="opacity-zero">INVISIBLE OPACITY 0</div>
+    </div>
+    <div class="cap">opacity:0 (skipped)</div>
+  </div>
+  <div class="cell">
+    <div class="box" style="background:#f3f4f6"><div class="offscreen" data-testid="offscreen">OFFSCREEN</div></div>
+    <div class="cap">left:-9999px (skipped)</div>
+  </div>
+</div>
+</body>
+</html>

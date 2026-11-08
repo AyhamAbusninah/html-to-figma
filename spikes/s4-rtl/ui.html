@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!-- H2F Spike S4 UI. Renders Chromium reference images with the same Google Fonts, then classifies each Figma
+     export by comparing horizontal ink profiles against three references:
+       RTL      = correct rendering (RTL base direction, full bidi)
+       LTR_BASE = bidi applied but paragraph base direction LTR (what "first strong = Latin" produces)
+       NO_BIDI  = characters laid out left-to-right in logical order (bidi algorithm not applied) -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&family=Cairo:wght@400;700&family=Noto+Sans+Arabic:wght@400;700&display=block">
+<style>
+  :root { color-scheme: light; --fg:#1f2328; --muted:#59636e; --ok:#1a7f37; --bad:#cf222e; --warn:#9a6700; --line:#d1d9e0; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--fg); background: #fff; }
+  h1 { font-size: 15px; margin: 0 0 4px; }
+  .muted { color: var(--muted); }
+  #status { margin: 12px 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: #f6f8fa; }
+  #summary { display: none; margin: 12px 0; }
+  #summary table { border-collapse: collapse; width: 100%; }
+  #summary td { padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  #summary td:first-child { width: 42%; color: var(--muted); }
+  .ok { color: var(--ok); font-weight: 600; } .bad { color: var(--bad); font-weight: 600; } .warn { color: var(--warn); font-weight: 600; }
+  textarea { width: 100%; height: 260px; font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+  .row { display: flex; gap: 8px; margin-top: 8px; }
+  button { font: inherit; padding: 8px 14px; border-radius: 6px; border: 1px solid var(--line); background: #fff; cursor: pointer; }
+  button.primary { background: #0969da; border-color: #0969da; color: #fff; }
+  #copied { align-self: center; color: var(--ok); display: none; }
+</style>
+</head>
+<body>
+<h1>H2F Spike S4: RTL / Arabic</h1>
+<div class="muted">Tests Arabic shaping, bidi ordering and base direction of text created through the Figma Plugin API.</div>
+<div id="status">Starting…</div>
+<div id="summary"><table id="summaryTable"></table></div>
+<div id="reportBox" style="display:none">
+  <div class="muted">Report (copy this and paste it back):</div>
+  <textarea id="report" readonly></textarea>
+  <div class="row">
+    <button class="primary" id="copyBtn">Copy report</button>
+    <button id="closeBtn">Close plugin</button>
+    <span id="copied">Copied ✓</span>
+  </div>
+</div>
+<script>
+'use strict';
+const BINS = 280;          // horizontal profile resolution
+const MAX_SHIFT = 4;       // bins of tolerated horizontal offset (font metric differences)
+const SCALE_RANGE = 0.1;   // tolerated width difference between Figma and Chromium glyph advances (±10%)
+const SCALE_STEP = 0.005;
+const SMOOTH_RADIUS = 2;   // bins; suppresses glyph-level detail, keeps word/run structure
+const SAME_REF = 0.97;     // above this, two references are considered indistinguishable
+const CONFIDENT_MARGIN = 0.08;
+const CONFIDENT_MIN = 0.6;
+
+const state = { init: null, refs: {}, fontLoad: {} };
+const $ = (id) => document.getElementById(id);
+const setStatus = (html) => { $('status').innerHTML = html; };
+const toMain = (msg) => parent.postMessage({ pluginMessage: msg }, '*');
+
+function withTimeout(promise, ms) {
+  return Promise.race([promise, new Promise((resolve) => setTimeout(() => resolve('timeout'), ms))]);
+}
+
+async function loadFonts(fonts, fontSize) {
+  const result = {};
+  for (const fam of fonts) {
+    try {
+      await withTimeout(document.fonts.load(`400 ${fontSize}px "${fam}"`, 'بسم الله abc 123'), 8000);
+    } catch (e) { /* recorded below */ }
+    const faces = [...document.fonts].filter((f) => f.family.replace(/["']/g, '') === fam);
+    result[fam] = { loaded: faces.some((f) => f.status === 'loaded'), faces: faces.length };
+  }
+  return result;
+}
+
+function renderCanvas(text, font, direction, box) {
+  const c = document.createElement('canvas');
+  c.width = box.w * 2;
+  c.height = box.h * 2;
+  const ctx = c.getContext('2d');
+  ctx.scale(2, 2);
+  ctx.font = `400 ${box.fontSize}px "${font}"`;
+  ctx.direction = direction;
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#000';
+  ctx.fillText(text, box.w, box.h / 2);
+  return c;
+}
+
+function profileOf(canvas) {
+  const { width, height } = canvas;
+  const data = canvas.getContext('2d').getImageData(0, 0, width, height).data;
+  const prof = new Float64Array(BINS);
+  let ink = 0;
+  for (let x = 0; x < width; x++) {
+    let col = 0;
+    for (let y = 0; y < height; y++) col += data[(y * width + x) * 4 + 3];
+    prof[Math.min(BINS - 1, Math.floor((x * BINS) / width))] += col;
+    ink += col;
+  }
+  return { prof, ink };
+}
+
+function zNorm(a) {
+  const n = a.length;
+  let mean = 0;
+  for (let i = 0; i < n; i++) mean += a[i];
+  mean /= n;
+  const out = new Float64Array(n);
+  let norm = 0;
+  for (let i = 0; i < n; i++) { out[i] = a[i] - mean; norm += out[i] * out[i]; }
+  norm = Math.sqrt(norm);
+  if (norm === 0) return null;
+  for (let i = 0; i < n; i++) out[i] /= norm;
+  return out;
+}
+
+function smooth(a, radius) {
+  const out = new Float64Array(a.length);
+  for (let i = 0; i < a.length; i++) {
+    let s = 0, n = 0;
+    for (let k = -radius; k <= radius; k++) {
+      const j = i + k;
+      if (j >= 0 && j < a.length) { s += a[j]; n++; }
+    }
+    out[i] = s / n;
+  }
+  return out;
+}
+
+/** Resamples `a` scaled by `scale` around its right edge (text is right-aligned), shifted by `shift` bins. */
+function rightAnchoredResample(a, scale, shift) {
+  const n = a.length, out = new Float64Array(n), right = n - 1;
+  for (let i = 0; i < n; i++) {
+    const src = right - (right - i) * scale + shift;
+    const i0 = Math.floor(src), f = src - i0;
+    const v0 = i0 >= 0 && i0 < n ? a[i0] : 0;
+    const v1 = i0 + 1 >= 0 && i0 + 1 < n ? a[i0 + 1] : 0;
+    out[i] = v0 * (1 - f) + v1 * f;
+  }
+  return out;
+}
+
+function dot(a, b) {
+  let s = 0;
+  for (let i = 0; i < a.length; i++) s += a[i] * b[i];
+  return s;
+}
+
+/**
+ * Similarity of two ink profiles, robust to small font-metric differences between Figma's text engine and
+ * Chromium: smoothed profiles, best normalized correlation over right-anchored scale (±SCALE_RANGE) and shift.
+ * Returns -1..1.
+ */
+function ncc(a, b) {
+  const zb = zNorm(smooth(b, SMOOTH_RADIUS));
+  const sa = smooth(a, SMOOTH_RADIUS);
+  if (!zb || !zNorm(sa)) return 0;
+  let best = -1;
+  for (let scale = 1 - SCALE_RANGE; scale <= 1 + SCALE_RANGE + 1e-9; scale += SCALE_STEP) {
+    for (let shift = -MAX_SHIFT; shift <= MAX_SHIFT; shift++) {
+      const za = zNorm(rightAnchoredResample(sa, scale, shift));
+      if (!za) continue;
+      const s = dot(za, zb);
+      if (s > best) best = s;
+    }
+  }
+  return best;
+}
+
+async function pngToCanvas(bytes) {
+  const bmp = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+  const c = document.createElement('canvas');
+  c.width = bmp.width;
+  c.height = bmp.height;
+  c.getContext('2d').drawImage(bmp, 0, 0);
+  return c;
+}
+
+async function canvasToPng(c) {
+  const blob = await new Promise((r) => c.toBlob(r, 'image/png'));
+  return new Uint8Array(await blob.arrayBuffer());
+}
+
+async function onInit(msg) {
+  state.init = msg;
+  setStatus('Loading reference fonts in the plugin UI (Google Fonts)…');
+  state.fontLoad = await loadFonts(msg.fonts, msg.box.fontSize);
+  setStatus('Rendering Chromium reference images…');
+  const refsForMain = {};
+  for (const font of msg.fonts) {
+    for (const c of msg.cases) {
+      const key = c.id + '|' + font;
+      const rtl = renderCanvas(c.text, font, 'rtl', msg.box);
+      const ltr = renderCanvas(c.text, font, 'ltr', msg.box);
+      const nobidi = renderCanvas('‭' + c.text + '‬', font, 'ltr', msg.box);
+      state.refs[key] = { rtl: profileOf(rtl).prof, ltr: profileOf(ltr).prof, nobidi: profileOf(nobidi).prof };
+      refsForMain[key] = await canvasToPng(rtl);
+    }
+  }
+  setStatus('Creating and exporting Figma text nodes… (this takes 10–30 s)');
+  toMain({ type: 'references', refs: refsForMain, fontLoad: state.fontLoad });
+}
+
+function classify(prof, refs) {
+  const rtlVsLtr = ncc(refs.rtl, refs.ltr);
+  const rtlVsNo = ncc(refs.rtl, refs.nobidi);
+  const scores = { RTL: ncc(prof, refs.rtl), LTR_BASE: ncc(prof, refs.ltr), NO_BIDI: ncc(prof, refs.nobidi) };
+  const candidates = { RTL: scores.RTL };
+  if (rtlVsLtr < SAME_REF) candidates.LTR_BASE = scores.LTR_BASE;
+  if (rtlVsNo < SAME_REF) candidates.NO_BIDI = scores.NO_BIDI;
+  const ranked = Object.entries(candidates).sort((a, b) => b[1] - a[1]);
+  const best = ranked[0];
+  const margin = ranked.length > 1 ? best[1] - ranked[1][1] : null;
+  return {
+    class: best[0],
+    confident: best[1] >= CONFIDENT_MIN && (margin === null || margin >= CONFIDENT_MARGIN),
+    margin: margin === null ? null : +margin.toFixed(3),
+    directionTestable: rtlVsLtr < SAME_REF,
+    scores: Object.fromEntries(Object.entries(scores).map(([k, v]) => [k, +v.toFixed(3)])),
+  };
+}
+
+function majority(list) {
+  const counts = {};
+  for (const x of list) counts[x] = (counts[x] || 0) + 1;
+  const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+  return top ? { value: top[0], count: top[1], of: list.length } : { value: 'NONE', count: 0, of: 0 };
+}
+
+function verdict(report, bidi) {
+  const v = {};
+  // Shaping: joined Beh x5 (S1) and the word (S3) must be clearly narrower than isolated forms.
+  const shapingByFont = {};
+  for (const s of report.shaping) {
+    (shapingByFont[s.font] = shapingByFont[s.font] || {})[s.caseId] = s.ratio;
+  }
+  v.shapingByFont = Object.fromEntries(Object.entries(shapingByFont).map(([f, r]) => [f, { ...r, shaped: r.S1 < 0.85 && r.S3 < 0.92 }]));
+  const shapedFlags = Object.values(v.shapingByFont).map((x) => x.shaped);
+  v.shaping = shapedFlags.every(Boolean) ? 'OK' : shapedFlags.some(Boolean) ? 'MIXED' : 'BROKEN';
+
+  const confident = bidi.filter((b) => b.confident && b.class !== 'EMPTY');
+  v.bidi = confident.some((b) => b.class === 'NO_BIDI') ? 'BROKEN' : 'OK';
+  v.emptyExports = bidi.filter((b) => b.class === 'EMPTY').map((b) => b.key);
+
+  const testable = (b) => b.directionTestable && b.confident;
+  const lFirstAsIs = bidi.filter((b) => b.firstStrong === 'L' && b.variant === 'asIs' && testable(b)).map((b) => b.class);
+  const lFirstRlm = bidi.filter((b) => b.firstStrong === 'L' && b.variant === 'rlm' && testable(b)).map((b) => b.class);
+  const rFirstAsIs = bidi.filter((b) => b.firstStrong === 'R' && b.variant === 'asIs' && testable(b)).map((b) => b.class);
+  const mL = majority(lFirstAsIs), mLr = majority(lFirstRlm), mR = majority(rFirstAsIs);
+  v.latinFirstAsIs = mL;
+  v.latinFirstWithRlm = mLr;
+  v.arabicFirstAsIs = mR;
+  v.baseDirection =
+    mL.value === 'LTR_BASE' && mR.value === 'RTL' ? 'FIRST_STRONG' :
+    mL.value === 'RTL' && mR.value === 'RTL' ? 'RTL_AUTO' : 'UNCLEAR';
+  v.rlmFixesLatinFirst = mLr.value === 'RTL';
+  v.referenceFontsLoaded = Object.values(state.fontLoad).every((f) => f.loaded);
+
+  if (v.shaping !== 'OK' || v.bidi !== 'OK') v.r5Outcome = 'C_ESCALATE (shaping or bidi broken → decision needed, see OPEN_QUESTIONS R-5)';
+  else if (v.baseDirection === 'FIRST_STRONG' && v.rlmFixesLatinFirst) v.r5Outcome = 'A_RLM_WORKAROUND (expected; PLG-RTL-2 confirmed)';
+  else if (v.baseDirection === 'RTL_AUTO') v.r5Outcome = 'B_NO_WORKAROUND_NEEDED';
+  else v.r5Outcome = 'INCONCLUSIVE (inspect the comparison frame visually)';
+  return v;
+}
+
+async function onResults(msg) {
+  setStatus('Classifying exports…');
+  const caseById = Object.fromEntries(state.init.cases.map((c) => [c.id, c]));
+  const bidi = [];
+  for (const e of msg.exports) {
+    const base = { key: e.key, caseId: e.caseId, font: e.font, variant: e.variant, firstStrong: caseById[e.caseId].firstStrong, wrapped: msg.report.wrapped.includes(e.key) };
+    try {
+      const canvas = await pngToCanvas(e.png);
+      const { prof, ink } = profileOf(canvas);
+      if (ink === 0) { bidi.push({ ...base, class: 'EMPTY', confident: true, exportSize: [canvas.width, canvas.height] }); continue; }
+      bidi.push({ ...base, ...classify(prof, state.refs[e.caseId + '|' + e.font]), exportSize: [canvas.width, canvas.height] });
+    } catch (err) {
+      bidi.push({ ...base, class: 'ERROR', confident: false, error: String(err) });
+    }
+  }
+  const report = { ...msg.report, ui: { userAgent: navigator.userAgent, referenceFontLoad: state.fontLoad }, bidi };
+  report.verdict = verdict(msg.report, bidi);
+  renderSummary(report.verdict, report);
+  $('report').value = JSON.stringify(report, null, 2);
+  $('reportBox').style.display = 'block';
+  setStatus('<span class="ok">Done.</span> A comparison frame was added to the current page. Copy the report below.');
+}
+
+function cls(ok) { return ok === true ? 'ok' : ok === false ? 'bad' : 'warn'; }
+
+function renderSummary(v, report) {
+  const rows = [
+    ['R-5 outcome', v.r5Outcome, v.r5Outcome.startsWith('A') || v.r5Outcome.startsWith('B') ? true : v.r5Outcome.startsWith('C') ? false : null],
+    ['Arabic shaping (letter joining)', v.shaping, v.shaping === 'OK' ? true : v.shaping === 'BROKEN' ? false : null],
+    ['Bidi ordering', v.bidi, v.bidi === 'OK'],
+    ['Base direction behaviour', v.baseDirection, v.baseDirection === 'UNCLEAR' ? null : true],
+    ['RLM prefix fixes Latin-first text', String(v.rlmFixesLatinFirst), v.rlmFixesLatinFirst],
+    ['Reference fonts loaded in UI', String(v.referenceFontsLoaded), v.referenceFontsLoaded],
+    ['Errors during run', String(report.errors.length), report.errors.length === 0],
+  ];
+  $('summaryTable').innerHTML = rows.map(([k, val, ok]) => `<tr><td>${k}</td><td class="${cls(ok)}">${val}</td></tr>`).join('');
+  $('summary').style.display = 'block';
+}
+
+window.onmessage = async (event) => {
+  const msg = event.data && event.data.pluginMessage;
+  if (!msg) return;
+  try {
+    if (msg.type === 'init') await onInit(msg);
+    else if (msg.type === 'progress') setStatus(msg.text);
+    else if (msg.type === 'results') await onResults(msg);
+    else if (msg.type === 'fatal') setStatus('<span class="bad">Failed:</span> <pre>' + msg.message.replace(/</g, '&lt;') + '</pre>');
+  } catch (err) {
+    setStatus('<span class="bad">UI error:</span> ' + String(err).replace(/</g, '&lt;'));
+  }
+};
+
+$('copyBtn').onclick = () => {
+  const ta = $('report');
+  ta.focus();
+  ta.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+  $('copied').textContent = ok ? 'Copied ✓' : 'Select all (Ctrl/Cmd+A) and copy manually';
+  $('copied').style.display = 'inline';
+};
+$('closeBtn').onclick = () => toMain({ type: 'close' });
+</script>
+</body>
+</html>

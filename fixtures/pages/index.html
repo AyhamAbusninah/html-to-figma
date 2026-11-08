@@ -1,0 +1,80 @@
+<!doctype html>
+<!--
+  Fixture: index
+  Purpose: table of contents for every fixture page. Not a capture target itself, but it is a
+           harmless smoke test (plain text, links, a table, one SVG logo via <img>).
+  Requirements: SYS-4, TST-3
+  Expected capture behaviour:
+    - Heading, intro paragraph and one TEXT node per link label / description cell.
+    - Link colour (#4338ca) and underline (textDecoration UNDERLINE) preserved.
+    - The logo <img src="*.svg"> becomes an SvgNode (EXT-S-5) or raster fallback.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HTML-to-Figma fixtures</title>
+<link rel="icon" href="../assets/img/favicon.ico">
+<style>
+  @font-face { font-family: "Inter"; font-weight: 400; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/inter/Inter-400.woff2) format("woff2"); }
+  @font-face { font-family: "Inter"; font-weight: 600; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/inter/Inter-600.woff2) format("woff2"); }
+  @font-face { font-family: "Inter"; font-weight: 700; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/inter/Inter-700.woff2) format("woff2"); }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px; font: 15px/1.5 "Inter", sans-serif; color: #111827; background: #f9fafb; }
+  main { width: 960px; }
+  header { display: flex; align-items: center; gap: 16px; margin-bottom: 8px; }
+  h1 { font-size: 28px; margin: 0; }
+  h2 { font-size: 18px; margin: 32px 0 8px; }
+  p { color: #4b5563; margin: 0 0 16px; }
+  table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #e5e7eb; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+  th { background: #f3f4f6; font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: #374151; }
+  td:first-child { width: 220px; white-space: nowrap; }
+  a { color: #4338ca; font-weight: 600; }
+  code { font: 13px/1.4 ui-monospace, monospace; background: #eef2ff; padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="../assets/img/logo.svg" width="160" height="40" alt="Fixture logo">
+    <h1>HTML-to-Figma fixtures</h1>
+  </header>
+  <p>Static, deterministic pages used to test the extractor. Serve with <code>node fixtures/serve.mjs</code>. Each page's source begins with a comment listing the requirement IDs it exercises and the expected capture behaviour.</p>
+
+  <h2>Core fixtures (TST-3)</h2>
+  <table>
+    <thead><tr><th>Page</th><th>Exercises</th></tr></thead>
+    <tbody>
+      <tr><td><a href="boxes.html">boxes</a></td><td>Backgrounds, modern colour syntaxes, borders, radii, shadows, opacity, blend modes, filters, transforms, visibility rules</td></tr>
+      <tr><td><a href="typography.html">typography</a></td><td>Sizes, weights, line-height, letter-spacing, text-transform, decoration, alignment, white-space, ellipsis, inline runs, font stacks</td></tr>
+      <tr><td><a href="images-same-origin.html">images-same-origin</a></td><td>srcset / picture, object-fit, data: and blob: images, lazy images, canvas, video poster</td></tr>
+      <tr><td><a href="images-cross-origin.html">images-cross-origin</a></td><td>No-CORS images from a second and third origin, cross-origin CSS background, cookie-protected image, tainted canvas</td></tr>
+      <tr><td><a href="backgrounds.html">backgrounds</a></td><td>background-size / position / repeat / origin / clip, layered backgrounds, linear / radial / repeating / conic gradients</td></tr>
+      <tr><td><a href="svg-icons.html">svg-icons</a></td><td>currentColor, CSS-styled SVG, &lt;use&gt; sprites, viewBox-only SVG, SVG text, SVG image, filters, scripts to strip</td></tr>
+      <tr><td><a href="stacking.html">stacking</a></td><td>z-index ordering, stacking contexts, fixed header, sticky subheader</td></tr>
+      <tr><td><a href="overflow.html">overflow</a></td><td>overflow hidden / clip / auto, rounded clipping, scrolled containers</td></tr>
+      <tr><td><a href="forms.html">forms</a></td><td>Inputs, placeholders, password masking, textarea, select, checkbox / radio (native and custom), buttons, range</td></tr>
+      <tr><td><a href="shadow-dom.html">shadow-dom</a></td><td>Open and closed shadow roots, slots, nested shadow roots, scoped styles</td></tr>
+      <tr><td><a href="iframes.html">iframes</a></td><td>srcdoc and same-origin iframes, cross-origin iframe placeholder, iframe border / padding offsets</td></tr>
+      <tr><td><a href="app-shell.html">app-shell</a></td><td>100vh shell with two independently scrolling containers (scroll expansion)</td></tr>
+      <tr><td><a href="pseudo-elements.html">pseudo-elements</a></td><td>::before / ::after with strings, counters, attr(), url(), status dots, separators, custom checkbox marks</td></tr>
+      <tr><td><a href="icon-fonts.html">icon-fonts</a></td><td>Font Awesome, Material Symbols ligatures, Private Use Area glyphs</td></tr>
+      <tr><td><a href="rtl-arabic.html">rtl-arabic</a></td><td>RTL document, Arabic fonts, start/end alignment, bidi strings, Arabic inputs, Arabic SVG labels</td></tr>
+      <tr><td><a href="rtl-overflow.html">rtl-overflow</a></td><td>RTL document with 2000&nbsp;px of horizontal overflow</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Universal benchmark pages</h2>
+  <table>
+    <thead><tr><th>Page</th><th>Represents</th></tr></thead>
+    <tbody>
+      <tr><td><a href="landing-page.html">landing-page</a></td><td>Marketing site: sticky nav, hero with image + gradient, feature grid, testimonials, pricing, footer</td></tr>
+      <tr><td><a href="spa.html">spa</a></td><td>Client-rendered app: CSS-in-JS, portal modal, toast, tabs, web component</td></tr>
+      <tr><td><a href="dashboard.html">dashboard</a></td><td>Analytics dashboard: KPI cards, SVG charts, sticky-header table, avatar group, progress bar</td></tr>
+      <tr><td><a href="ecommerce.html">ecommerce</a></td><td>Product listing: srcset + lazy images, prices, star ratings, rotated badges, filters</td></tr>
+    </tbody>
+  </table>
+</main>
+</body>
+</html>

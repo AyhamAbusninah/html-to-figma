@@ -1,0 +1,159 @@
+<!doctype html>
+<!--
+  Fixture: forms
+  Purpose: form controls — value vs placeholder text, ::placeholder colour, password masking,
+           textarea, select, native and custom (appearance:none) checkboxes / radios, buttons,
+           disabled states, range input, hidden input.
+  Requirements: EXT-X-6, EXT-X-7, EXT-T-2, EXT-I-2, EXT-T-11, SEC-1, AC-EXT-5
+  Expected capture behaviour (data-testid):
+    - input-value: FRAME (white, 1px #d1d5db border, radius 8) + TEXT "Jane Cooper" (EXT-X-6).
+    - input-placeholder: TEXT "Search products…" in the ::placeholder colour #9ca3af, italic.
+    - input-password: TEXT is "•" × 19 (length of the value). The string "secret-password-123"
+      MUST NOT appear anywhere in the capture file (EXT-X-7, AC-EXT-5). The same applies to the
+      password typed by script into input-password-typed ("typed-secret-456").
+    - input-hidden: type=hidden with value "csrf-token-should-not-render" → skipped (EXT-T-2).
+    - textarea: multi-line TEXT with the two-line value, lineCount ≥ 2.
+    - select: TEXT of the selected option "Canada" (not the first option).
+    - select-multiple: listbox — the visible options; selected ones highlighted.
+    - checkbox-native / radio-native: checked state visible (rendered via Tier 3 crop or as a
+      simple frame — implementation-defined, but checked vs unchecked must be distinguishable).
+    - checkbox-custom: appearance:none + data:image/svg+xml check mark background → FRAME with
+      fill #4f46e5 and an IMAGE paint from the data: URI (Tier 1).
+    - radio-custom: appearance:none with inset box-shadow dot → INNER_SHADOW / border.
+    - toggle-switch: checkbox + label::after knob (pseudo-element materialised, EXT-T-11).
+    - buttons: primary (filled), secondary (border), ghost, icon button (inline SVG), disabled
+      (opacity .5, cursor not captured).
+    - disabled-input: greyed background #f3f4f6, text colour #9ca3af.
+    - range: track and thumb — native (implementation-defined).
+    - input-date / input-number / input-color: value text as displayed ("42"; the date is shown in
+      the browser locale, e.g. "11/08/2026" for en-US — the capture should use the displayed text,
+      implementation-defined); colour swatch #4f46e5.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fixture: forms</title>
+<style>
+  @font-face { font-family: "Inter"; font-weight: 400; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/inter/Inter-400.woff2) format("woff2"); }
+  @font-face { font-family: "Inter"; font-weight: 600; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/inter/Inter-600.woff2) format("woff2"); }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px; font: 14px/1.4 "Inter", sans-serif; color: #111827; background: #f9fafb; }
+  h1 { font-size: 22px; margin: 0 0 16px; font-weight: 600; }
+  form { width: 720px; background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 24px; }
+  fieldset { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px 16px 16px; margin: 0 0 20px; }
+  legend { font-weight: 600; padding: 0 6px; color: #374151; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 20px; }
+  label.f { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600; color: #374151; }
+  input[type=text], input[type=email], input[type=password], input[type=number], input[type=date], input[type=search], textarea, select {
+    font: 14px/1.4 "Inter", sans-serif; color: #111827; padding: 9px 12px; border: 1px solid #d1d5db; border-radius: 8px; background: #fff; width: 100%;
+  }
+  input::placeholder, textarea::placeholder { color: #9ca3af; font-style: italic; }
+  input:disabled { background: #f3f4f6; color: #9ca3af; border-color: #e5e7eb; }
+  textarea { height: 84px; resize: none; }
+  select[multiple] { height: 96px; padding: 4px; }
+  .checks { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; }
+  .checks label { display: inline-flex; align-items: center; gap: 8px; }
+  .cb-custom { appearance: none; -webkit-appearance: none; width: 18px; height: 18px; margin: 0; border: 1.5px solid #9ca3af; border-radius: 5px; background: #fff; display: inline-block; vertical-align: middle; }
+  .cb-custom:checked { background: #4f46e5 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5l3 3 6-7' fill='none' stroke='%23fff' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 14px 14px no-repeat; border-color: #4f46e5; }
+  .rb-custom { appearance: none; -webkit-appearance: none; width: 18px; height: 18px; margin: 0; border: 1.5px solid #9ca3af; border-radius: 50%; background: #fff; }
+  .rb-custom:checked { border-color: #059669; box-shadow: inset 0 0 0 4px #fff; background: #059669; }
+  .toggle { position: relative; display: inline-flex; align-items: center; gap: 10px; }
+  .toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
+  .toggle .track { width: 40px; height: 22px; border-radius: 999px; background: #d1d5db; position: relative; }
+  .toggle .track::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+  .toggle input:checked + .track { background: #10b981; }
+  .toggle input:checked + .track::after { left: 21px; }
+  .buttons { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  button { font: 600 14px/1 "Inter", sans-serif; padding: 10px 16px; border-radius: 8px; border: 1px solid transparent; cursor: pointer; }
+  .btn-primary { background: #4f46e5; color: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.15); }
+  .btn-secondary { background: #fff; color: #374151; border-color: #d1d5db; }
+  .btn-ghost { background: transparent; color: #4f46e5; }
+  .btn-danger { background: #dc2626; color: #fff; }
+  .btn-icon { width: 38px; height: 38px; padding: 0; display: inline-grid; place-items: center; background: #f3f4f6; color: #111827; }
+  .btn-icon svg { width: 18px; height: 18px; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  input[type=range] { width: 260px; accent-color: #4f46e5; }
+  input[type=color] { width: 44px; height: 32px; padding: 2px; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; }
+</style>
+</head>
+<body>
+<h1>Forms</h1>
+<form onsubmit="return false" autocomplete="off">
+  <input type="hidden" name="csrf" value="csrf-token-should-not-render" data-testid="input-hidden">
+
+  <fieldset>
+    <legend>Text fields</legend>
+    <div class="grid">
+      <label class="f">Full name<input type="text" value="Jane Cooper" data-testid="input-value"></label>
+      <label class="f">Search<input type="search" placeholder="Search products…" data-testid="input-placeholder"></label>
+      <label class="f">Password<input type="password" value="secret-password-123" data-testid="input-password"></label>
+      <label class="f">Password (typed by script)<input type="password" id="pw-typed" data-testid="input-password-typed"></label>
+      <label class="f">Email<input type="email" value="jane.cooper@example.com" data-testid="input-email"></label>
+      <label class="f">Disabled<input type="text" value="Read-only value" disabled data-testid="disabled-input"></label>
+      <label class="f">Quantity<input type="number" value="42" data-testid="input-number"></label>
+      <label class="f">Date<input type="date" value="2026-11-08" data-testid="input-date"></label>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Multi-line &amp; selects</legend>
+    <div class="grid">
+      <label class="f">Notes<textarea data-testid="textarea">First line of the note.
+Second line after a newline.</textarea></label>
+      <label class="f">Empty textarea<textarea placeholder="Write a comment…" data-testid="textarea-placeholder"></textarea></label>
+      <label class="f">Country
+        <select data-testid="select">
+          <option>United States</option>
+          <option selected>Canada</option>
+          <option>Mexico</option>
+        </select>
+      </label>
+      <label class="f">Tags (multiple)
+        <select multiple data-testid="select-multiple">
+          <option selected>Design</option>
+          <option>Engineering</option>
+          <option selected>Marketing</option>
+          <option>Sales</option>
+        </select>
+      </label>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Checkboxes &amp; radios</legend>
+    <div class="checks">
+      <label data-testid="checkbox-native"><input type="checkbox" checked> Native checked</label>
+      <label><input type="checkbox"> Native unchecked</label>
+      <label data-testid="radio-native"><input type="radio" name="r1" checked> Radio A</label>
+      <label><input type="radio" name="r1"> Radio B</label>
+      <label data-testid="checkbox-custom"><input type="checkbox" class="cb-custom" checked> Custom checked</label>
+      <label><input type="checkbox" class="cb-custom"> Custom unchecked</label>
+      <label data-testid="radio-custom"><input type="radio" class="rb-custom" name="r2" checked> Custom radio</label>
+      <label class="toggle" data-testid="toggle-switch"><input type="checkbox" checked><span class="track"></span> Notifications</label>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Buttons &amp; other inputs</legend>
+    <div class="buttons" data-testid="buttons">
+      <button class="btn-primary" type="submit">Save changes</button>
+      <button class="btn-secondary" type="button">Cancel</button>
+      <button class="btn-ghost" type="button">Learn more</button>
+      <button class="btn-danger" type="button">Delete</button>
+      <button class="btn-icon" type="button" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
+      <button class="btn-primary" type="button" disabled data-testid="button-disabled">Disabled</button>
+    </div>
+    <div class="buttons" style="margin-top:16px">
+      <input type="range" min="0" max="100" value="65" data-testid="range">
+      <input type="color" value="#4f46e5" data-testid="input-color">
+      <input type="button" value="Input button" class="btn-secondary" style="font:600 14px Inter,sans-serif;padding:9px 14px;border:1px solid #d1d5db;border-radius:8px;background:#fff">
+    </div>
+  </fieldset>
+</form>
+<script>
+  // Simulates a value the user typed (property, not attribute) — must also be masked.
+  document.getElementById("pw-typed").value = "typed-secret-456";
+</script>
+</body>
+</html>

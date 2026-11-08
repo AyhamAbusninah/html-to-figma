@@ -1,0 +1,14 @@
+node_modules/
+dist/
+coverage/
+*.log
+.DS_Store
+# Captures produced while testing (may contain page content, SEC-4)
+figma-capture_*.json
+# Spike results pasted locally
+spikes/**/results/*.local.json
+# Tool caches / test output
+.impeccable/hook.cache.json
+test-results/
+playwright-report/
+.playwright-mcp/

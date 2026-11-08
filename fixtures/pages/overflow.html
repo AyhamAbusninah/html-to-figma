@@ -1,0 +1,103 @@
+<!doctype html>
+<!--
+  Fixture: overflow
+  Purpose: clipping — overflow hidden (incl. rounded-corner clipping), overflow:auto containers
+           scrolled to a non-zero offset on load, overflow-x only, overflow:clip, and clip-path.
+  Requirements: EXT-V-8, EXT-V-10, EXT-T-4, EXT-C-5, EXT-G-1, EXT-I-10
+  Expected capture behaviour (data-testid):
+    - clip-hidden: FRAME clipsContent true; the oversized child keeps its full rect (extends past
+      the parent) and Figma clips it visually.
+    - clip-rounded: clipsContent true + radius 24 → the child image is clipped to the rounded rect
+      (Figma clips frame children to the frame's corner radius).
+    - scrolled-y: overflow-y:auto, scrollTop set to 180 by script on load → children captured at
+      their CURRENT scrolled positions (row 1–4 above the box top are clipped; "Row 05" is the
+      first visible row) (EXT-V-8). This box is small (< 15% of the viewport), so it is NOT offered
+      for scroll expansion (EXT-C-5).
+    - scrolled-x: overflow-x:auto scrolled to scrollLeft 260 → chip "Chip 05" near the left edge.
+    - overflow-x-only: overflow-x hidden, overflow-y visible → clipsContent true (either axis).
+    - clip-value: overflow:clip → clipsContent true.
+    - clip-path-circle: clip-path → rasterised via Tier 3 with CLIP_MASK_RASTERIZED (EXT-V-10),
+      or emitted unclipped with CLIP_MASK_UNSUPPORTED.
+    - mask-gradient: -webkit-mask-image → same as clip-path.
+    - fully-clipped: a child positioned entirely outside a hidden-overflow parent is still in the
+      DOM tree; it may be emitted (clipped by Figma) — it must not leak visually.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fixture: overflow</title>
+<style>
+  @font-face { font-family: "Inter"; font-weight: 400; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/inter/Inter-400.woff2) format("woff2"); }
+  @font-face { font-family: "Inter"; font-weight: 600; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/inter/Inter-600.woff2) format("woff2"); }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px; font: 13px/1.4 "Inter", sans-serif; color: #111827; background: #fff; width: 1000px; }
+  h1 { font-size: 22px; margin: 0 0 4px; font-weight: 600; }
+  h2 { font-size: 14px; margin: 28px 0 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: #4b5563; }
+  .row { display: flex; flex-wrap: wrap; gap: 40px; align-items: flex-start; }
+  .cap { margin-top: 6px; color: #4b5563; font-size: 12px; }
+  .clip-hidden { position: relative; width: 220px; height: 140px; overflow: hidden; background: #e0e7ff; border: 2px solid #4f46e5; }
+  .clip-hidden .big { position: absolute; left: 120px; top: 60px; width: 200px; height: 160px; background: #f97316; color: #fff; padding: 8px; font-weight: 600; }
+  .clip-rounded { width: 240px; height: 150px; border-radius: 24px; overflow: hidden; background: #111827; }
+  .clip-rounded img { display: block; width: 100%; height: 100%; object-fit: cover; }
+  .scroll-box { width: 260px; height: 180px; overflow-y: auto; border: 1px solid #94a3b8; background: #f8fafc; }
+  .scroll-box .r { height: 44px; padding: 12px 14px; border-bottom: 1px solid #e2e8f0; }
+  .scroll-box .r:nth-child(odd) { background: #fff; }
+  .scroll-x { width: 420px; overflow-x: auto; white-space: nowrap; border: 1px solid #94a3b8; padding: 10px; background: #f8fafc; }
+  .chip { display: inline-block; width: 100px; padding: 8px 0; text-align: center; margin-right: 10px; background: #dbeafe; color: #1e40af; border-radius: 999px; font-weight: 600; }
+  .overflow-x-only { width: 260px; overflow-x: hidden; overflow-y: visible; background: #fef9c3; border: 1px dashed #ca8a04; padding: 10px; white-space: nowrap; }
+  .clip-value { width: 220px; height: 100px; overflow: clip; background: #dcfce7; border: 2px solid #16a34a; padding: 8px; }
+  .clip-value .tall { height: 200px; background: linear-gradient(#22c55e, #14532d); color: #fff; padding: 6px; }
+  .clip-path-circle { width: 160px; height: 160px; clip-path: circle(45% at 50% 50%); background: url(../assets/img/photo-800x500.png) center / cover; }
+  .mask-gradient { width: 240px; height: 150px; background: url(../assets/img/photo-800x500.png) center / cover; -webkit-mask-image: linear-gradient(90deg, #000 40%, transparent); mask-image: linear-gradient(90deg, #000 40%, transparent); }
+  .fully-clipped { position: relative; width: 200px; height: 80px; overflow: hidden; background: #fae8ff; border: 2px solid #c026d3; }
+  .fully-clipped .out { position: absolute; left: 260px; top: 0; width: 80px; height: 40px; background: #000; color: #fff; }
+</style>
+</head>
+<body>
+<h1>Overflow &amp; clipping</h1>
+
+<h2>overflow: hidden</h2>
+<div class="row">
+  <div><div class="clip-hidden" data-testid="clip-hidden"><div class="big">child 200×160 overflows</div></div><div class="cap">child clipped at right/bottom</div></div>
+  <div><div class="clip-rounded" data-testid="clip-rounded"><img src="../assets/img/photo-800x500.png" alt="clipped by rounded parent"></div><div class="cap">rounded parent clips child image</div></div>
+  <div><div class="fully-clipped" data-testid="fully-clipped">visible text<div class="out">LEAK</div></div><div class="cap">child fully outside (must not leak)</div></div>
+</div>
+
+<h2>Scrolled containers (scroll set on load)</h2>
+<div class="row">
+  <div>
+    <div class="scroll-box" id="scrolled-y" data-testid="scrolled-y">
+      <div class="r">Row 01</div><div class="r">Row 02</div><div class="r">Row 03</div><div class="r">Row 04</div>
+      <div class="r">Row 05</div><div class="r">Row 06</div><div class="r">Row 07</div><div class="r">Row 08</div>
+      <div class="r">Row 09</div><div class="r">Row 10</div><div class="r">Row 11</div><div class="r">Row 12</div>
+    </div>
+    <div class="cap">overflow-y: auto, scrollTop = 180</div>
+  </div>
+  <div>
+    <div class="scroll-x" id="scrolled-x" data-testid="scrolled-x">
+      <span class="chip">Chip 01</span><span class="chip">Chip 02</span><span class="chip">Chip 03</span><span class="chip">Chip 04</span><span class="chip">Chip 05</span><span class="chip">Chip 06</span><span class="chip">Chip 07</span><span class="chip">Chip 08</span><span class="chip">Chip 09</span><span class="chip">Chip 10</span>
+    </div>
+    <div class="cap">overflow-x: auto, scrollLeft = 260</div>
+  </div>
+</div>
+
+<h2>Single axis &amp; clip</h2>
+<div class="row">
+  <div><div class="overflow-x-only" data-testid="overflow-x-only">overflow-x hidden: this long line is cut at the right edge of the box</div><div class="cap">overflow-x only</div></div>
+  <div><div class="clip-value" data-testid="clip-value"><div class="tall">overflow: clip — this 200px child is cut at 100px</div></div><div class="cap">overflow: clip</div></div>
+</div>
+
+<h2>clip-path &amp; mask (rasterised)</h2>
+<div class="row">
+  <div><div class="clip-path-circle" data-testid="clip-path-circle"></div><div class="cap">clip-path: circle()</div></div>
+  <div><div class="mask-gradient" data-testid="mask-gradient"></div><div class="cap">mask-image gradient</div></div>
+</div>
+
+<script>
+  // Deterministic, applied before the load event completes rendering.
+  document.getElementById("scrolled-y").scrollTop = 180;
+  document.getElementById("scrolled-x").scrollLeft = 260;
+</script>
+</body>
+</html>

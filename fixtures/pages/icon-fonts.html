@@ -1,0 +1,91 @@
+<!doctype html>
+<!--
+  Fixture: icon-fonts
+  Purpose: icon-glyph detection and rasterisation — Font Awesome Free 6 (solid, glyphs via
+           ::before content), Material Symbols Outlined (ligatures: the DOM text is the icon
+           name), a Private-Use-Area glyph in a non-icon font family, and regular text next to icons.
+  Requirements: EXT-X-9, EXT-T-11, EXT-C-2, EXT-I-4, AC-EXT-15
+  Expected capture behaviour (data-testid):
+    - fa-*: Font Awesome renders through i::before { content: "\f00c" } — the ::before is
+      materialised (EXT-T-11) and its text is a PUA character in family "Font Awesome 6 Free" →
+      IMAGE node (not TEXT) drawn on a canvas at 2×DPR with the page's font and colour (EXT-X-9,
+      AC-EXT-15). Colours: check #16a34a, xmark #dc2626, house inherits #111827, gear #4f46e5,
+      cart #0ea5e9, the 2x / 3x size variants scale.
+    - ms-*: <span class="material-symbols-outlined">home</span> — DOM text "home" is a ligature;
+      family matches "Material Symbols*" → IMAGE node drawn with the ligature text (not a TEXT node
+      reading "home"). ms-filled uses font-variation-settings 'FILL' 1 (may render outlined if the
+      static font lacks the FILL axis — the capture must match whatever Chrome shows).
+    - pua-glyph: a single U+F005 character (Private Use Area) in Font Awesome → icon by rule (b) (all chars in
+      PUA), even though the element has no icon class.
+    - text-next-to-icon: the label text ("Saved", "Settings", "Delete") stays a normal TEXT node
+      in Inter; only the glyph becomes an IMAGE.
+    - If the icon font failed to load (blank square), canvas drawing is skipped → Tier 3.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fixture: icon fonts</title>
+<link rel="stylesheet" href="../assets/vendor/fontawesome/css/fontawesome.min.css">
+<link rel="stylesheet" href="../assets/vendor/fontawesome/css/solid.min.css">
+<style>
+  @font-face { font-family: "Inter"; font-weight: 400; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/inter/Inter-400.woff2) format("woff2"); }
+  @font-face { font-family: "Inter"; font-weight: 600; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/inter/Inter-600.woff2) format("woff2"); }
+  @font-face { font-family: "Material Symbols Outlined"; font-style: normal; font-weight: 400; font-display: block; src: url(../assets/vendor/material-symbols/MaterialSymbolsOutlined.woff2) format("woff2"); }
+  .material-symbols-outlined {
+    font-family: "Material Symbols Outlined"; font-weight: normal; font-style: normal; font-size: 24px; line-height: 1;
+    letter-spacing: normal; text-transform: none; display: inline-block; white-space: nowrap; word-wrap: normal;
+    direction: ltr; -webkit-font-feature-settings: "liga"; font-feature-settings: "liga"; -webkit-font-smoothing: antialiased;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px; font: 14px/1.5 "Inter", sans-serif; color: #111827; background: #fff; width: 900px; }
+  h1 { font-size: 22px; margin: 0 0 4px; font-weight: 600; }
+  h2 { font-size: 14px; margin: 28px 0 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: #4b5563; }
+  .row { display: flex; gap: 28px; align-items: center; flex-wrap: wrap; }
+  .item { display: inline-flex; align-items: center; gap: 8px; }
+  .fa-solid { font-size: 20px; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 8px; font-weight: 600; border: 1px solid #d1d5db; background: #fff; }
+  .btn.primary { background: #4f46e5; color: #fff; border-color: #4f46e5; }
+  .btn.danger { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
+  .pua { font-family: "Font Awesome 6 Free"; font-weight: 900; font-size: 22px; color: #ea580c; }
+  .ms-filled { font-variation-settings: "FILL" 1, "wght" 400, "GRAD" 0, "opsz" 24; color: #e11d48; }
+</style>
+</head>
+<body>
+<h1>Icon fonts</h1>
+
+<h2>Font Awesome Free (solid)</h2>
+<div class="row">
+  <span class="item" data-testid="fa-check"><i class="fa-solid fa-check" style="color:#16a34a"></i>check</span>
+  <span class="item" data-testid="fa-xmark"><i class="fa-solid fa-xmark" style="color:#dc2626"></i>xmark</span>
+  <span class="item" data-testid="fa-house"><i class="fa-solid fa-house"></i>house</span>
+  <span class="item" data-testid="fa-gear"><i class="fa-solid fa-gear" style="color:#4f46e5"></i>gear</span>
+  <span class="item" data-testid="fa-cart"><i class="fa-solid fa-cart-shopping" style="color:#0ea5e9"></i>cart-shopping</span>
+  <span class="item" data-testid="fa-star"><i class="fa-solid fa-star" style="color:#f59e0b"></i>star</span>
+  <span class="item" data-testid="fa-2x"><i class="fa-solid fa-bell fa-2x" style="color:#7c3aed"></i>2x</span>
+  <span class="item" data-testid="fa-3x"><i class="fa-solid fa-user fa-3x" style="color:#0f766e"></i>3x</span>
+</div>
+
+<h2>Material Symbols Outlined (ligatures)</h2>
+<div class="row">
+  <span class="item" data-testid="ms-home"><span class="material-symbols-outlined">home</span>home</span>
+  <span class="item" data-testid="ms-search"><span class="material-symbols-outlined" style="color:#2563eb">search</span>search</span>
+  <span class="item" data-testid="ms-settings"><span class="material-symbols-outlined" style="color:#4b5563">settings</span>settings</span>
+  <span class="item" data-testid="ms-delete"><span class="material-symbols-outlined" style="color:#dc2626">delete</span>delete</span>
+  <span class="item" data-testid="ms-large"><span class="material-symbols-outlined" style="font-size:40px;color:#059669">shopping_cart</span>40px</span>
+  <span class="item" data-testid="ms-filled"><span class="material-symbols-outlined ms-filled">favorite</span>FILL 1</span>
+</div>
+
+<h2>Private Use Area glyph without an icon class</h2>
+<div class="row">
+  <span class="item" data-testid="pua-glyph"><span class="pua">&#xf005;</span>U+F005 in a plain span</span>
+</div>
+
+<h2>Text next to icons</h2>
+<div class="row" data-testid="text-next-to-icon">
+  <span class="btn primary"><i class="fa-solid fa-floppy-disk"></i>Saved</span>
+  <span class="btn"><span class="material-symbols-outlined" style="font-size:20px">tune</span>Settings</span>
+  <span class="btn danger"><i class="fa-solid fa-trash"></i>Delete</span>
+</div>
+</body>
+</html>

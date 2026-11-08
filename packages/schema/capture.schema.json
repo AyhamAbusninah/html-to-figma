@@ -1,0 +1,1693 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://arkantechjo.com/schemas/h2f/capture-1.schema.json",
+  "title": "H2F Capture Document v1",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "meta",
+    "assets",
+    "root"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "semver; major must be 1 (SCH-8)",
+      "type": "string"
+    },
+    "meta": {
+      "type": "object",
+      "required": [
+        "sourceUrl",
+        "title",
+        "capturedAt",
+        "captureMode",
+        "lang",
+        "direction",
+        "viewport",
+        "document",
+        "devicePixelRatio",
+        "extractorVersion",
+        "userAgent",
+        "stats",
+        "warnings"
+      ],
+      "properties": {
+        "sourceUrl": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "capturedAt": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}",
+          "description": "ISO 8601",
+          "type": "string"
+        },
+        "captureMode": {
+          "anyOf": [
+            {
+              "const": "page",
+              "type": "string"
+            },
+            {
+              "const": "element",
+              "type": "string"
+            }
+          ]
+        },
+        "lang": {
+          "type": "string"
+        },
+        "direction": {
+          "anyOf": [
+            {
+              "const": "ltr",
+              "type": "string"
+            },
+            {
+              "const": "rtl",
+              "type": "string"
+            }
+          ]
+        },
+        "viewport": {
+          "type": "object",
+          "required": [
+            "width",
+            "height"
+          ],
+          "properties": {
+            "width": {
+              "minimum": 0,
+              "type": "number"
+            },
+            "height": {
+              "minimum": 0,
+              "type": "number"
+            }
+          }
+        },
+        "document": {
+          "type": "object",
+          "required": [
+            "width",
+            "height"
+          ],
+          "properties": {
+            "width": {
+              "minimum": 0,
+              "type": "number"
+            },
+            "height": {
+              "minimum": 0,
+              "type": "number"
+            }
+          }
+        },
+        "devicePixelRatio": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "extractorVersion": {
+          "type": "string"
+        },
+        "userAgent": {
+          "type": "string"
+        },
+        "stats": {
+          "type": "object",
+          "required": [
+            "nodeCount",
+            "textCount",
+            "imageCount",
+            "svgCount",
+            "bytes"
+          ],
+          "properties": {
+            "nodeCount": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "textCount": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "imageCount": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "svgCount": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "bytes": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "code",
+              "message"
+            ],
+            "properties": {
+              "code": {
+                "description": "See WARNING_CODES; unknown codes are allowed (forward compatibility)",
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "nodeId": {
+                "type": "string"
+              },
+              "detail": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "assets": {
+      "type": "object",
+      "required": [
+        "images"
+      ],
+      "properties": {
+        "images": {
+          "type": "object",
+          "patternProperties": {
+            "^(.*)$": {
+              "type": "object",
+              "required": [
+                "mime",
+                "data",
+                "width",
+                "height",
+                "source"
+              ],
+              "properties": {
+                "mime": {
+                  "anyOf": [
+                    {
+                      "const": "image/png",
+                      "type": "string"
+                    },
+                    {
+                      "const": "image/jpeg",
+                      "type": "string"
+                    },
+                    {
+                      "const": "image/gif",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "data": {
+                  "description": "Base64 without data: prefix (SCH-6)",
+                  "type": "string"
+                },
+                "width": {
+                  "minimum": 1,
+                  "maximum": 4096,
+                  "type": "integer"
+                },
+                "height": {
+                  "minimum": 1,
+                  "maximum": 4096,
+                  "type": "integer"
+                },
+                "source": {
+                  "anyOf": [
+                    {
+                      "const": "canvas",
+                      "type": "string"
+                    },
+                    {
+                      "const": "fetch",
+                      "type": "string"
+                    },
+                    {
+                      "const": "screenshot",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "originalUrl": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "root": {
+      "$ref": "#/definitions/FrameNode"
+    }
+  },
+  "definitions": {
+    "CaptureNode": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/FrameNode"
+        },
+        {
+          "$ref": "#/definitions/TextNode"
+        },
+        {
+          "$ref": "#/definitions/ImageNode"
+        },
+        {
+          "$ref": "#/definitions/SvgNode"
+        }
+      ]
+    },
+    "FrameNode": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "rect",
+        "opacity",
+        "type",
+        "fills",
+        "clipsContent",
+        "children"
+      ],
+      "properties": {
+        "id": {
+          "description": "Unique within the document, assigned in traversal order (NFR-2)",
+          "type": "string"
+        },
+        "name": {
+          "description": "Layer name, e.g. \"div#main.content\" (≤ 64 chars)",
+          "type": "string"
+        },
+        "domPath": {
+          "type": "string"
+        },
+        "rect": {
+          "description": "Document coordinates in CSS px relative to the capture root (SCH-2, SCH-3)",
+          "type": "object",
+          "required": [
+            "x",
+            "y",
+            "width",
+            "height"
+          ],
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            },
+            "width": {
+              "minimum": 0,
+              "type": "number"
+            },
+            "height": {
+              "minimum": 0,
+              "type": "number"
+            }
+          }
+        },
+        "opacity": {
+          "minimum": 0,
+          "maximum": 1,
+          "type": "number"
+        },
+        "blendMode": {
+          "description": "Figma BlendMode; omitted when NORMAL",
+          "anyOf": [
+            {
+              "const": "DARKEN",
+              "type": "string"
+            },
+            {
+              "const": "MULTIPLY",
+              "type": "string"
+            },
+            {
+              "const": "LINEAR_BURN",
+              "type": "string"
+            },
+            {
+              "const": "COLOR_BURN",
+              "type": "string"
+            },
+            {
+              "const": "LIGHTEN",
+              "type": "string"
+            },
+            {
+              "const": "SCREEN",
+              "type": "string"
+            },
+            {
+              "const": "LINEAR_DODGE",
+              "type": "string"
+            },
+            {
+              "const": "COLOR_DODGE",
+              "type": "string"
+            },
+            {
+              "const": "OVERLAY",
+              "type": "string"
+            },
+            {
+              "const": "SOFT_LIGHT",
+              "type": "string"
+            },
+            {
+              "const": "HARD_LIGHT",
+              "type": "string"
+            },
+            {
+              "const": "DIFFERENCE",
+              "type": "string"
+            },
+            {
+              "const": "EXCLUSION",
+              "type": "string"
+            },
+            {
+              "const": "HUE",
+              "type": "string"
+            },
+            {
+              "const": "SATURATION",
+              "type": "string"
+            },
+            {
+              "const": "COLOR",
+              "type": "string"
+            },
+            {
+              "const": "LUMINOSITY",
+              "type": "string"
+            }
+          ]
+        },
+        "type": {
+          "const": "FRAME",
+          "type": "string"
+        },
+        "fills": {
+          "description": "Bottom → top",
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "object",
+                "required": [
+                  "type",
+                  "color"
+                ],
+                "properties": {
+                  "type": {
+                    "const": "SOLID",
+                    "type": "string"
+                  },
+                  "color": {
+                    "description": "sRGB, channels 0–1 (SCH-4)",
+                    "type": "object",
+                    "required": [
+                      "r",
+                      "g",
+                      "b",
+                      "a"
+                    ],
+                    "properties": {
+                      "r": {
+                        "minimum": 0,
+                        "maximum": 1,
+                        "type": "number"
+                      },
+                      "g": {
+                        "minimum": 0,
+                        "maximum": 1,
+                        "type": "number"
+                      },
+                      "b": {
+                        "minimum": 0,
+                        "maximum": 1,
+                        "type": "number"
+                      },
+                      "a": {
+                        "minimum": 0,
+                        "maximum": 1,
+                        "type": "number"
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type",
+                  "angleDeg",
+                  "stops"
+                ],
+                "properties": {
+                  "type": {
+                    "const": "GRADIENT_LINEAR",
+                    "type": "string"
+                  },
+                  "angleDeg": {
+                    "description": "CSS gradient angle: 0 = to top, 90 = to right",
+                    "type": "number"
+                  },
+                  "stops": {
+                    "minItems": 2,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "position",
+                        "color"
+                      ],
+                      "properties": {
+                        "position": {
+                          "minimum": 0,
+                          "maximum": 1,
+                          "type": "number"
+                        },
+                        "color": {
+                          "description": "sRGB, channels 0–1 (SCH-4)",
+                          "type": "object",
+                          "required": [
+                            "r",
+                            "g",
+                            "b",
+                            "a"
+                          ],
+                          "properties": {
+                            "r": {
+                              "minimum": 0,
+                              "maximum": 1,
+                              "type": "number"
+                            },
+                            "g": {
+                              "minimum": 0,
+                              "maximum": 1,
+                              "type": "number"
+                            },
+                            "b": {
+                              "minimum": 0,
+                              "maximum": 1,
+                              "type": "number"
+                            },
+                            "a": {
+                              "minimum": 0,
+                              "maximum": 1,
+                              "type": "number"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type",
+                  "center",
+                  "radius",
+                  "stops"
+                ],
+                "properties": {
+                  "type": {
+                    "const": "GRADIENT_RADIAL",
+                    "type": "string"
+                  },
+                  "center": {
+                    "description": "Fraction of the box (0–1, may exceed)",
+                    "type": "object",
+                    "required": [
+                      "x",
+                      "y"
+                    ],
+                    "properties": {
+                      "x": {
+                        "type": "number"
+                      },
+                      "y": {
+                        "type": "number"
+                      }
+                    }
+                  },
+                  "radius": {
+                    "description": "Fraction of the box width/height",
+                    "type": "object",
+                    "required": [
+                      "x",
+                      "y"
+                    ],
+                    "properties": {
+                      "x": {
+                        "exclusiveMinimum": 0,
+                        "type": "number"
+                      },
+                      "y": {
+                        "exclusiveMinimum": 0,
+                        "type": "number"
+                      }
+                    }
+                  },
+                  "stops": {
+                    "minItems": 2,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "position",
+                        "color"
+                      ],
+                      "properties": {
+                        "position": {
+                          "minimum": 0,
+                          "maximum": 1,
+                          "type": "number"
+                        },
+                        "color": {
+                          "description": "sRGB, channels 0–1 (SCH-4)",
+                          "type": "object",
+                          "required": [
+                            "r",
+                            "g",
+                            "b",
+                            "a"
+                          ],
+                          "properties": {
+                            "r": {
+                              "minimum": 0,
+                              "maximum": 1,
+                              "type": "number"
+                            },
+                            "g": {
+                              "minimum": 0,
+                              "maximum": 1,
+                              "type": "number"
+                            },
+                            "b": {
+                              "minimum": 0,
+                              "maximum": 1,
+                              "type": "number"
+                            },
+                            "a": {
+                              "minimum": 0,
+                              "maximum": 1,
+                              "type": "number"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type",
+                  "assetId",
+                  "scaleMode"
+                ],
+                "properties": {
+                  "type": {
+                    "const": "IMAGE",
+                    "type": "string"
+                  },
+                  "assetId": {
+                    "type": "string"
+                  },
+                  "scaleMode": {
+                    "description": "CSS backgrounds are pre-composited (EXT-I-8)",
+                    "const": "FILL",
+                    "type": "string"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "strokes": {
+          "type": "object",
+          "required": [
+            "top",
+            "right",
+            "bottom",
+            "left"
+          ],
+          "properties": {
+            "top": {
+              "type": "object",
+              "required": [
+                "width",
+                "color",
+                "style"
+              ],
+              "properties": {
+                "width": {
+                  "minimum": 0,
+                  "type": "number"
+                },
+                "color": {
+                  "description": "sRGB, channels 0–1 (SCH-4)",
+                  "type": "object",
+                  "required": [
+                    "r",
+                    "g",
+                    "b",
+                    "a"
+                  ],
+                  "properties": {
+                    "r": {
+                      "minimum": 0,
+                      "maximum": 1,
+                      "type": "number"
+                    },
+                    "g": {
+                      "minimum": 0,
+                      "maximum": 1,
+                      "type": "number"
+                    },
+                    "b": {
+                      "minimum": 0,
+                      "maximum": 1,
+                      "type": "number"
+                    },
+                    "a": {
+                      "minimum": 0,
+                      "maximum": 1,
+                      "type": "number"
+                    }
+                  }
+                },
+                "style": {
+                  "anyOf": [
+                    {
+                      "const": "solid",
+                      "type": "string"
+                    },
+                    {
+                      "const": "dashed",
+                      "type": "string"
+                    },
+                    {
+                      "const": "dotted",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            "right": {
+              "type": "object",
+              "required": [
+                "width",
+                "color",
+                "style"
+              ],
+              "properties": {
+                "width": {
+                  "minimum": 0,
+                  "type": "number"
+                },
+                "color": {
+                  "description": "sRGB, channels 0–1 (SCH-4)",
+                  "type": "object",
+                  "required": [
+                    "r",
+                    "g",
+                    "b",
+                    "a"
+                  ],
+                  "properties": {
+                    "r": {
+                      "minimum": 0,
+                      "maximum": 1,
+                      "type": "number"
+                    },
+                    "g": {
+                      "minimum": 0,
+                      "maximum": 1,
+                      "type": "number"
+                    },
+                    "b": {
+                      "minimum": 0,
+                      "maximum": 1,
+                      "type": "number"
+                    },
+                    "a": {
+                      "minimum": 0,
+                      "maximum": 1,
+                      "type": "number"
+                    }
+                  }
+                },
+                "style": {
+                  "anyOf": [
+                    {
+                      "const": "solid",
+                      "type": "string"
+                    },
+                    {
+                      "const": "dashed",
+                      "type": "string"
+                    },
+                    {
+                      "const": "dotted",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            "bottom": {
+              "type": "object",
+              "required": [
+                "width",
+                "color",
+                "style"
+              ],
+              "properties": {
+                "width": {
+                  "minimum": 0,
+                  "type": "number"
+                },
+                "color": {
+                  "description": "sRGB, channels 0–1 (SCH-4)",
+                  "type": "object",
+                  "required": [
+                    "r",
+                    "g",
+                    "b",
+                    "a"
+                  ],
+                  "properties": {
+                    "r": {
+                      "minimum": 0,
+                      "maximum": 1,
+                      "type": "number"
+                    },
+                    "g": {
+                      "minimum": 0,
+                      "maximum": 1,
+                      "type": "number"
+                    },
+                    "b": {
+                      "minimum": 0,
+                      "maximum": 1,
+                      "type": "number"
+                    },
+                    "a": {
+                      "minimum": 0,
+                      "maximum": 1,
+                      "type": "number"
+                    }
+                  }
+                },
+                "style": {
+                  "anyOf": [
+                    {
+                      "const": "solid",
+                      "type": "string"
+                    },
+                    {
+                      "const": "dashed",
+                      "type": "string"
+                    },
+                    {
+                      "const": "dotted",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            "left": {
+              "type": "object",
+              "required": [
+                "width",
+                "color",
+                "style"
+              ],
+              "properties": {
+                "width": {
+                  "minimum": 0,
+                  "type": "number"
+                },
+                "color": {
+                  "description": "sRGB, channels 0–1 (SCH-4)",
+                  "type": "object",
+                  "required": [
+                    "r",
+                    "g",
+                    "b",
+                    "a"
+                  ],
+                  "properties": {
+                    "r": {
+                      "minimum": 0,
+                      "maximum": 1,
+                      "type": "number"
+                    },
+                    "g": {
+                      "minimum": 0,
+                      "maximum": 1,
+                      "type": "number"
+                    },
+                    "b": {
+                      "minimum": 0,
+                      "maximum": 1,
+                      "type": "number"
+                    },
+                    "a": {
+                      "minimum": 0,
+                      "maximum": 1,
+                      "type": "number"
+                    }
+                  }
+                },
+                "style": {
+                  "anyOf": [
+                    {
+                      "const": "solid",
+                      "type": "string"
+                    },
+                    {
+                      "const": "dashed",
+                      "type": "string"
+                    },
+                    {
+                      "const": "dotted",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "radii": {
+          "type": "object",
+          "required": [
+            "tl",
+            "tr",
+            "br",
+            "bl"
+          ],
+          "properties": {
+            "tl": {
+              "minimum": 0,
+              "type": "number"
+            },
+            "tr": {
+              "minimum": 0,
+              "type": "number"
+            },
+            "br": {
+              "minimum": 0,
+              "type": "number"
+            },
+            "bl": {
+              "minimum": 0,
+              "type": "number"
+            }
+          }
+        },
+        "effects": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "object",
+                "required": [
+                  "type",
+                  "color",
+                  "offset",
+                  "radius",
+                  "spread"
+                ],
+                "properties": {
+                  "type": {
+                    "anyOf": [
+                      {
+                        "const": "DROP_SHADOW",
+                        "type": "string"
+                      },
+                      {
+                        "const": "INNER_SHADOW",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "color": {
+                    "description": "sRGB, channels 0–1 (SCH-4)",
+                    "type": "object",
+                    "required": [
+                      "r",
+                      "g",
+                      "b",
+                      "a"
+                    ],
+                    "properties": {
+                      "r": {
+                        "minimum": 0,
+                        "maximum": 1,
+                        "type": "number"
+                      },
+                      "g": {
+                        "minimum": 0,
+                        "maximum": 1,
+                        "type": "number"
+                      },
+                      "b": {
+                        "minimum": 0,
+                        "maximum": 1,
+                        "type": "number"
+                      },
+                      "a": {
+                        "minimum": 0,
+                        "maximum": 1,
+                        "type": "number"
+                      }
+                    }
+                  },
+                  "offset": {
+                    "type": "object",
+                    "required": [
+                      "x",
+                      "y"
+                    ],
+                    "properties": {
+                      "x": {
+                        "type": "number"
+                      },
+                      "y": {
+                        "type": "number"
+                      }
+                    }
+                  },
+                  "radius": {
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "spread": {
+                    "type": "number"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type",
+                  "radius"
+                ],
+                "properties": {
+                  "type": {
+                    "anyOf": [
+                      {
+                        "const": "LAYER_BLUR",
+                        "type": "string"
+                      },
+                      {
+                        "const": "BACKGROUND_BLUR",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "radius": {
+                    "minimum": 0,
+                    "type": "number"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "clipsContent": {
+          "type": "boolean"
+        },
+        "children": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/CaptureNode"
+          }
+        }
+      }
+    },
+    "TextNode": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "rect",
+        "opacity",
+        "type",
+        "characters",
+        "lineCount",
+        "style"
+      ],
+      "properties": {
+        "id": {
+          "description": "Unique within the document, assigned in traversal order (NFR-2)",
+          "type": "string"
+        },
+        "name": {
+          "description": "Layer name, e.g. \"div#main.content\" (≤ 64 chars)",
+          "type": "string"
+        },
+        "domPath": {
+          "type": "string"
+        },
+        "rect": {
+          "description": "Document coordinates in CSS px relative to the capture root (SCH-2, SCH-3)",
+          "type": "object",
+          "required": [
+            "x",
+            "y",
+            "width",
+            "height"
+          ],
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            },
+            "width": {
+              "minimum": 0,
+              "type": "number"
+            },
+            "height": {
+              "minimum": 0,
+              "type": "number"
+            }
+          }
+        },
+        "opacity": {
+          "minimum": 0,
+          "maximum": 1,
+          "type": "number"
+        },
+        "blendMode": {
+          "description": "Figma BlendMode; omitted when NORMAL",
+          "anyOf": [
+            {
+              "const": "DARKEN",
+              "type": "string"
+            },
+            {
+              "const": "MULTIPLY",
+              "type": "string"
+            },
+            {
+              "const": "LINEAR_BURN",
+              "type": "string"
+            },
+            {
+              "const": "COLOR_BURN",
+              "type": "string"
+            },
+            {
+              "const": "LIGHTEN",
+              "type": "string"
+            },
+            {
+              "const": "SCREEN",
+              "type": "string"
+            },
+            {
+              "const": "LINEAR_DODGE",
+              "type": "string"
+            },
+            {
+              "const": "COLOR_DODGE",
+              "type": "string"
+            },
+            {
+              "const": "OVERLAY",
+              "type": "string"
+            },
+            {
+              "const": "SOFT_LIGHT",
+              "type": "string"
+            },
+            {
+              "const": "HARD_LIGHT",
+              "type": "string"
+            },
+            {
+              "const": "DIFFERENCE",
+              "type": "string"
+            },
+            {
+              "const": "EXCLUSION",
+              "type": "string"
+            },
+            {
+              "const": "HUE",
+              "type": "string"
+            },
+            {
+              "const": "SATURATION",
+              "type": "string"
+            },
+            {
+              "const": "COLOR",
+              "type": "string"
+            },
+            {
+              "const": "LUMINOSITY",
+              "type": "string"
+            }
+          ]
+        },
+        "type": {
+          "const": "TEXT",
+          "type": "string"
+        },
+        "characters": {
+          "description": "Logical order, whitespace normalized, text-transform not applied",
+          "type": "string"
+        },
+        "lineCount": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "style": {
+          "type": "object",
+          "required": [
+            "fontFamilies",
+            "fontWeight",
+            "fontStyle",
+            "fontSize",
+            "lineHeight",
+            "letterSpacing",
+            "color",
+            "direction",
+            "textAlign",
+            "textDecoration",
+            "textCase"
+          ],
+          "properties": {
+            "fontFamilies": {
+              "minItems": 1,
+              "description": "CSS stack, unquoted, in order",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "fontWeight": {
+              "minimum": 1,
+              "maximum": 1000,
+              "type": "integer"
+            },
+            "fontStyle": {
+              "anyOf": [
+                {
+                  "const": "normal",
+                  "type": "string"
+                },
+                {
+                  "const": "italic",
+                  "type": "string"
+                }
+              ]
+            },
+            "fontSize": {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            "lineHeight": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0,
+                  "type": "number"
+                },
+                {
+                  "const": "normal",
+                  "type": "string"
+                }
+              ]
+            },
+            "letterSpacing": {
+              "type": "number"
+            },
+            "color": {
+              "description": "sRGB, channels 0–1 (SCH-4)",
+              "type": "object",
+              "required": [
+                "r",
+                "g",
+                "b",
+                "a"
+              ],
+              "properties": {
+                "r": {
+                  "minimum": 0,
+                  "maximum": 1,
+                  "type": "number"
+                },
+                "g": {
+                  "minimum": 0,
+                  "maximum": 1,
+                  "type": "number"
+                },
+                "b": {
+                  "minimum": 0,
+                  "maximum": 1,
+                  "type": "number"
+                },
+                "a": {
+                  "minimum": 0,
+                  "maximum": 1,
+                  "type": "number"
+                }
+              }
+            },
+            "direction": {
+              "anyOf": [
+                {
+                  "const": "ltr",
+                  "type": "string"
+                },
+                {
+                  "const": "rtl",
+                  "type": "string"
+                }
+              ]
+            },
+            "textAlign": {
+              "description": "Physical; start/end already resolved (EXT-RTL-2)",
+              "anyOf": [
+                {
+                  "const": "left",
+                  "type": "string"
+                },
+                {
+                  "const": "center",
+                  "type": "string"
+                },
+                {
+                  "const": "right",
+                  "type": "string"
+                },
+                {
+                  "const": "justify",
+                  "type": "string"
+                }
+              ]
+            },
+            "textDecoration": {
+              "anyOf": [
+                {
+                  "const": "none",
+                  "type": "string"
+                },
+                {
+                  "const": "underline",
+                  "type": "string"
+                },
+                {
+                  "const": "line-through",
+                  "type": "string"
+                }
+              ]
+            },
+            "textCase": {
+              "anyOf": [
+                {
+                  "const": "none",
+                  "type": "string"
+                },
+                {
+                  "const": "upper",
+                  "type": "string"
+                },
+                {
+                  "const": "lower",
+                  "type": "string"
+                },
+                {
+                  "const": "title",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "ImageNode": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "rect",
+        "opacity",
+        "type",
+        "assetId",
+        "scaleMode"
+      ],
+      "properties": {
+        "id": {
+          "description": "Unique within the document, assigned in traversal order (NFR-2)",
+          "type": "string"
+        },
+        "name": {
+          "description": "Layer name, e.g. \"div#main.content\" (≤ 64 chars)",
+          "type": "string"
+        },
+        "domPath": {
+          "type": "string"
+        },
+        "rect": {
+          "description": "Document coordinates in CSS px relative to the capture root (SCH-2, SCH-3)",
+          "type": "object",
+          "required": [
+            "x",
+            "y",
+            "width",
+            "height"
+          ],
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            },
+            "width": {
+              "minimum": 0,
+              "type": "number"
+            },
+            "height": {
+              "minimum": 0,
+              "type": "number"
+            }
+          }
+        },
+        "opacity": {
+          "minimum": 0,
+          "maximum": 1,
+          "type": "number"
+        },
+        "blendMode": {
+          "description": "Figma BlendMode; omitted when NORMAL",
+          "anyOf": [
+            {
+              "const": "DARKEN",
+              "type": "string"
+            },
+            {
+              "const": "MULTIPLY",
+              "type": "string"
+            },
+            {
+              "const": "LINEAR_BURN",
+              "type": "string"
+            },
+            {
+              "const": "COLOR_BURN",
+              "type": "string"
+            },
+            {
+              "const": "LIGHTEN",
+              "type": "string"
+            },
+            {
+              "const": "SCREEN",
+              "type": "string"
+            },
+            {
+              "const": "LINEAR_DODGE",
+              "type": "string"
+            },
+            {
+              "const": "COLOR_DODGE",
+              "type": "string"
+            },
+            {
+              "const": "OVERLAY",
+              "type": "string"
+            },
+            {
+              "const": "SOFT_LIGHT",
+              "type": "string"
+            },
+            {
+              "const": "HARD_LIGHT",
+              "type": "string"
+            },
+            {
+              "const": "DIFFERENCE",
+              "type": "string"
+            },
+            {
+              "const": "EXCLUSION",
+              "type": "string"
+            },
+            {
+              "const": "HUE",
+              "type": "string"
+            },
+            {
+              "const": "SATURATION",
+              "type": "string"
+            },
+            {
+              "const": "COLOR",
+              "type": "string"
+            },
+            {
+              "const": "LUMINOSITY",
+              "type": "string"
+            }
+          ]
+        },
+        "type": {
+          "const": "IMAGE",
+          "type": "string"
+        },
+        "assetId": {
+          "description": "null → placeholder (capture failed)",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scaleMode": {
+          "anyOf": [
+            {
+              "const": "FILL",
+              "type": "string"
+            },
+            {
+              "const": "FIT",
+              "type": "string"
+            },
+            {
+              "const": "STRETCH",
+              "type": "string"
+            }
+          ]
+        },
+        "radii": {
+          "type": "object",
+          "required": [
+            "tl",
+            "tr",
+            "br",
+            "bl"
+          ],
+          "properties": {
+            "tl": {
+              "minimum": 0,
+              "type": "number"
+            },
+            "tr": {
+              "minimum": 0,
+              "type": "number"
+            },
+            "br": {
+              "minimum": 0,
+              "type": "number"
+            },
+            "bl": {
+              "minimum": 0,
+              "type": "number"
+            }
+          }
+        }
+      }
+    },
+    "SvgNode": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "rect",
+        "opacity",
+        "type",
+        "svg",
+        "fallbackAssetId"
+      ],
+      "properties": {
+        "id": {
+          "description": "Unique within the document, assigned in traversal order (NFR-2)",
+          "type": "string"
+        },
+        "name": {
+          "description": "Layer name, e.g. \"div#main.content\" (≤ 64 chars)",
+          "type": "string"
+        },
+        "domPath": {
+          "type": "string"
+        },
+        "rect": {
+          "description": "Document coordinates in CSS px relative to the capture root (SCH-2, SCH-3)",
+          "type": "object",
+          "required": [
+            "x",
+            "y",
+            "width",
+            "height"
+          ],
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            },
+            "width": {
+              "minimum": 0,
+              "type": "number"
+            },
+            "height": {
+              "minimum": 0,
+              "type": "number"
+            }
+          }
+        },
+        "opacity": {
+          "minimum": 0,
+          "maximum": 1,
+          "type": "number"
+        },
+        "blendMode": {
+          "description": "Figma BlendMode; omitted when NORMAL",
+          "anyOf": [
+            {
+              "const": "DARKEN",
+              "type": "string"
+            },
+            {
+              "const": "MULTIPLY",
+              "type": "string"
+            },
+            {
+              "const": "LINEAR_BURN",
+              "type": "string"
+            },
+            {
+              "const": "COLOR_BURN",
+              "type": "string"
+            },
+            {
+              "const": "LIGHTEN",
+              "type": "string"
+            },
+            {
+              "const": "SCREEN",
+              "type": "string"
+            },
+            {
+              "const": "LINEAR_DODGE",
+              "type": "string"
+            },
+            {
+              "const": "COLOR_DODGE",
+              "type": "string"
+            },
+            {
+              "const": "OVERLAY",
+              "type": "string"
+            },
+            {
+              "const": "SOFT_LIGHT",
+              "type": "string"
+            },
+            {
+              "const": "HARD_LIGHT",
+              "type": "string"
+            },
+            {
+              "const": "DIFFERENCE",
+              "type": "string"
+            },
+            {
+              "const": "EXCLUSION",
+              "type": "string"
+            },
+            {
+              "const": "HUE",
+              "type": "string"
+            },
+            {
+              "const": "SATURATION",
+              "type": "string"
+            },
+            {
+              "const": "COLOR",
+              "type": "string"
+            },
+            {
+              "const": "LUMINOSITY",
+              "type": "string"
+            }
+          ]
+        },
+        "type": {
+          "const": "SVG",
+          "type": "string"
+        },
+        "svg": {
+          "description": "Self-contained, sanitized SVG markup (EXT-S-2, EXT-S-3)",
+          "type": "string"
+        },
+        "fallbackAssetId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

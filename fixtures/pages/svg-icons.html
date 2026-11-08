@@ -1,0 +1,194 @@
+<!doctype html>
+<!--
+  Fixture: svg-icons
+  Purpose: inline SVG serialisation — currentColor, CSS-class styling, <use> sprites, sizing by
+           CSS, <text>, <image href>, filters, <img src=*.svg>, and sanitisation of scripts.
+  Requirements: EXT-S-1, EXT-S-2 (a–f), EXT-S-3, EXT-S-4, EXT-S-5, EXT-S-6, EXT-T-2, SEC-5,
+                AC-EXT-4, PLG-R-8
+  Expected capture behaviour (data-testid):
+    - sprite-sheet (<svg style="display:none"> with <symbol>s): emits NOTHING itself (display:none).
+    - current-color-*: each SVG emits one SvgNode; the serialized string contains no
+      "currentColor" — replaced by the resolved colour (#dc2626, #16a34a, #2563eb) (EXT-S-2c).
+    - css-class-icon: fill/stroke come from the page <style> (.ico-duo .bg / .fg) → inlined as
+      attributes because the standalone SVG will not have the stylesheet (EXT-S-2b).
+    - use-sprite-*: no <use> in the output; each is replaced by a clone of the referenced
+      <symbol> contents, colours resolved (AC-EXT-4). use-sprite-xlink uses xlink:href.
+    - viewbox-only: SVG with viewBox but no width/height attrs, sized 96×48 by CSS → explicit
+      width="96" height="48" added, viewBox kept (EXT-S-2d).
+    - no-viewbox: width/height but no viewBox → viewBox synthesised "0 0 120 60".
+    - svg-text: <text> elements stay text inside the SVG string, with font-family/size inlined.
+    - svg-image: <image href="../assets/img/photo-160x100.png"> converted to a data: URI (EXT-S-2e).
+    - svg-filter: SVG with a <filter> (drop shadow) — serialized as-is; raster fallback present.
+    - img-svg: <img src=icon-star.svg> / logo.svg → SvgNode via fetched text (EXT-S-5).
+    - svg-script: the <script> element and the onclick / onload attributes are REMOVED from the
+      serialized string (EXT-S-3); the strings "alert(" and "onclick" must not appear.
+      <foreignObject> in svg-foreign is removed too.
+    - nested-svg: the inner <svg> stays inside the parent string (one SvgNode) (EXT-S-1).
+    - Every SvgNode has a fallbackAssetId (EXT-S-4).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fixture: SVG icons</title>
+<style>
+  @font-face { font-family: "Inter"; font-weight: 400; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/inter/Inter-400.woff2) format("woff2"); }
+  @font-face { font-family: "Inter"; font-weight: 600; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/inter/Inter-600.woff2) format("woff2"); }
+  @font-face { font-family: "Inter"; font-weight: 700; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/inter/Inter-700.woff2) format("woff2"); }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px; font: 13px/1.4 "Inter", sans-serif; color: #111827; background: #fff; width: 1000px; }
+  h1 { font-size: 22px; margin: 0 0 4px; font-weight: 600; }
+  h2 { font-size: 14px; margin: 28px 0 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: #4b5563; }
+  .row { display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-end; }
+  .item { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 12px; color: #4b5563; }
+  .red { color: #dc2626; } .green { color: #16a34a; } .blue { color: #2563eb; }
+  .icon { width: 32px; height: 32px; }
+  .icon-lg { width: 48px; height: 48px; }
+  .ico-duo .bg { fill: #e0e7ff; }
+  .ico-duo .fg { fill: none; stroke: #4338ca; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .ico-duo:hover .fg { stroke: #be185d; } /* hover is not applied during capture */
+  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 8px; background: #111827; color: #f9fafb; font-weight: 600; }
+  .btn svg { width: 16px; height: 16px; }
+  .viewbox-only { width: 96px; height: 48px; }
+  .chart-labels text { font-family: "Inter", sans-serif; font-size: 11px; fill: #334155; }
+</style>
+</head>
+<body>
+<!-- Hidden sprite sheet (common icon-system pattern). -->
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none" data-testid="sprite-sheet">
+  <symbol id="icon-search" viewBox="0 0 24 24">
+    <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/>
+    <path d="M20 20l-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="icon-bell" viewBox="0 0 24 24">
+    <path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z" fill="currentColor"/>
+    <path d="M10 20a2 2 0 0 0 4 0" fill="none" stroke="currentColor" stroke-width="2"/>
+  </symbol>
+  <symbol id="icon-x" viewBox="0 0 24 24">
+    <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="icon-gear" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="2"/>
+    <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  </symbol>
+</svg>
+
+<h1>SVG icons</h1>
+
+<h2>fill / stroke = currentColor</h2>
+<div class="row">
+  <div class="item red" data-testid="current-color-red">
+    <svg class="icon" viewBox="0 0 24 24"><path d="M12 21s-8-5.2-8-11a4.5 4.5 0 0 1 8-2.8A4.5 4.5 0 0 1 20 10c0 5.8-8 11-8 11z" fill="currentColor"/></svg>
+    heart (fill)
+  </div>
+  <div class="item green" data-testid="current-color-green">
+    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg>
+    check (stroke)
+  </div>
+  <div class="item blue" data-testid="current-color-blue">
+    <svg class="icon" viewBox="0 0 24 24"><g fill="currentColor"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2" opacity=".5"/><rect x="3" y="13" width="8" height="8" rx="2" opacity=".5"/><rect x="13" y="13" width="8" height="8" rx="2"/></g></svg>
+    grid (inherited via &lt;g&gt;)
+  </div>
+  <div class="item" data-testid="current-color-button">
+    <span class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>New item</span>
+    icon in a button
+  </div>
+</div>
+
+<h2>Styled by CSS classes</h2>
+<div class="row">
+  <div class="item" data-testid="css-class-icon">
+    <svg class="icon-lg ico-duo" viewBox="0 0 24 24"><rect class="bg" x="1" y="1" width="22" height="22" rx="6"/><path class="fg" d="M7 12h10M12 7v10"/></svg>
+    .bg / .fg from &lt;style&gt;
+  </div>
+</div>
+
+<h2>&lt;use&gt; sprite references</h2>
+<div class="row">
+  <div class="item" data-testid="use-sprite-search"><svg class="icon" style="color:#0f766e"><use href="#icon-search"/></svg>#icon-search</div>
+  <div class="item" data-testid="use-sprite-bell"><svg class="icon" style="color:#b45309"><use href="#icon-bell"/></svg>#icon-bell</div>
+  <div class="item red" data-testid="use-sprite-x"><svg class="icon"><use href="#icon-x"/></svg>#icon-x</div>
+  <div class="item" data-testid="use-sprite-xlink"><svg class="icon" style="color:#7c3aed" xmlns:xlink="http://www.w3.org/1999/xlink"><use xlink:href="#icon-gear"/></svg>xlink:href</div>
+  <div class="item" data-testid="use-sprite-sized"><svg width="20" height="20" style="color:#111827"><use href="#icon-search" width="20" height="20"/></svg>20px</div>
+</div>
+
+<h2>Sizing</h2>
+<div class="row">
+  <div class="item" data-testid="viewbox-only">
+    <svg class="viewbox-only" viewBox="0 0 96 48"><rect width="96" height="48" rx="8" fill="#fde68a"/><circle cx="24" cy="24" r="12" fill="#d97706"/><rect x="44" y="18" width="40" height="12" rx="6" fill="#92400e"/></svg>
+    viewBox only, CSS 96×48
+  </div>
+  <div class="item" data-testid="no-viewbox">
+    <svg width="120" height="60"><rect x="4" y="4" width="112" height="52" rx="10" fill="none" stroke="#0ea5e9" stroke-width="4"/><text x="60" y="36" font-family="Inter, sans-serif" font-size="14" text-anchor="middle" fill="#0369a1">no viewBox</text></svg>
+    width/height, no viewBox
+  </div>
+  <div class="item" data-testid="nested-svg">
+    <svg width="120" height="60" viewBox="0 0 120 60"><rect width="120" height="60" fill="#f1f5f9"/><svg x="10" y="10" width="40" height="40" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" fill="#e11d48"/></svg><svg x="70" y="10" width="40" height="40" viewBox="0 0 10 10"><rect width="10" height="10" fill="#2563eb"/></svg></svg>
+    nested &lt;svg&gt;
+  </div>
+</div>
+
+<h2>Text, image, filter</h2>
+<div class="row">
+  <div class="item" data-testid="svg-text">
+    <svg class="chart-labels" width="260" height="150" viewBox="0 0 260 150">
+      <rect width="260" height="150" fill="#f8fafc"/>
+      <polyline points="20,110 70,80 120,95 170,50 220,35" fill="none" stroke="#6366f1" stroke-width="3" stroke-linejoin="round"/>
+      <g fill="#6366f1"><circle cx="20" cy="110" r="4"/><circle cx="70" cy="80" r="4"/><circle cx="120" cy="95" r="4"/><circle cx="170" cy="50" r="4"/><circle cx="220" cy="35" r="4"/></g>
+      <line x1="10" y1="125" x2="250" y2="125" stroke="#94a3b8"/>
+      <text x="20" y="141" text-anchor="middle">Mon</text><text x="70" y="141" text-anchor="middle">Tue</text>
+      <text x="120" y="141" text-anchor="middle">Wed</text><text x="170" y="141" text-anchor="middle">Thu</text>
+      <text x="220" y="141" text-anchor="middle">Fri</text>
+      <text x="10" y="18" style="font-weight:700;font-size:13px;fill:#0f172a">Sessions this week</text>
+    </svg>
+    &lt;text&gt; labels
+  </div>
+  <div class="item" data-testid="svg-image">
+    <svg width="180" height="120" viewBox="0 0 180 120">
+      <rect width="180" height="120" rx="12" fill="#0f172a"/>
+      <image href="../assets/img/photo-160x100.png" x="10" y="10" width="160" height="100" preserveAspectRatio="xMidYMid slice"/>
+      <circle cx="160" cy="20" r="10" fill="#22c55e" stroke="#fff" stroke-width="3"/>
+    </svg>
+    &lt;image href&gt;
+  </div>
+  <div class="item" data-testid="svg-filter">
+    <svg width="140" height="120" viewBox="0 0 140 120">
+      <defs>
+        <filter id="soft-shadow" x="-30%" y="-30%" width="160%" height="160%">
+          <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#1e293b" flood-opacity=".35"/>
+        </filter>
+        <linearGradient id="card-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#6366f1"/></linearGradient>
+      </defs>
+      <rect x="20" y="16" width="100" height="72" rx="14" fill="url(#card-grad)" filter="url(#soft-shadow)"/>
+    </svg>
+    &lt;filter&gt; + gradient
+  </div>
+</div>
+
+<h2>&lt;img src="*.svg"&gt;</h2>
+<div class="row">
+  <div class="item" data-testid="img-svg-star"><img src="../assets/img/icon-star.svg" width="48" height="48" alt="star">icon-star.svg</div>
+  <div class="item" data-testid="img-svg-check"><img src="../assets/img/icon-check.svg" width="48" height="48" alt="check">icon-check.svg</div>
+  <div class="item" data-testid="img-svg-logo"><img src="../assets/img/logo.svg" width="160" height="40" alt="logo">logo.svg</div>
+</div>
+
+<h2>Must be sanitised</h2>
+<div class="row">
+  <div class="item" data-testid="svg-script">
+    <svg width="120" height="60" viewBox="0 0 120 60" onload="window.__h2fSvgOnload = true" onclick="alert('svg click')">
+      <script>window.__h2fSvgScriptRan = true;</script>
+      <rect width="120" height="60" rx="8" fill="#fee2e2" onclick="alert('rect click')"/>
+      <text x="60" y="36" font-family="Inter, sans-serif" font-size="13" text-anchor="middle" fill="#991b1b" onmouseover="alert('hover')">script + on*</text>
+    </svg>
+    &lt;script&gt; and on* attributes
+  </div>
+  <div class="item" data-testid="svg-foreign">
+    <svg width="160" height="60" viewBox="0 0 160 60">
+      <rect width="160" height="60" rx="8" fill="#ecfeff" stroke="#06b6d4"/>
+      <foreignObject x="8" y="8" width="144" height="44"><div xmlns="http://www.w3.org/1999/xhtml" style="font:12px sans-serif;color:#155e75">HTML inside foreignObject</div></foreignObject>
+    </svg>
+    &lt;foreignObject&gt;
+  </div>
+</div>
+</body>
+</html>

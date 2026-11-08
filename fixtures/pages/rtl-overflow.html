@@ -1,0 +1,75 @@
+<!doctype html>
+<!--
+  Fixture: rtl-overflow
+  Purpose: RTL document with horizontal overflow. The content row is 2000px wide in a typically
+           1280px-wide viewport, so Chrome's scrollX runs from 0 (right-hand start edge) down to
+           a negative value. Markers sit at the extreme left and right edges.
+  Requirements: EXT-RTL-4, EXT-G-1, EXT-G-4, EXT-RTL-1, AC-EXT-12
+  Expected capture behaviour (data-testid):
+    - body is exactly 2048px wide (2000px content + 2×24px padding). In RTL its right edge aligns
+      with the viewport's right edge and it overflows to the LEFT.
+    - Root rect = { x: 0, y: 0, width: scrollWidth = 2048, height: scrollHeight } (EXT-G-4).
+    - All rects have x ≥ 0 (EXT-RTL-4 normalisation: docX = rect.left + scrollX +
+      (scrollWidth − clientWidth)).
+    - wide-row (2000px, 2px border) spans x = 24 … 2024.
+    - marker-left ("LEFT EDGE ← x = 0", 160px wide) sits at x = 26 (inside the 2px border).
+    - marker-right ("RIGHT EDGE") has right edge x = 2022; body (the right-most box) has right edge
+      2048 = document width (±0.5px) (AC-EXT-12).
+    - ruler ticks every 200px are labelled with their distance from the LEFT edge (0, 200, … 2000)
+      so a misplaced capture is obvious in Figma.
+    - The result must be the same whether the user had scrolled horizontally or not (the page
+      starts at the right-hand edge, scrollX = 0).
+-->
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>اختبار: تجاوز أفقي في صفحة RTL</title>
+<style>
+  @font-face { font-family: "Tajawal"; font-weight: 400; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/tajawal/Tajawal-Regular.ttf) format("truetype"); }
+  @font-face { font-family: "Tajawal"; font-weight: 700; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/tajawal/Tajawal-Bold.ttf) format("truetype"); }
+  @font-face { font-family: "Inter"; font-weight: 600; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/inter/Inter-600.woff2) format("woff2"); }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px; width: 2048px; font: 16px/1.6 "Tajawal", sans-serif; color: #111827; background: #fff; }
+  h1 { font: 700 24px/1.4 "Tajawal", sans-serif; margin: 0 0 6px; }
+  p { margin: 0 0 16px; color: #4b5563; width: 900px; }
+  .wide-row { position: relative; width: 2000px; height: 260px; background: linear-gradient(90deg, #eff6ff, #fdf2f8); border: 2px solid #1e3a8a; }
+  .marker { position: absolute; top: 40px; width: 160px; height: 120px; display: grid; place-items: center; text-align: center; font: 700 15px/1.4 "Inter", "Tajawal", sans-serif; color: #fff; border-radius: 10px; }
+  .marker-left { left: 0; background: #dc2626; }
+  .marker-right { right: 0; background: #16a34a; }
+  .marker-mid { left: 920px; background: #7c3aed; }
+  .ruler { position: absolute; left: 0; right: 0; bottom: 0; height: 60px; direction: ltr; }
+  .tick { position: absolute; bottom: 0; width: 2px; height: 24px; background: #1e3a8a; }
+  .tick span { position: absolute; bottom: 28px; left: 50%; transform: translateX(-50%); font: 600 12px "Inter", sans-serif; color: #1e3a8a; white-space: nowrap; }
+  .cards { display: flex; gap: 16px; width: 2000px; margin-top: 24px; }
+  .cards div { flex: 0 0 180px; height: 90px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 8px; display: grid; place-items: center; font-weight: 700; }
+</style>
+</head>
+<body>
+<h1 data-testid="title">صفحة من اليمين إلى اليسار بعرض ٢٠٠٠ بكسل</h1>
+<p data-testid="intro">المحتوى أعرض من نافذة العرض، لذلك يظهر شريط تمرير أفقي. تبدأ الصفحة من الحافة اليمنى، ويجب أن تكون جميع الإحداثيات في الالتقاط موجبة.</p>
+
+<div class="wide-row" data-testid="wide-row">
+  <div class="marker marker-right" data-testid="marker-right">RIGHT EDGE<br>الحافة اليمنى</div>
+  <div class="marker marker-mid" data-testid="marker-mid">x = 920<br>المنتصف</div>
+  <div class="marker marker-left" data-testid="marker-left">LEFT EDGE ← x = 0<br>الحافة اليسرى</div>
+  <div class="ruler" data-testid="ruler">
+    <div class="tick" style="left:0"><span>0</span></div>
+    <div class="tick" style="left:200px"><span>200</span></div>
+    <div class="tick" style="left:400px"><span>400</span></div>
+    <div class="tick" style="left:600px"><span>600</span></div>
+    <div class="tick" style="left:800px"><span>800</span></div>
+    <div class="tick" style="left:1000px"><span>1000</span></div>
+    <div class="tick" style="left:1200px"><span>1200</span></div>
+    <div class="tick" style="left:1400px"><span>1400</span></div>
+    <div class="tick" style="left:1600px"><span>1600</span></div>
+    <div class="tick" style="left:1800px"><span>1800</span></div>
+    <div class="tick" style="left:1994px"><span>2000</span></div>
+  </div>
+</div>
+
+<div class="cards" data-testid="cards">
+  <div>١</div><div>٢</div><div>٣</div><div>٤</div><div>٥</div><div>٦</div><div>٧</div><div>٨</div><div>٩</div><div>١٠</div>
+</div>
+</body>
+</html>

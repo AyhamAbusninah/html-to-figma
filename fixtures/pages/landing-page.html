@@ -1,0 +1,259 @@
+<!doctype html>
+<!--
+  Fixture: landing-page (universal benchmark)
+  Purpose: a realistic marketing landing page representing "any website": sticky navigation,
+           hero with a background photo under a gradient overlay, CTA buttons, a CSS Grid feature
+           section with inline SVG icons, testimonial cards with avatars, a flexbox pricing table
+           with a highlighted plan, a logo strip, an FAQ, and a footer with SVG social icons.
+  Requirements: end-to-end coverage of §3 (EXT-T-*, EXT-V-*, EXT-X-*, EXT-I-8, EXT-S-*, EXT-T-9,
+                EXT-T-11), NFR-1, NFR-2, TST-5, AC-EXT-9, AC-EXT-10
+  Expected capture behaviour:
+    - nav: position:sticky top 0 with backdrop-filter blur → captured once at y = 0
+      (EXT-T-9), BACKGROUND_BLUR effect, logo as SvgNode.
+    - hero: one FRAME whose fills are [linear gradient overlay, IMAGE (hero-1600x900.jpg,
+      pre-composited cover)], in that order (EXT-I-8, EXT-V-3); headline TEXT 56px/700 wraps to
+      2 lines; the "New" badge uses a ::before dot (EXT-T-11).
+    - buttons: primary with box-shadow; secondary with 1px rgba border on the dark hero.
+    - features: 6 cards in a 3-column grid; each icon is an SvgNode using currentColor (resolved).
+    - testimonials: avatars are circular IMAGE nodes (radius = 50%); star rows are SvgNodes.
+    - pricing: middle plan scaled visually via larger padding (no transform) with a "Most popular"
+      ribbon; price text with a <sup> currency sign; feature lists with ✓ marks via ::before.
+    - faq: <details open> shows its answer; closed <details> show only the summary.
+    - footer: dark background, 4 link columns, social icons as SvgNodes, copyright line.
+    - Emitted node count should be well under MAX_NODES; layout is 1280px wide by design.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lumen — Plan projects your team actually finishes</title>
+<link rel="icon" href="../assets/img/favicon.ico">
+<style>
+  @font-face { font-family: "Inter"; font-weight: 400; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/inter/Inter-400.woff2) format("woff2"); }
+  @font-face { font-family: "Inter"; font-weight: 600; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/inter/Inter-600.woff2) format("woff2"); }
+  @font-face { font-family: "Inter"; font-weight: 700; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/inter/Inter-700.woff2) format("woff2"); }
+  :root { --ink: #0b1020; --muted: #5b6475; --line: #e6e8ee; --brand: #5b4cf0; --brand-ink: #3b2fc9; --bg-soft: #f6f7fb; }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: auto; }
+  body { margin: 0; font: 16px/1.6 "Inter", system-ui, sans-serif; color: var(--ink); background: #fff; min-width: 1200px; }
+  a { color: inherit; text-decoration: none; }
+  .wrap { width: 1160px; margin: 0 auto; }
+  /* nav */
+  .nav { position: sticky; top: 0; z-index: 20; background: rgba(255,255,255,.82); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(230,232,238,.8); }
+  .nav .wrap { height: 68px; display: flex; align-items: center; gap: 40px; }
+  .nav ul { display: flex; gap: 28px; list-style: none; margin: 0; padding: 0; font-weight: 600; font-size: 15px; color: #2b3242; }
+  .nav .actions { margin-left: auto; display: flex; gap: 12px; align-items: center; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 20px; border-radius: 10px; font-weight: 600; font-size: 15px; border: 1px solid transparent; }
+  .btn-primary { background: var(--brand); color: #fff; box-shadow: 0 6px 18px rgba(91,76,240,.35), inset 0 1px 0 rgba(255,255,255,.2); }
+  .btn-ghost { color: #2b3242; }
+  .btn-outline-light { color: #fff; border-color: rgba(255,255,255,.45); background: rgba(255,255,255,.08); }
+  /* hero */
+  .hero { position: relative; color: #fff; padding: 112px 0 128px;
+    background: linear-gradient(100deg, rgba(11,16,32,.92) 0%, rgba(11,16,32,.72) 45%, rgba(91,76,240,.35) 100%), url(../assets/img/hero-1600x900.jpg) center / cover no-repeat; }
+  .hero .badge { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px 6px 10px; border-radius: 999px; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.25); font-size: 14px; font-weight: 600; }
+  .hero .badge::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #34d399; box-shadow: 0 0 0 4px rgba(52,211,153,.25); }
+  .hero h1 { font-size: 56px; line-height: 1.08; letter-spacing: -0.02em; margin: 22px 0 18px; width: 720px; font-weight: 700; }
+  .hero p { font-size: 19px; color: #cfd5e3; width: 600px; margin: 0 0 34px; }
+  .hero .cta { display: flex; gap: 14px; }
+  .hero .proof { margin-top: 40px; display: flex; align-items: center; gap: 14px; font-size: 14px; color: #cfd5e3; }
+  .avatars { display: flex; }
+  .avatars img { width: 36px; height: 36px; border-radius: 50%; border: 2px solid #0b1020; margin-left: -10px; }
+  .avatars img:first-child { margin-left: 0; }
+  /* logos */
+  .logos { padding: 36px 0; border-bottom: 1px solid var(--line); }
+  .logos .wrap { display: flex; align-items: center; justify-content: space-between; color: #5f6779; font-weight: 700; font-size: 20px; letter-spacing: .02em; }
+  .logos span:first-child { font-size: 13px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+  /* sections */
+  section.block { padding: 96px 0; }
+  .eyebrow { color: var(--brand); font-weight: 700; font-size: 13px; letter-spacing: .1em; text-transform: uppercase; }
+  h2.title { font-size: 40px; line-height: 1.15; letter-spacing: -0.015em; margin: 10px 0 14px; font-weight: 700; }
+  .sub { color: var(--muted); font-size: 18px; width: 640px; margin: 0; }
+  .center { text-align: center; }
+  .center .sub { margin: 0 auto; }
+  /* features */
+  .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 56px; }
+  .feature { padding: 28px; border: 1px solid var(--line); border-radius: 16px; background: #fff; }
+  .feature .ico { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; margin-bottom: 18px; }
+  .feature .ico svg { width: 22px; height: 22px; }
+  .feature h3 { margin: 0 0 8px; font-size: 18px; font-weight: 600; }
+  .feature p { margin: 0; color: var(--muted); font-size: 15px; }
+  .c1 { background: #eeecff; color: #5b4cf0; } .c2 { background: #e6f7f1; color: #0f9f6e; } .c3 { background: #fff1e6; color: #e2681c; }
+  .c4 { background: #e8f2ff; color: #2563eb; } .c5 { background: #fdeef4; color: #d6336c; } .c6 { background: #f1f3f6; color: #374151; }
+  /* testimonials */
+  .soft { background: var(--bg-soft); }
+  .quotes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 48px; }
+  .quote { background: #fff; border-radius: 16px; padding: 28px; box-shadow: 0 1px 2px rgba(16,24,40,.06), 0 8px 24px rgba(16,24,40,.06); display: flex; flex-direction: column; gap: 18px; }
+  .quote .stars { display: flex; gap: 2px; color: #f5a524; }
+  .quote .stars svg { width: 18px; height: 18px; }
+  .quote blockquote { margin: 0; font-size: 16px; color: #2b3242; }
+  .quote .who { display: flex; align-items: center; gap: 12px; margin-top: auto; }
+  .quote .who img { width: 44px; height: 44px; border-radius: 50%; }
+  .quote .who strong { display: block; font-size: 15px; }
+  .quote .who span { font-size: 13px; color: var(--muted); }
+  /* pricing */
+  .plans { display: flex; gap: 24px; align-items: stretch; margin-top: 56px; }
+  .plan { flex: 1; border: 1px solid var(--line); border-radius: 18px; padding: 32px; background: #fff; display: flex; flex-direction: column; position: relative; }
+  .plan.popular { border: 2px solid var(--brand); box-shadow: 0 20px 40px rgba(91,76,240,.18); padding: 40px 32px; margin: -8px 0; }
+  .plan .ribbon { position: absolute; top: -14px; left: 50%; transform: translateX(-50%); background: var(--brand); color: #fff; font-size: 12px; font-weight: 700; padding: 4px 12px; border-radius: 999px; letter-spacing: .04em; text-transform: uppercase; }
+  .plan h3 { margin: 0; font-size: 18px; font-weight: 600; }
+  .plan .desc { color: var(--muted); font-size: 14px; margin: 6px 0 20px; }
+  .plan .price { font-size: 48px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; }
+  .plan .price sup { font-size: 22px; vertical-align: top; position: relative; top: 6px; margin-right: 2px; }
+  .plan .price small { font-size: 15px; font-weight: 400; color: var(--muted); letter-spacing: 0; }
+  .plan ul { list-style: none; padding: 0; margin: 24px 0 28px; display: grid; gap: 10px; font-size: 15px; }
+  .plan li { padding-left: 28px; position: relative; }
+  .plan li::before { content: "✓"; position: absolute; left: 0; top: 0; width: 20px; height: 20px; border-radius: 50%; background: #eeecff; color: var(--brand); font-size: 12px; font-weight: 700; display: grid; place-items: center; }
+  .plan .btn { justify-content: center; margin-top: auto; }
+  .btn-light { background: #f1f2f6; color: var(--ink); }
+  /* faq */
+  .faq { width: 760px; margin: 48px auto 0; }
+  details { border-bottom: 1px solid var(--line); padding: 18px 0; }
+  summary { font-weight: 600; font-size: 17px; cursor: pointer; list-style: none; display: flex; justify-content: space-between; }
+  summary::after { content: "+"; color: var(--brand); font-size: 22px; line-height: 1; }
+  details[open] summary::after { content: "–"; }
+  details p { color: var(--muted); margin: 10px 0 0; }
+  /* cta band */
+  .band { margin: 0 auto 96px; width: 1160px; border-radius: 24px; padding: 56px; color: #fff; display: flex; align-items: center; justify-content: space-between;
+    background: radial-gradient(circle at 85% 20%, rgba(255,255,255,.18), transparent 40%), linear-gradient(120deg, #4338ca, #7c3aed 60%, #db2777); }
+  .band h2 { margin: 0 0 6px; font-size: 32px; }
+  .band p { margin: 0; color: #e0dcff; }
+  .btn-white { background: #fff; color: #3b2fc9; }
+  /* footer */
+  footer { background: #0b1020; color: #aab1c3; padding: 64px 0 32px; font-size: 14px; }
+  footer .cols { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr; gap: 32px; }
+  footer h4 { color: #fff; font-size: 14px; margin: 0 0 14px; font-weight: 600; }
+  footer ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+  footer .social { display: flex; gap: 12px; margin-top: 20px; }
+  footer .social a { width: 36px; height: 36px; border-radius: 10px; background: #1a2135; display: grid; place-items: center; color: #cfd5e3; }
+  footer .social svg { width: 18px; height: 18px; }
+  footer .legal { border-top: 1px solid #1f2740; margin-top: 48px; padding-top: 24px; display: flex; justify-content: space-between; }
+  .logo-light { filter: brightness(0) invert(1); }
+</style>
+</head>
+<body>
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="star" viewBox="0 0 20 20"><path fill="currentColor" d="M10 1.8l2.5 5.2 5.7.8-4.1 4 1 5.6L10 14.7l-5.1 2.7 1-5.6-4.1-4 5.7-.8z"/></symbol>
+</svg>
+
+<header class="nav">
+  <div class="wrap">
+    <a href="#"><img src="../assets/img/logo.svg" width="160" height="40" alt="Lumen"></a>
+    <ul><li>Product</li><li>Solutions</li><li>Pricing</li><li>Customers</li><li>Docs</li></ul>
+    <div class="actions"><a class="btn btn-ghost" href="#">Sign in</a><a class="btn btn-primary" href="#">Start free trial</a></div>
+  </div>
+</header>
+
+<section class="hero" data-testid="hero">
+  <div class="wrap">
+    <span class="badge">New: timeline view and workload balancing</span>
+    <h1>Plan projects your team actually finishes</h1>
+    <p>Lumen brings roadmaps, tasks and docs into one calm workspace — so priorities stay clear and nothing slips between tools.</p>
+    <div class="cta">
+      <a class="btn btn-primary" href="#">Start free trial
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+      <a class="btn btn-outline-light" href="#">Book a demo</a>
+    </div>
+    <div class="proof">
+      <div class="avatars"><img src="../assets/img/avatar-1.png" alt=""><img src="../assets/img/avatar-2.png" alt=""><img src="../assets/img/avatar-3.png" alt=""><img src="../assets/img/avatar-4.png" alt=""></div>
+      Trusted by 12,000+ teams in 80 countries
+    </div>
+  </div>
+</section>
+
+<div class="logos"><div class="wrap"><span>Teams shipping with Lumen</span><span>NORTHWIND</span><span>Fernway</span><span>Kestrel</span><span>Quarry</span><span>Halcyon</span><span>Brightside</span></div></div>
+
+<section class="block" data-testid="features">
+  <div class="wrap center">
+    <div class="eyebrow">Features</div>
+    <h2 class="title">Everything a project needs, nothing it doesn't</h2>
+    <p class="sub">Start with a template or a blank board. Add structure only when your team is ready for it.</p>
+  </div>
+  <div class="wrap features">
+    <div class="feature"><div class="ico c1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v16"/></svg></div><h3>Boards &amp; timelines</h3><p>Switch between kanban, list and timeline without losing context.</p></div>
+    <div class="feature"><div class="ico c2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg></div><h3>Live reporting</h3><p>Dashboards update as work moves, so status meetings get shorter.</p></div>
+    <div class="feature"><div class="ico c3"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="8" r="4"/><path d="M2 21c1-4 4-6 7-6s6 2 7 6M17 11a3 3 0 1 0 0-6M22 19c-.5-2-2-3.5-4-4"/></svg></div><h3>Workload balancing</h3><p>See who is overloaded before deadlines are at risk.</p></div>
+    <div class="feature"><div class="ico c4"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg></div><h3>Docs next to tasks</h3><p>Specs, notes and decisions live beside the work they describe.</p></div>
+    <div class="feature"><div class="ico c5"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></div><h3>Automations</h3><p>Move cards, assign owners and post updates with simple rules.</p></div>
+    <div class="feature"><div class="ico c6"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div><h3>Enterprise security</h3><p>SSO, audit logs and granular permissions on every plan above Free.</p></div>
+  </div>
+</section>
+
+<section class="block soft" data-testid="testimonials">
+  <div class="wrap center">
+    <div class="eyebrow">Customers</div>
+    <h2 class="title">Teams that switched never looked back</h2>
+  </div>
+  <div class="wrap quotes">
+    <figure class="quote" style="margin:0">
+      <div class="stars"><svg><use href="#star"/></svg><svg><use href="#star"/></svg><svg><use href="#star"/></svg><svg><use href="#star"/></svg><svg><use href="#star"/></svg></div>
+      <blockquote>“We replaced three tools with Lumen. Planning reviews went from an hour to fifteen minutes.”</blockquote>
+      <div class="who"><img src="../assets/img/avatar-1.png" alt=""><div><strong>Amira Lahlou</strong><span>Head of Product, Northwind</span></div></div>
+    </figure>
+    <figure class="quote" style="margin:0">
+      <div class="stars"><svg><use href="#star"/></svg><svg><use href="#star"/></svg><svg><use href="#star"/></svg><svg><use href="#star"/></svg><svg><use href="#star"/></svg></div>
+      <blockquote>“The timeline view finally made our dependencies visible. Fewer surprises, calmer launches.”</blockquote>
+      <div class="who"><img src="../assets/img/avatar-3.png" alt=""><div><strong>Carlos Mendes</strong><span>Engineering Manager, Fernway</span></div></div>
+    </figure>
+    <figure class="quote" style="margin:0">
+      <div class="stars"><svg><use href="#star"/></svg><svg><use href="#star"/></svg><svg><use href="#star"/></svg><svg><use href="#star"/></svg><svg style="opacity:.3"><use href="#star"/></svg></div>
+      <blockquote>“Onboarding took a single afternoon. Our agency runs every client project here now.”</blockquote>
+      <div class="who"><img src="../assets/img/avatar-5.png" alt=""><div><strong>Elena Ortiz</strong><span>Founder, Brightside Studio</span></div></div>
+    </figure>
+  </div>
+</section>
+
+<section class="block" data-testid="pricing">
+  <div class="wrap center">
+    <div class="eyebrow">Pricing</div>
+    <h2 class="title">Simple plans that scale with you</h2>
+    <p class="sub">Free for small teams. Upgrade when you need more power.</p>
+  </div>
+  <div class="wrap plans">
+    <div class="plan"><h3>Free</h3><p class="desc">For individuals and tiny teams.</p><div class="price"><sup>$</sup>0<small> / user / mo</small></div>
+      <ul><li>Up to 5 members</li><li>Unlimited boards</li><li>1 GB storage</li></ul><a class="btn btn-light" href="#">Get started</a></div>
+    <div class="plan popular"><span class="ribbon">Most popular</span><h3>Team</h3><p class="desc">For growing teams that ship weekly.</p><div class="price"><sup>$</sup>12<small> / user / mo</small></div>
+      <ul><li>Unlimited members</li><li>Timelines &amp; workload</li><li>Automations (1,000 runs)</li><li>Priority support</li></ul><a class="btn btn-primary" href="#">Start free trial</a></div>
+    <div class="plan"><h3>Enterprise</h3><p class="desc">For organisations with advanced needs.</p><div class="price">Custom</div>
+      <ul><li>SSO &amp; SCIM</li><li>Audit logs</li><li>Dedicated success manager</li></ul><a class="btn btn-light" href="#">Contact sales</a></div>
+  </div>
+</section>
+
+<section class="block soft" data-testid="faq">
+  <div class="wrap center"><h2 class="title">Frequently asked questions</h2></div>
+  <div class="faq">
+    <details open><summary>Can I import from other tools?</summary><p>Yes. Import CSV files or connect your existing tracker and Lumen maps fields automatically.</p></details>
+    <details><summary>Is there a free trial of paid plans?</summary><p>Every paid plan includes a 14-day trial with all features.</p></details>
+    <details><summary>How is billing handled?</summary><p>Monthly or yearly, per active member.</p></details>
+  </div>
+</section>
+
+<div style="padding-top:96px">
+  <div class="band" data-testid="cta-band">
+    <div><h2>Ready to bring calm to your projects?</h2><p>Start free — no credit card required.</p></div>
+    <a class="btn btn-white" href="#">Create your workspace</a>
+  </div>
+</div>
+
+<footer data-testid="footer">
+  <div class="wrap">
+    <div class="cols">
+      <div>
+        <img class="logo-light" src="../assets/img/logo.svg" width="160" height="40" alt="Lumen">
+        <p style="width:260px">Project planning for teams who prefer shipping over status meetings.</p>
+        <div class="social">
+          <a href="#" aria-label="X"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.5 3h3l-7 8 8.2 10h-6.4l-5-6.2L4.6 21h-3l7.5-8.6L1.3 3h6.6l4.5 5.7zm-1 16h1.7L7.6 4.8H5.8z"/></svg></a>
+          <a href="#" aria-label="LinkedIn"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4.5 3.5a2 2 0 1 1 0 4 2 2 0 0 1 0-4zM3 9h3v12H3zM9 9h2.9v1.7c.5-.9 1.6-1.9 3.4-1.9 3.4 0 4.2 2.1 4.2 5V21h-3v-6.2c0-1.5 0-3.3-2-3.3s-2.4 1.6-2.4 3.2V21H9z"/></svg></a>
+          <a href="#" aria-label="GitHub"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.3-3.4-1.3-.4-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.6 1 1.6 1 .9 1.6 2.4 1.1 3 .9.1-.7.4-1.1.6-1.4-2.2-.3-4.6-1.1-4.6-5a3.9 3.9 0 0 1 1-2.7c-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.8 1a9.6 9.6 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .6 1.4.2 2.4.1 2.7a3.9 3.9 0 0 1 1 2.7c0 3.9-2.3 4.7-4.6 5 .4.3.7.9.7 1.9V21c0 .3.2.6.7.5A10 10 0 0 0 12 2z"/></svg></a>
+          <a href="#" aria-label="YouTube"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M22 8.2a3 3 0 0 0-2.1-2.1C18 5.6 12 5.6 12 5.6s-6 0-7.9.5A3 3 0 0 0 2 8.2 31 31 0 0 0 1.6 12 31 31 0 0 0 2 15.8a3 3 0 0 0 2.1 2.1c1.9.5 7.9.5 7.9.5s6 0 7.9-.5a3 3 0 0 0 2.1-2.1 31 31 0 0 0 .4-3.8 31 31 0 0 0-.4-3.8zM10 15.1V8.9l5.2 3.1z"/></svg></a>
+        </div>
+      </div>
+      <div><h4>Product</h4><ul><li>Features</li><li>Integrations</li><li>Changelog</li><li>Roadmap</li></ul></div>
+      <div><h4>Company</h4><ul><li>About</li><li>Careers</li><li>Press</li><li>Contact</li></ul></div>
+      <div><h4>Resources</h4><ul><li>Docs</li><li>Guides</li><li>Templates</li><li>Community</li></ul></div>
+      <div><h4>Legal</h4><ul><li>Privacy</li><li>Terms</li><li>Security</li></ul></div>
+    </div>
+    <div class="legal"><span>© 2026 Lumen Labs, Inc. All rights reserved.</span><span>Made for focused teams.</span></div>
+  </div>
+</footer>
+</body>
+</html>

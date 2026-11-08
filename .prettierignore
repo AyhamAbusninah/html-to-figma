@@ -1,0 +1,9 @@
+dist/
+node_modules/
+pnpm-lock.yaml
+packages/schema/capture.schema.json
+packages/schema/src/generated/
+fixtures/
+*.md
+spikes/
+.impeccable/

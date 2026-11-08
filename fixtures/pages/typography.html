@@ -1,0 +1,165 @@
+<!doctype html>
+<!--
+  Fixture: typography
+  Purpose: text extraction — font size / weight / style, line-height, letter-spacing,
+           text-transform, decoration, alignment, white-space handling, wrapping, ellipsis,
+           inline mixed runs and font-family stacks.
+  Requirements: EXT-X-1, EXT-X-2, EXT-X-3, EXT-X-4, EXT-X-5, EXT-X-8, EXT-G-2, EXT-RTL-2,
+                PLG-R-9, PLG-R-9a, PLG-F-2, PLG-F-3, PLG-F-5, AC-PLG-2, AC-PLG-3
+  Expected capture behaviour (rows identified by data-testid):
+    - weights: nine TEXT nodes with fontWeight 100…900 in Inter (only 400/600/700 files exist;
+      the browser synthesises / snaps others — the capture records the computed weight).
+    - italic: fontStyle italic (synthesised oblique — Inter italic is not loaded).
+    - lh-normal → lineHeight "normal"; lh-number (1.8 × 16px) → 28.8px; lh-px → 30px (EXT-X-5).
+    - letter-spacing: 0.2em at 16px → 3.2px; -0.5px stays negative.
+    - transform-upper/lower/capitalize: characters are the DOM text (mixed case, untransformed),
+      textCase = UPPER / LOWER / TITLE (EXT-X-3).
+    - decoration: UNDERLINE / STRIKETHROUGH; overline is unsupported (warning or omitted).
+    - align-*: textAlign left / center / right / justify(→ left or JUSTIFIED); align-start → left
+      and align-end → right in this LTR page (EXT-RTL-2).
+    - ws-normal: runs of spaces/newlines collapsed to single spaces; ws-nowrap: collapsed, 1 line;
+      ws-pre / ws-pre-wrap: spaces and newlines preserved exactly; ws-pre-line: newlines kept,
+      spaces collapsed (EXT-X-2).
+    - wrap-paragraph: lineCount > 1 (5+ lines in a 360px column), rect width ≈ 360.
+    - ellipsis: characters = visible prefix + "…" (EXT-X-8), lineCount 1.
+    - inline-mixed: one TEXT node per DOM text node — "This paragraph mixes ", "bold", " and ",
+      "italic", … each with its own weight/style/colour/decoration (EXT-X-1).
+    - stack-missing: fontFamily stack ["Definitely Missing Font","Inter","sans-serif"] verbatim;
+      Chrome rendered Inter; plugin reports substitution (PLG-F-5).
+    - generic-*: fontFamily ["serif"], ["monospace"], ["system-ui"], ["cursive"] kept literal (EXT-X-4).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fixture: typography</title>
+<style>
+  @font-face { font-family: "Inter"; font-weight: 400; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/inter/Inter-400.woff2) format("woff2"); }
+  @font-face { font-family: "Inter"; font-weight: 600; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/inter/Inter-600.woff2) format("woff2"); }
+  @font-face { font-family: "Inter"; font-weight: 700; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/inter/Inter-700.woff2) format("woff2"); }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px; font: 16px/1.5 "Inter", sans-serif; color: #111827; background: #fff; width: 1000px; }
+  h1 { font-size: 28px; font-weight: 700; margin: 0 0 16px; }
+  h2 { font-size: 13px; font-weight: 600; margin: 28px 0 8px; text-transform: uppercase; letter-spacing: .06em; color: #6b7280; }
+  .row { display: flex; gap: 24px; align-items: baseline; flex-wrap: wrap; }
+  .box { border: 1px dashed #d1d5db; padding: 8px 12px; margin: 6px 0; }
+  .w100 { font-weight: 100; } .w200 { font-weight: 200; } .w300 { font-weight: 300; }
+  .w400 { font-weight: 400; } .w500 { font-weight: 500; } .w600 { font-weight: 600; }
+  .w700 { font-weight: 700; } .w800 { font-weight: 800; } .w900 { font-weight: 900; }
+  .lh-normal { line-height: normal; width: 300px; }
+  .lh-number { line-height: 1.8; width: 300px; }
+  .lh-px { line-height: 30px; width: 300px; }
+  .ls-wide { letter-spacing: 0.2em; }
+  .ls-tight { letter-spacing: -0.5px; font-size: 24px; font-weight: 700; }
+  .tt-upper { text-transform: uppercase; }
+  .tt-lower { text-transform: lowercase; }
+  .tt-cap { text-transform: capitalize; }
+  .td-under { text-decoration: underline; }
+  .td-strike { text-decoration: line-through; color: #6b7280; }
+  .td-over { text-decoration: overline; }
+  .td-wavy { text-decoration: underline wavy #dc2626; }
+  .align { width: 460px; background: #f9fafb; }
+  .ws { width: 420px; background: #f9fafb; font-size: 14px; }
+  .ws-normal { white-space: normal; }
+  .ws-nowrap { white-space: nowrap; overflow: hidden; }
+  .ws-pre { white-space: pre; font-family: ui-monospace, monospace; }
+  .ws-pre-wrap { white-space: pre-wrap; }
+  .ws-pre-line { white-space: pre-line; }
+  .ws-break-spaces { white-space: break-spaces; }
+  .wrap-paragraph { width: 360px; font-size: 15px; line-height: 22px; }
+  .ellipsis { width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .inline-mixed { width: 520px; }
+  .inline-mixed a { color: #4338ca; }
+  .inline-mixed .hl { background: #fef08a; color: #854d0e; padding: 0 3px; border-radius: 3px; }
+  .inline-mixed code { font-family: ui-monospace, monospace; font-size: 0.9em; background: #f3f4f6; padding: 1px 4px; }
+  .stack-missing { font-family: "Definitely Missing Font", "Inter", sans-serif; }
+  .g-serif { font-family: serif; } .g-mono { font-family: monospace; } .g-system { font-family: system-ui; } .g-cursive { font-family: cursive; }
+</style>
+</head>
+<body>
+<h1>Typography</h1>
+
+<h2>Sizes</h2>
+<div class="row" data-testid="sizes">
+  <span style="font-size:10px">10px</span>
+  <span style="font-size:12px">12px</span>
+  <span style="font-size:14px">14px</span>
+  <span style="font-size:16px">16px</span>
+  <span style="font-size:20px">20px</span>
+  <span style="font-size:28px">28px</span>
+  <span style="font-size:40px">40px</span>
+  <span style="font-size:56px">56px</span>
+</div>
+
+<h2>Weights &amp; style</h2>
+<div class="row" data-testid="weights">
+  <span class="w100">Thin 100</span><span class="w200">ExtraLight 200</span><span class="w300">Light 300</span>
+  <span class="w400">Regular 400</span><span class="w500">Medium 500</span><span class="w600">SemiBold 600</span>
+  <span class="w700">Bold 700</span><span class="w800">ExtraBold 800</span><span class="w900">Black 900</span>
+</div>
+<p data-testid="italic"><em>Italic text (synthesised oblique)</em> and <strong><em>bold italic</em></strong>.</p>
+
+<h2>Line height</h2>
+<div class="row">
+  <p class="box lh-normal" data-testid="lh-normal">line-height: normal. Two lines of text wrap here to show spacing.</p>
+  <p class="box lh-number" data-testid="lh-number">line-height: 1.8. Two lines of text wrap here to show spacing.</p>
+  <p class="box lh-px" data-testid="lh-px">line-height: 30px. Two lines of text wrap here to show spacing.</p>
+</div>
+
+<h2>Letter spacing</h2>
+<p class="ls-wide" data-testid="ls-wide">Wide tracking 0.2em</p>
+<p class="ls-tight" data-testid="ls-tight">Tight tracking -0.5px</p>
+
+<h2>Text transform &amp; decoration</h2>
+<div class="row">
+  <span class="tt-upper" data-testid="tt-upper">Mixed Case uppercase</span>
+  <span class="tt-lower" data-testid="tt-lower">Mixed Case LOWERCASE</span>
+  <span class="tt-cap" data-testid="tt-cap">mixed case capitalize each word</span>
+</div>
+<div class="row">
+  <span class="td-under" data-testid="td-under">Underlined</span>
+  <span class="td-strike" data-testid="td-strike">Strikethrough $49.00</span>
+  <span class="td-over" data-testid="td-over">Overline</span>
+  <span class="td-wavy" data-testid="td-wavy">Wavy red underline</span>
+</div>
+
+<h2>Alignment</h2>
+<p class="box align" style="text-align:left" data-testid="align-left">text-align: left</p>
+<p class="box align" style="text-align:center" data-testid="align-center">text-align: center</p>
+<p class="box align" style="text-align:right" data-testid="align-right">text-align: right</p>
+<p class="box align" style="text-align:justify" data-testid="align-justify">text-align: justify spreads words so that both edges of every line except the last are flush with the container edges.</p>
+<p class="box align" style="text-align:start" data-testid="align-start">text-align: start (→ left in LTR)</p>
+<p class="box align" style="text-align:end" data-testid="align-end">text-align: end (→ right in LTR)</p>
+
+<h2>White-space</h2>
+<div class="box ws ws-normal" data-testid="ws-normal">normal:    runs   of     spaces
+     and
+  newlines   collapse.</div>
+<div class="box ws ws-nowrap" data-testid="ws-nowrap">nowrap:    spaces   collapse   but   the   line   never   wraps   even   when   it   is   long</div>
+<div class="box ws ws-pre" data-testid="ws-pre">pre:   keeps    spaces
+  and newlines
+    exactly</div>
+<div class="box ws ws-pre-wrap" data-testid="ws-pre-wrap">pre-wrap:   keeps   spaces   and
+newlines but also wraps long lines when they reach the edge of the box.</div>
+<div class="box ws ws-pre-line" data-testid="ws-pre-line">pre-line:    spaces    collapse
+but newlines
+are kept.</div>
+<div class="box ws ws-break-spaces" data-testid="ws-break-spaces">break-spaces:   like   pre-wrap   but   trailing   spaces   wrap.   </div>
+
+<h2>Wrapping &amp; truncation</h2>
+<p class="wrap-paragraph" data-testid="wrap-paragraph">This is a longer paragraph in a fixed 360px column. It wraps across several lines, so the capture must report a line count greater than one and keep the width fixed in Figma. Hyphenation is off, so words move to the next line whole.</p>
+<p class="ellipsis" data-testid="ellipsis">This single line is far too long for its 260px box and ends with an ellipsis</p>
+
+<h2>Inline runs</h2>
+<p class="inline-mixed" data-testid="inline-mixed">This paragraph mixes <b>bold</b> and <i>italic</i> words, a <a href="#inline">link with underline</a>, a <span class="hl">highlighted span</span>, <code>inline code</code>, <small>small text</small>, H<sub>2</sub>O and x<sup>2</sup>, then ends in plain text.</p>
+
+<h2>Font stacks</h2>
+<p class="stack-missing" data-testid="stack-missing">First family missing → rendered in Inter</p>
+<div class="row">
+  <span class="g-serif" data-testid="generic-serif">Generic serif</span>
+  <span class="g-mono" data-testid="generic-mono">Generic monospace</span>
+  <span class="g-system" data-testid="generic-system">Generic system-ui</span>
+  <span class="g-cursive" data-testid="generic-cursive">Generic cursive</span>
+</div>
+</body>
+</html>

@@ -1,0 +1,178 @@
+# Frappe/ERPNext v15 STRESS-TEST BENCHMARK (REQUIREMENTS TST-3a, TST-6 set B).
+#
+# This exists only to exercise the universal engine against a complex real-world DOM
+# (Flexbox/Grid, sticky headers, inner scrolls, RTL Arabic). Nothing here may leak into
+# packages/* (SYS-5, SYS-7).
+#
+# Based on frappe_docker's pwd.yml, pinned to v15 and MariaDB 10.6 (v15's supported version).
+#   docker compose -f fixtures/frappe-bench/docker-compose.yml up -d
+#   node fixtures/frappe-bench/seed.mjs          # setup wizard + demo data + EN/AR users
+#   open http://localhost:${H2F_FRAPPE_PORT:-8085}
+#
+# Credentials are throwaway local test values. Never expose this stack beyond localhost.
+
+x-erpnext-image: &erpnext-image
+  image: frappe/erpnext:${H2F_ERPNEXT_VERSION:-v15.124.5}
+
+x-bench-volumes: &bench-volumes
+  volumes:
+    - sites:/home/frappe/frappe-bench/sites
+    - logs:/home/frappe/frappe-bench/logs
+
+name: h2f-frappe-bench
+
+services:
+  configurator:
+    <<: [*erpnext-image, *bench-volumes]
+    deploy:
+      restart_policy:
+        condition: none
+    entrypoint: ["bash", "-c"]
+    command:
+      - >
+        ls -1 apps > sites/apps.txt;
+        bench set-config -g db_host $$DB_HOST;
+        bench set-config -gp db_port $$DB_PORT;
+        bench set-config -g redis_cache "redis://$$REDIS_CACHE";
+        bench set-config -g redis_queue "redis://$$REDIS_QUEUE";
+        bench set-config -g redis_socketio "redis://$$REDIS_QUEUE";
+        bench set-config -gp socketio_port $$SOCKETIO_PORT;
+    environment:
+      DB_HOST: db
+      DB_PORT: "3306"
+      REDIS_CACHE: redis-cache:6379
+      REDIS_QUEUE: redis-queue:6379
+      SOCKETIO_PORT: "9000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  create-site:
+    <<: [*erpnext-image, *bench-volumes]
+    deploy:
+      restart_policy:
+        condition: none
+    entrypoint: ["bash", "-c"]
+    command:
+      - >
+        wait-for-it -t 120 db:3306;
+        wait-for-it -t 120 redis-cache:6379;
+        wait-for-it -t 120 redis-queue:6379;
+        if [ -d "sites/frontend" ]; then
+          echo "Site frontend already exists, skipping creation";
+        else
+          bench new-site --mariadb-user-host-login-scope='%' --admin-password=admin --db-root-username=root --db-root-password=admin --install-app erpnext --set-default frontend;
+        fi;
+    depends_on:
+      configurator:
+        condition: service_completed_successfully
+
+  backend:
+    <<: [*erpnext-image, *bench-volumes]
+    deploy:
+      restart_policy:
+        condition: on-failure
+    depends_on:
+      create-site:
+        condition: service_completed_successfully
+
+  websocket:
+    <<: [*erpnext-image, *bench-volumes]
+    deploy:
+      restart_policy:
+        condition: on-failure
+    command: ["node", "/home/frappe/frappe-bench/apps/frappe/socketio.js"]
+    depends_on:
+      create-site:
+        condition: service_completed_successfully
+
+  frontend:
+    <<: [*erpnext-image, *bench-volumes]
+    deploy:
+      restart_policy:
+        condition: on-failure
+    command: ["nginx-entrypoint.sh"]
+    environment:
+      BACKEND: backend:8000
+      FRAPPE_SITE_NAME_HEADER: frontend
+      SOCKETIO: websocket:9000
+      UPSTREAM_REAL_IP_ADDRESS: 127.0.0.1
+      UPSTREAM_REAL_IP_HEADER: X-Forwarded-For
+      UPSTREAM_REAL_IP_RECURSIVE: "off"
+      PROXY_READ_TIMEOUT: 120
+      CLIENT_MAX_BODY_SIZE: 50m
+    ports:
+      - "127.0.0.1:${H2F_FRAPPE_PORT:-8085}:8080"
+    depends_on:
+      - backend
+      - websocket
+
+  queue-long:
+    <<: [*erpnext-image, *bench-volumes]
+    deploy:
+      restart_policy:
+        condition: on-failure
+    command: ["bench", "worker", "--queue", "long,default,short"]
+    depends_on:
+      create-site:
+        condition: service_completed_successfully
+
+  queue-short:
+    <<: [*erpnext-image, *bench-volumes]
+    deploy:
+      restart_policy:
+        condition: on-failure
+    command: ["bench", "worker", "--queue", "short,default"]
+    depends_on:
+      create-site:
+        condition: service_completed_successfully
+
+  scheduler:
+    <<: [*erpnext-image, *bench-volumes]
+    deploy:
+      restart_policy:
+        condition: on-failure
+    command: ["bench", "schedule"]
+    depends_on:
+      create-site:
+        condition: service_completed_successfully
+
+  db:
+    image: mariadb:10.6
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost --password=admin"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    deploy:
+      restart_policy:
+        condition: on-failure
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --skip-character-set-client-handshake
+      - --skip-innodb-read-only-compressed
+    environment:
+      MYSQL_ROOT_PASSWORD: admin
+    volumes:
+      - db-data:/var/lib/mysql
+
+  redis-queue:
+    image: redis:6.2-alpine
+    deploy:
+      restart_policy:
+        condition: on-failure
+    volumes:
+      - redis-queue-data:/data
+
+  redis-cache:
+    image: redis:6.2-alpine
+    deploy:
+      restart_policy:
+        condition: on-failure
+
+volumes:
+  db-data:
+  redis-queue-data:
+  sites:
+  logs:

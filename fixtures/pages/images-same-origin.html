@@ -1,0 +1,154 @@
+<!doctype html>
+<!--
+  Fixture: images-same-origin
+  Purpose: same-origin raster sources through Tier 1 (canvas) — srcset / <picture> candidate
+           selection, object-fit modes, rounded images, data: and blob: URLs, lazy loading,
+           <canvas>, <video> poster and current frame, non-PNG formats that need re-encoding.
+  Requirements: EXT-I-1, EXT-I-2, EXT-I-5, EXT-I-6, EXT-I-7, EXT-I-9, EXT-I-10, EXT-C-1, EXT-C-2,
+                EXT-S-5, PLG-R-7, AC-PLG-9
+  Expected capture behaviour (data-testid):
+    - srcset-w / srcset-x: the asset is the candidate Chrome rendered (currentSrc). At DPR 1 the
+      image shows the label "400W 1X"; at DPR 2 it shows "1600W 2X". The capture must match the
+      label visible on screen.
+    - picture-webp: currentSrc is the .webp (label "800X500 WEBP") → re-encoded to JPEG/PNG (EXT-I-6).
+    - fit-cover → scaleMode FILL; fit-contain and fit-scale-down → FIT; fit-fill → STRETCH;
+      fit-none → FIT + warning (EXT-I-10). fit-position: object-position right bottom (corner
+      marker lime/BR visible).
+    - rounded: IMAGE node with per-corner radii 24px; circle: radius 60 (50% of 120).
+    - data-png / data-svg: Tier 1 succeeds (source "canvas"); data-svg may become an SvgNode.
+    - blob: blob: URL created by script — Tier 1. Note: the blob URL string changes on every load,
+      so goldens must not compare the URL.
+    - fmt-jpg → JPEG; fmt-gif (animated, 3 frames) → first frame as PNG (EXT-I-6); fmt-ico and
+      fmt-alpha-webp → PNG (alpha preserved); fmt-svg (<img src=*.svg>) → SvgNode (EXT-S-5).
+    - dedupe: photo-800x500.png is used 4 times on this page → exactly one asset entry (EXT-I-9).
+    - broken: 404 image → assetId null + IMAGE_FETCH_FAILED (EXT-I-5); plugin draws placeholder.
+    - lazy-far: ~3000px below the fold, loading="lazy" — present only when auto-scroll is on
+      (EXT-C-1); otherwise it may be captured as not-yet-loaded / placeholder.
+    - canvas-drawn: IMAGE node of the canvas bitmap (quadrants, circle, text "CANVAS 42").
+    - video-poster: preload="none" → poster image ("POSTER" label). video-frame: script seeks to
+      1.5 s → current frame shows "2" / "FRAME 2".
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fixture: images (same origin)</title>
+<style>
+  @font-face { font-family: "Inter"; font-weight: 400; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/inter/Inter-400.woff2) format("woff2"); }
+  @font-face { font-family: "Inter"; font-weight: 600; font-style: normal; font-display: block; src: url(../assets/vendor/fonts/inter/Inter-600.woff2) format("woff2"); }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px; font: 13px/1.4 "Inter", sans-serif; color: #111827; background: #fff; width: 1100px; }
+  h1 { font-size: 22px; margin: 0 0 4px; font-weight: 600; }
+  h2 { font-size: 14px; margin: 28px 0 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: #4b5563; }
+  .row { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
+  figure { margin: 0; }
+  figcaption { margin-top: 6px; font-size: 12px; color: #4b5563; }
+  img, canvas, video { display: block; }
+  .fit { width: 200px; height: 200px; background: #e5e7eb; border: 1px solid #9ca3af; }
+  .fit-cover { object-fit: cover; }
+  .fit-contain { object-fit: contain; }
+  .fit-fill { object-fit: fill; }
+  .fit-none { object-fit: none; }
+  .fit-scale-down { object-fit: scale-down; }
+  .fit-position { object-fit: cover; object-position: right bottom; }
+  .rounded { border-radius: 24px; }
+  .circle { width: 120px; height: 120px; border-radius: 50%; object-fit: cover; border: 4px solid #fff; box-shadow: 0 0 0 2px #4f46e5; }
+  .checker { background: conic-gradient(#e5e7eb 25%, #fff 0 50%, #e5e7eb 0 75%, #fff 0) 0 0 / 20px 20px; padding: 10px; }
+  .spacer { height: 3000px; border-left: 4px dotted #d1d5db; margin: 20px 0 20px 40px; padding-left: 16px; color: #6b7280; }
+</style>
+</head>
+<body>
+<h1>Images — same origin</h1>
+<p>All images load from this origin, <code>data:</code> or <code>blob:</code> URLs.</p>
+
+<h2>Responsive candidates</h2>
+<div class="row">
+  <figure data-testid="srcset-w">
+    <img src="../assets/img/photo-400x250.png"
+         srcset="../assets/img/photo-400x250.png 400w, ../assets/img/photo-1600x1000.png 1600w"
+         sizes="400px" width="400" height="250" alt="srcset with width descriptors">
+    <figcaption>srcset 400w / 1600w, sizes=400px</figcaption>
+  </figure>
+  <figure data-testid="srcset-x">
+    <img src="../assets/img/photo-400x250.png"
+         srcset="../assets/img/photo-400x250.png 1x, ../assets/img/photo-1600x1000.png 2x"
+         width="240" height="150" alt="srcset with density descriptors">
+    <figcaption>srcset 1x / 2x at 240×150</figcaption>
+  </figure>
+  <figure data-testid="picture-webp">
+    <picture>
+      <source type="image/webp" srcset="../assets/img/photo-800x500.webp">
+      <img src="../assets/img/photo-800x500.png" width="320" height="200" alt="picture with webp source">
+    </picture>
+    <figcaption>&lt;picture&gt; webp source, png fallback</figcaption>
+  </figure>
+</div>
+
+<h2>object-fit (portrait 400×600 into 200×200)</h2>
+<div class="row">
+  <figure data-testid="fit-cover"><img class="fit fit-cover" src="../assets/img/portrait-400x600.png" alt="cover"><figcaption>cover → FILL</figcaption></figure>
+  <figure data-testid="fit-contain"><img class="fit fit-contain" src="../assets/img/portrait-400x600.png" alt="contain"><figcaption>contain → FIT</figcaption></figure>
+  <figure data-testid="fit-fill"><img class="fit fit-fill" src="../assets/img/portrait-400x600.png" alt="fill"><figcaption>fill → STRETCH</figcaption></figure>
+  <figure data-testid="fit-none"><img class="fit fit-none" src="../assets/img/portrait-400x600.png" alt="none"><figcaption>none → FIT + warning</figcaption></figure>
+  <figure data-testid="fit-scale-down"><img class="fit fit-scale-down" src="../assets/img/portrait-400x600.png" alt="scale-down"><figcaption>scale-down → FIT</figcaption></figure>
+  <figure data-testid="fit-position"><img class="fit fit-position" src="../assets/img/photo-800x500.png" alt="cover right bottom"><figcaption>cover + object-position right bottom</figcaption></figure>
+</div>
+
+<h2>Shapes, data: and blob:</h2>
+<div class="row">
+  <figure data-testid="rounded"><img class="rounded" src="../assets/img/photo-800x500.png" width="240" height="150" alt="rounded"><figcaption>border-radius 24px</figcaption></figure>
+  <figure data-testid="circle"><img class="circle" src="../assets/img/photo-800x500.png" alt="circle"><figcaption>circle avatar</figcaption></figure>
+  <figure data-testid="data-png"><img src="data:image/png;base64,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" width="160" height="100" alt="data URI png"><figcaption>data:image/png</figcaption></figure>
+  <figure data-testid="data-svg"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 60'%3E%3Crect width='100' height='60' rx='8' fill='%230ea5e9'/%3E%3Ccircle cx='30' cy='30' r='14' fill='%23fff'/%3E%3Crect x='52' y='22' width='34' height='16' rx='3' fill='%23fff'/%3E%3C/svg%3E" width="160" height="96" alt="data URI svg"><figcaption>data:image/svg+xml</figcaption></figure>
+  <figure data-testid="blob"><img id="blob-img" width="128" height="128" alt="blob URL image"><figcaption>blob: URL (script)</figcaption></figure>
+</div>
+
+<h2>Formats</h2>
+<div class="row">
+  <figure data-testid="fmt-jpg"><img src="../assets/img/photo-800x500.jpg" width="200" height="125" alt="jpeg"><figcaption>JPEG</figcaption></figure>
+  <figure data-testid="fmt-gif"><img src="../assets/img/anim-120.gif" width="120" height="120" alt="animated gif"><figcaption>animated GIF</figcaption></figure>
+  <figure data-testid="fmt-alpha-png"><div class="checker"><img src="../assets/img/alpha-256.png" width="128" height="128" alt="alpha png"></div><figcaption>PNG with alpha</figcaption></figure>
+  <figure data-testid="fmt-alpha-webp"><div class="checker"><img src="../assets/img/alpha-256.webp" width="128" height="128" alt="alpha webp"></div><figcaption>WebP with alpha</figcaption></figure>
+  <figure data-testid="fmt-ico"><img src="../assets/img/favicon.ico" width="32" height="32" alt="ico"><figcaption>ICO</figcaption></figure>
+  <figure data-testid="fmt-svg"><img src="../assets/img/chart-text.svg" width="240" height="140" alt="svg as img"><figcaption>&lt;img src=*.svg&gt;</figcaption></figure>
+  <figure data-testid="dedupe"><img src="../assets/img/photo-800x500.png" width="100" height="62" alt="duplicate"><figcaption>same bytes again</figcaption></figure>
+  <figure data-testid="broken"><img src="../assets/img/does-not-exist.png" width="120" height="80" alt="Broken image"><figcaption>404 image</figcaption></figure>
+</div>
+
+<h2>Canvas &amp; video</h2>
+<div class="row">
+  <figure data-testid="canvas-drawn"><canvas id="cv" width="240" height="150"></canvas><figcaption>&lt;canvas&gt; drawn by script</figcaption></figure>
+  <figure data-testid="video-poster"><video width="320" height="180" poster="../assets/img/poster-320x180.png" preload="none" muted src="../assets/img/clip-320x180.webm"></video><figcaption>video, preload=none → poster</figcaption></figure>
+  <figure data-testid="video-frame"><video id="vframe" width="320" height="180" preload="auto" muted src="../assets/img/clip-320x180.webm"></video><figcaption>video seeked to 1.5 s → frame 2</figcaption></figure>
+</div>
+
+<div class="spacer">Spacer: the lazy image below is ~3000px under the fold.</div>
+<figure data-testid="lazy-far">
+  <img src="../assets/img/photo-800x500.png" loading="lazy" width="400" height="250" alt="lazy image far below the fold">
+  <figcaption>loading="lazy" — needs auto-scroll</figcaption>
+</figure>
+
+<script>
+  // blob: URL from a same-origin fetch.
+  fetch("../assets/img/alpha-256.png")
+    .then((r) => r.blob())
+    .then((b) => { document.getElementById("blob-img").src = URL.createObjectURL(b); });
+
+  // Deterministic canvas drawing.
+  const ctx = document.getElementById("cv").getContext("2d");
+  const q = [["#ef4444", 0, 0], ["#22c55e", 120, 0], ["#3b82f6", 0, 75], ["#eab308", 120, 75]];
+  for (const [c, x, y] of q) { ctx.fillStyle = c; ctx.fillRect(x, y, 120, 75); }
+  ctx.fillStyle = "rgba(255,255,255,.85)";
+  ctx.beginPath(); ctx.arc(120, 75, 46, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#111827";
+  ctx.font = "bold 18px sans-serif";
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText("CANVAS 42", 120, 75);
+
+  // Seek the second video to frame 2 (t = 1.5 s).
+  const v = document.getElementById("vframe");
+  const seek = () => { v.currentTime = 1.5; };
+  if (v.readyState >= 1) seek(); else v.addEventListener("loadedmetadata", seek, { once: true });
+</script>
+</body>
+</html>
