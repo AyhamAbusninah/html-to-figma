@@ -1,4 +1,24 @@
-export type { RawPageSnapshot } from './raw-snapshot.ts';
+export type {
+  RawControl,
+  RawElement,
+  RawNode,
+  RawPageSnapshot,
+  RawRect,
+  RawStyle,
+  RawStyleKey,
+  RawText,
+  ReplacedKind,
+} from './raw-snapshot.ts';
+export { RAW_STYLE_KEYS } from './raw-snapshot.ts';
+export { CaptureTooLargeError, MAX_NODES } from './convert.ts';
+export { normalizeWhitespace, resolveTextAlign, hasArabic, countLines } from './text.ts';
+export {
+  parseFontFamilies,
+  parseBoxShadow,
+  parseBorder,
+  parseRadii,
+  isTranslationOnly,
+} from './css.ts';
 export { parseCssColor, isTransparent } from './color.ts';
 export {
   buildCaptureDocument,

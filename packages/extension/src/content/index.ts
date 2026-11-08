@@ -2,7 +2,7 @@
  * Content script, injected on demand by the popup (EXT-P-5) and built as a single IIFE.
  * Exposes `globalThis.__h2fCapture()`, which the popup calls via chrome.scripting.executeScript.
  *
- * R0: walking skeleton (meta + root frame). Traversal arrives in R2.
+ * R2 slice 1: full traversal (collector) → conversion (@h2f/core) → validation.
  */
 import { buildCaptureDocument } from '@h2f/core';
 import { validateCapture } from '@h2f/schema';

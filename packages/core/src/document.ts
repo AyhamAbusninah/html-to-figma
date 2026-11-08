@@ -1,5 +1,6 @@
 import { SCHEMA_VERSION, type CaptureDocument, type RGBA } from '@h2f/schema';
 import { isTransparent, parseCssColor } from './color.ts';
+import { collectWarnings, convertTree, createContext } from './convert.ts';
 import type { RawPageSnapshot } from './raw-snapshot.ts';
 
 const WHITE: RGBA = { r: 1, g: 1, b: 1, a: 1 };
@@ -36,13 +37,21 @@ export interface BuildOptions {
 /**
  * Builds a CaptureDocument from a page snapshot.
  *
- * R0 scope (walking skeleton): page metadata and a root FRAME sized to the scrollable document with the page
- * background. No child nodes yet: DOM traversal arrives in R2. `meta.stats.bytes` is 0 here, and the caller fills
- * it after serialization.
+ * Root FRAME sized to the scrollable document with the page background; children converted from `raw.tree` when
+ * present (without a tree: metadata-only document). `meta.stats.bytes` is 0 here; the caller fills it after
+ * serialization. Throws CaptureTooLargeError above MAX_NODES (EXT-T-10).
  */
 export function buildCaptureDocument(raw: RawPageSnapshot, options: BuildOptions): CaptureDocument {
   const width = Math.max(raw.scroll.width, raw.viewport.width);
   const height = Math.max(raw.scroll.height, raw.viewport.height);
+  const rtl = raw.computedDirection === 'rtl';
+  // Viewport → document coordinates. In RTL documents Chrome reports scrollX <= 0 with 0 at the right edge, so the
+  // left edge of the scrollable area is normalized to x = 0 (EXT-RTL-4).
+  const offsetX =
+    (raw.scrollOffset?.x ?? 0) +
+    (rtl ? Math.max(0, raw.scroll.width - (raw.clientWidth ?? raw.scroll.width)) : 0);
+  const ctx = createContext(offsetX, raw.scrollOffset?.y ?? 0);
+  const children = raw.tree ? convertTree(raw.tree, ctx) : [];
   return {
     schemaVersion: SCHEMA_VERSION,
     meta: {
@@ -57,8 +66,14 @@ export function buildCaptureDocument(raw: RawPageSnapshot, options: BuildOptions
       devicePixelRatio: raw.devicePixelRatio || 1,
       extractorVersion: options.extractorVersion,
       userAgent: raw.userAgent,
-      stats: { nodeCount: 1, textCount: 0, imageCount: 0, svgCount: 0, bytes: 0 },
-      warnings: [],
+      stats: {
+        nodeCount: ctx.nodeCount,
+        textCount: ctx.textCount,
+        imageCount: ctx.imageCount,
+        svgCount: ctx.svgCount,
+        bytes: 0,
+      },
+      warnings: collectWarnings(ctx),
     },
     assets: { images: {} },
     root: {
@@ -69,7 +84,7 @@ export function buildCaptureDocument(raw: RawPageSnapshot, options: BuildOptions
       opacity: 1,
       fills: [{ type: 'SOLID', color: resolvePageBackground(raw.backgroundColors) }],
       clipsContent: true,
-      children: [],
+      children,
     },
   };
 }

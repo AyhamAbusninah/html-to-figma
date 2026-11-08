@@ -16,6 +16,9 @@ import {
   type Variant,
 } from './helpers.ts';
 
+/** The reference build is the R0-recovered 0.1.0; the rebuilt extension is 0.2.0 (R2 capture). */
+const VERSION: Record<Variant, string> = { rebuilt: '0.2.0', reference: '0.1.0' };
+
 let fixtures: FixtureServer;
 test.beforeAll(async () => {
   fixtures = await startFixtures();
@@ -57,7 +60,7 @@ for (const variant of Object.keys(VARIANTS) as Variant[]) {
         await chrome.runtime.sendMessage({ type: 'h2f:ping' }),
         await chrome.runtime.sendMessage({ type: 'h2f:fetch-asset', url: 'https://x/y.png' }),
       ]);
-      expect(pong).toEqual({ ok: true, type: 'h2f:pong', version: '0.1.0' });
+      expect(pong).toEqual({ ok: true, type: 'h2f:pong', version: VERSION[variant] });
       expect(fetchAsset).toEqual({
         ok: false,
         error: 'Tier-2 asset fetch is not implemented yet (P4)',
@@ -105,8 +108,12 @@ for (const variant of Object.keys(VARIANTS) as Variant[]) {
         expect(stats.Direction).toBe(
           `${expected.dir.toUpperCase()}${expected.lang ? ` · ${expected.lang}` : ''}`,
         );
-        expect(stats.Nodes).toBe('1');
-        expect(stats.Warnings).toBe('0');
+        if (variant === 'reference') {
+          expect(stats.Nodes).toBe('1'); // R0 skeleton: root frame only
+          expect(stats.Warnings).toBe('0');
+        } else {
+          expect(Number(stats.Nodes)).toBeGreaterThan(50); // R2: full tree
+        }
         await expect(popup.locator('#copy')).toBeEnabled();
 
         // Download through chrome.downloads. Playwright's download interception (acceptDownloads) ignores the
@@ -156,15 +163,20 @@ for (const variant of Object.keys(VARIANTS) as Variant[]) {
           lang: expected.lang,
           direction: expected.dir === 'rtl' ? 'rtl' : 'ltr',
           document: { width: expected.width, height: expected.height },
-          extractorVersion: '0.1.0',
+          extractorVersion: VERSION[variant],
           captureMode: 'page',
         });
         expect(saved.meta.stats.bytes).toBeGreaterThan(0);
         expect(saved.root).toMatchObject({
           type: 'FRAME',
-          children: [],
           rect: { width: expected.width, height: expected.height },
         });
+        if (variant === 'reference') expect(saved.root.children).toEqual([]);
+        else {
+          expect(saved.root.children.length).toBeGreaterThan(0);
+          expect(stats.Nodes).toBe(String(saved.meta.stats.nodeCount));
+          expect(stats.Warnings).toBe(String(saved.meta.warnings.length));
+        }
 
         // Capture must not modify the page (AC-EXT-8).
         expect(await target.evaluate(() => document.documentElement.outerHTML)).toBe(domBefore);
@@ -175,9 +187,10 @@ for (const variant of Object.keys(VARIANTS) as Variant[]) {
   });
 }
 
-test('content script: rebuilt and reference produce identical CaptureDocuments on every fixture page', async ({
+test('R0 invariants preserved: rebuilt metadata and root frame match the reference on every fixture page', async ({
   browser,
 }) => {
+  // R2 intentionally adds child nodes, stats and warnings. Everything the R0 skeleton produced must be unchanged.
   const pages = readFileSync(join(repo, 'fixtures/pages/index.html'), 'utf8').match(
     /href="([a-z0-9-]+\.html)"/g,
   )!;
@@ -185,10 +198,11 @@ test('content script: rebuilt and reference produce identical CaptureDocuments o
   expect(names.length).toBeGreaterThanOrEqual(20);
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
   const summary: Record<string, unknown>[] = [];
-  const strip = (r: { ok: boolean; document?: CaptureDocument; durationMs?: number }) => {
-    const doc = structuredClone(r.document!);
-    doc.meta.capturedAt = '<normalized>';
-    return { ok: r.ok, doc };
+  const invariant = (r: { ok: boolean; document?: CaptureDocument }) => {
+    const { root, meta } = structuredClone(r.document!);
+    const { capturedAt: _c, stats: _s, warnings: _w, extractorVersion: _v, ...m } = meta;
+    const { children: _k, ...rootProps } = root;
+    return { ok: r.ok, meta: m, root: rootProps };
   };
   for (const name of names) {
     await page.goto(`${fixtures.origins.main}/pages/${name}`, { waitUntil: 'networkidle' });
@@ -201,20 +215,20 @@ test('content script: rebuilt and reference produce identical CaptureDocuments o
     };
     const reference = await run(join(VARIANTS.reference.extension, 'content.js'));
     const rebuilt = await run(join(VARIANTS.rebuilt.extension, 'content.js'));
-    expect(strip(rebuilt), name).toEqual(strip(reference));
+    expect(invariant(rebuilt), name).toEqual(invariant(reference));
     const d = (rebuilt as { document: CaptureDocument }).document;
+    expect(validateCapture(d).ok, name).toBe(true);
     summary.push({
       page: name,
-      ok: (rebuilt as { ok: boolean }).ok,
-      document: d.meta.document,
-      direction: d.meta.direction,
-      lang: d.meta.lang,
+      nodes: d.meta.stats.nodeCount,
+      texts: d.meta.stats.textCount,
+      warnings: d.meta.warnings.length,
       bytes: d.meta.stats.bytes,
     });
   }
   mkdirSync(join(repo, 'test-results'), { recursive: true });
   writeFileSync(
-    join(repo, 'test-results/r0-content-equivalence.json'),
+    join(repo, 'test-results/r2-fixture-captures.json'),
     JSON.stringify(summary, null, 2),
   );
   await page.close();

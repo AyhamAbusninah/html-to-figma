@@ -12,7 +12,7 @@
  * Compatibility policy (SCH-8): within major version 1, changes may only ADD optional properties or widen accepted
  * values. Every document valid under the 1.0.0 baseline must stay valid. Removing/renaming/narrowing = major bump.
  */
-import { Type, type Static, type TSchema } from '@sinclair/typebox';
+import { Type, type Static, type TLiteral, type TSchema } from '@sinclair/typebox';
 
 // ── Primitives ───────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -32,11 +32,11 @@ export const Rect = Type.Object(
 
 const Size = () => Type.Object({ width: NonNegative(), height: NonNegative() });
 
-const Literals = <T extends string>(values: readonly T[], options: { description?: string } = {}) =>
-  Type.Union(
-    values.map((v) => Type.Literal(v)),
-    options,
-  );
+/** Union of string literals. `const T` keeps the literal types (e.g. 'ltr' | 'rtl'), not `string`. */
+const Literals = <const T extends readonly string[]>(
+  values: T,
+  options: { description?: string } = {},
+) => Type.Union(values.map((v) => Type.Literal(v)) as TLiteral<T[number]>[], options);
 
 export const BLEND_MODES = [
   'DARKEN',

@@ -15,6 +15,19 @@ export const WARNING_CODES = {
   SCROLL_AREAS_EXPANDED: 'Inner scroll areas were expanded for capture (EXT-C-6)',
   PSEUDO_LIMIT: 'Pseudo-element limit reached; remaining ones skipped (EXT-T-11)',
   ARABIC_LETTER_SPACING_IGNORED: 'letter-spacing set to 0 on Arabic text (EXT-RTL-5)',
+  // R2 MVP slice: features explicitly not captured yet (rendered as placeholders or approximated)
+  IMAGE_NOT_CAPTURED:
+    '<img>/<canvas>/<video>/<object>/<embed> content not captured yet; placeholder (R4)',
+  SVG_NOT_CAPTURED: 'Inline <svg> not captured yet; placeholder (R4)',
+  IFRAME_NOT_CAPTURED: '<iframe> content not captured; placeholder',
+  BACKGROUND_IMAGE_NOT_CAPTURED: 'CSS background images not captured yet (R4)',
+  GRADIENT_NOT_CAPTURED: 'CSS gradients not captured yet',
+  PSEUDO_ELEMENT_NOT_CAPTURED: '::before/::after content not captured yet',
+  NATIVE_CONTROL_APPROXIMATED: 'Native checkbox/radio/range/etc. approximated by box styles',
+  BORDER_STYLE_DEGRADED: 'double/groove/ridge/inset/outset borders rendered as solid',
+  BLEND_MODE_UNSUPPORTED: 'Unmappable mix-blend-mode ignored',
+  TEXT_ELLIPSIS_NOT_APPLIED:
+    'text-overflow: ellipsis not reproduced; text clipped without "…" (EXT-X-8)',
 } as const;
 
 export type WarningCode = keyof typeof WARNING_CODES;
