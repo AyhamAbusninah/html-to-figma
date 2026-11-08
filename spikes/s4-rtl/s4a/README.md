@@ -1,5 +1,7 @@
 # S4-A: Arabic / RTL text in Figma Web (Fedora proxy)
 
+> **Status: deferred / not executed** (scheduling decision 2026-11-08). No results exist yet. Run it later with the steps below.
+
 Stage A of Spike S4 (OPEN_QUESTIONS R-5). It runs the **original S4 matrix** against Figma's text engine using
 **Figma Web on Fedora**, with no development plugin (those need the macOS/Windows desktop app).
 

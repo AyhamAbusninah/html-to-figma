@@ -172,7 +172,7 @@ These amend the original brief and are reflected in `REQUIREMENTS.md`. Items nee
 ## 10. Milestones (proposed)
 
 > **Superseded (2026-11-08)** by the R0–R6 phase plan (architecture assessment for the Fedora environment):
-> R0 Reconstruct & stabilise ✅ (see `docs/verification/R0.md`) · R1 S4-A browser proxy + decisions B-1/B-2 ·
+> R0 Reconstruct & stabilise ✅ (see `docs/verification/R0.md`) · R1 S4-A ⏸ **deferred / not executed** (scheduling decision 2026-11-08) ·
 > R2 Collector + engine · R3 Planner + adapter · R4 Assets · R5 Real-Figma validation (macOS/Windows) ·
 > R6 Distribution & pilot. The table below is kept for history.
 
