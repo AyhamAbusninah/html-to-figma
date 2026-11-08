@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>S4-A operator kit</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&family=Cairo:wght@400;700&family=Noto+Sans+Arabic:wght@400;700&display=block">
+<style>
+:root{color-scheme:light;--fg:#1f2328;--muted:#59636e;--line:#d1d9e0;--accent:#0969da}
+body{margin:0 auto;max-width:1100px;padding:24px 16px 64px;font:14px/1.5 system-ui,sans-serif;color:var(--fg);background:#fff}
+h1{font-size:22px;margin:0 0 4px} h2{margin-top:36px;border-bottom:1px solid var(--line);padding-bottom:4px} h3{margin:24px 0 8px;font-size:15px}
+table{border-collapse:collapse;width:100%} td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:middle}
+th{font-size:12px;color:var(--muted);font-weight:600} .pv{font-size:22px} .cp{font:12px ui-monospace,monospace;color:var(--muted)}
+.tag{font:11px system-ui;background:#fff8c5;border:1px solid #d4a72c;border-radius:4px;padding:0 4px;margin-left:6px}
+button.copy{font:inherit;padding:4px 12px;border:1px solid var(--accent);color:var(--accent);background:#fff;border-radius:6px;cursor:pointer}
+button.copy.done{background:var(--accent);color:#fff} code{background:#f6f8fa;padding:1px 4px;border-radius:4px}
+.cfg td:first-child{color:var(--muted);width:280px} ol li{margin:6px 0} .warn{background:#fff8c5;border:1px solid #d4a72c;border-radius:8px;padding:10px 14px}
+</style></head><body>
+<h1>S4-A operator kit: Figma Web (Fedora)</h1>
+<p>Spike S4 matrix v1.0.0, generated from <code>spikes/s4-rtl/code.js</code>. Build the frames below in a
+<b>draft file in Figma Web</b>, export them, and run <code>node spikes/s4-rtl/s4a/classify.mjs &lt;export.zip&gt;</code>.</p>
+<p class="warn"><b>Scope:</b> S4-A tests Figma's text engine on text created in the <b>editor UI</b>. It does <b>not</b> test text created by
+the Plugin API (that is S4-B). Use the <b>Copy</b> buttons and don't type strings by hand: several contain invisible characters.</p>
+
+<h2>1. Base text-layer settings (all layers unless a row says otherwise)</h2>
+<table class="cfg">
+<tr><td>Font family</td><td>per frame: Tajawal · Cairo · Noto Sans Arabic</td></tr>
+<tr><td>Style</td><td>Regular</td></tr>
+<tr><td>Font size</td><td><b>28</b></td></tr>
+<tr><td>Line height</td><td><b>48 px</b> (pixels, not %)</td></tr>
+<tr><td>Letter spacing</td><td>0</td></tr>
+<tr><td>Fill</td><td>default black (#000000, 100%)</td></tr>
+<tr><td>Bidi frames (asIs / rlm)</td><td>text align <b>Right</b>, resizing <b>Fixed width = 560</b> (auto height). Every row must stay on <b>one line</b> (height 48).</td></tr>
+<tr><td>Shaping frames</td><td>text align <b>Left</b>, resizing <b>Auto width</b></td></tr>
+<tr><td>Frames</td><td>Auto layout <b>vertical</b>, gap <b>0</b>, padding <b>0</b>, <b>no fill</b> (transparent), names exactly as shown</td></tr>
+</table>
+
+<h2>2. Procedure (about 25–35 min)</h2>
+<ol>
+<li>Figma Web → new <b>draft</b> design file. Record your browser name and version (needed for the report).</li>
+<li><b>First bidi frame</b> (<code>S4A-Tajawal-asIs</code>): press <b>T</b>, click the canvas, paste row 1 (Copy → Ctrl+V), press Esc.
+Apply the base settings above (font Tajawal, 28/48px, Right, Fixed width 560).</li>
+<li>With the layer selected press <b>Shift+A</b> (auto layout). Set vertical, gap 0, padding 0, remove the frame fill, and rename the frame.</li>
+<li>Select the text layer and press <b>Ctrl+D</b> 9 times (10 rows). For rows 2–10: double-click the row, <b>Ctrl+A</b>, paste the matching string. Keep row order = table order.</li>
+<li>Duplicate the frame (Ctrl+D on the frame), rename it <code>S4A-Tajawal-rlm</code>, and replace all 10 texts with the <b>RLM</b> strings (rows look identical; the RLM is invisible).</li>
+<li>Duplicate both frames for each other font: select the frame, press <b>Enter</b> (selects its text layers), change the <b>font family</b>, rename the frame.</li>
+<li><b>Shaping frames</b>: same approach with 6 rows per font, <b>Left</b> aligned, <b>Auto width</b>.</li>
+<li><b>Visual frames</b>: 3 layers per font with the per-row settings (V1 fixed width 360 / V2 letter spacing 4 px / V3 Bold).</li>
+<li>Check: every bidi frame is <b>560 × 480</b>, and no row wraps to two lines.</li>
+<li>Select all 12 frames → Export: <b>PNG, 2x</b> → <b>Export</b>. You get one zip with one PNG per frame, named after the frame.</li>
+<li>Copy the zip to this machine and run <code>node spikes/s4-rtl/s4a/classify.mjs ~/Downloads/&lt;zip&gt; --browser "&lt;browser + version&gt;"</code>.</li>
+</ol>
+
+<h2>3. Frames and strings</h2>
+<h2 style="margin-top:28px">Tajawal</h2><section><h3>Frame <code>S4A-Tajawal-asIs</code></h3>
+  <table><tr><th>#</th><th>Case</th><th>1st strong</th><th>Text (preview)</th><th></th><th>starts with</th></tr><tr><td>1</td><td>B1</td><td>R</td>
+      <td class="pv" style="font-family:'Tajawal'" dir="rtl">مرحبا بالعالم</td>
+      <td><button class="copy" data-i="0">Copy</button></td><td class="cp">U+0645 U+0631…</td></tr><tr><td>2</td><td>B2</td><td>R</td>
+      <td class="pv" style="font-family:'Tajawal'" dir="rtl">فاتورة INV-2026-00042</td>
+      <td><button class="copy" data-i="1">Copy</button></td><td class="cp">U+0641 U+0627…</td></tr><tr><td>3</td><td>B3</td><td>L</td>
+      <td class="pv" style="font-family:'Tajawal'" dir="rtl">Figma يدعم العربية</td>
+      <td><button class="copy" data-i="2">Copy</button></td><td class="cp">U+0046 U+0069…</td></tr><tr><td>4</td><td>B4</td><td>R</td>
+      <td class="pv" style="font-family:'Tajawal'" dir="rtl">2026 عام التحويل</td>
+      <td><button class="copy" data-i="3">Copy</button></td><td class="cp">U+0032 U+0030…</td></tr><tr><td>5</td><td>B5</td><td>L</td>
+      <td class="pv" style="font-family:'Tajawal'" dir="rtl">INV-0042: فاتورة مدفوعة</td>
+      <td><button class="copy" data-i="4">Copy</button></td><td class="cp">U+0049 U+004E…</td></tr><tr><td>6</td><td>B6</td><td>R</td>
+      <td class="pv" style="font-family:'Tajawal'" dir="rtl">يدعم (Auto Layout) لاحقاً</td>
+      <td><button class="copy" data-i="5">Copy</button></td><td class="cp">U+064A U+062F…</td></tr><tr><td>7</td><td>B7</td><td>R</td>
+      <td class="pv" style="font-family:'Tajawal'" dir="rtl">المجموع: ١٢٣٬٤٥٦ د.أ</td>
+      <td><button class="copy" data-i="6">Copy</button></td><td class="cp">U+0627 U+0644…</td></tr><tr><td>8</td><td>B8</td><td>R</td>
+      <td class="pv" style="font-family:'Tajawal'" dir="rtl">مرحبا Arkan</td>
+      <td><button class="copy" data-i="7">Copy</button></td><td class="cp">U+0645 U+0631…</td></tr><tr><td>9</td><td>B9</td><td>L</td>
+      <td class="pv" style="font-family:'Tajawal'" dir="rtl">Dashboard لوحة التحكم الرئيسية</td>
+      <td><button class="copy" data-i="8">Copy</button></td><td class="cp">U+0044 U+0061…</td></tr><tr><td>10</td><td>B10</td><td>L</td>
+      <td class="pv" style="font-family:'Tajawal'" dir="rtl">Version 2 الإصدار الجديد</td>
+      <td><button class="copy" data-i="9">Copy</button></td><td class="cp">U+0056 U+0065…</td></tr></table></section><section><h3>Frame <code>S4A-Tajawal-rlm</code></h3>
+  <table><tr><th>#</th><th>Case</th><th>1st strong</th><th>Text (preview)</th><th></th><th>starts with</th></tr><tr><td>1</td><td>B1 <span class="tag">+ invisible RLM</span></td><td>R</td>
+      <td class="pv" style="font-family:'Tajawal'" dir="rtl">مرحبا بالعالم</td>
+      <td><button class="copy" data-i="10">Copy</button></td><td class="cp">U+200F U+0645…</td></tr><tr><td>2</td><td>B2 <span class="tag">+ invisible RLM</span></td><td>R</td>
+      <td class="pv" style="font-family:'Tajawal'" dir="rtl">فاتورة INV-2026-00042</td>
+      <td><button class="copy" data-i="11">Copy</button></td><td class="cp">U+200F U+0641…</td></tr><tr><td>3</td><td>B3 <span class="tag">+ invisible RLM</span></td><td>L</td>
+      <td class="pv" style="font-family:'Tajawal'" dir="rtl">Figma يدعم العربية</td>
+      <td><button class="copy" data-i="12">Copy</button></td><td class="cp">U+200F U+0046…</td></tr><tr><td>4</td><td>B4 <span class="tag">+ invisible RLM</span></td><td>R</td>
+      <td class="pv" style="font-family:'Tajawal'" dir="rtl">2026 عام التحويل</td>
+      <td><button class="copy" data-i="13">Copy</button></td><td class="cp">U+200F U+0032…</td></tr><tr><td>5</td><td>B5 <span class="tag">+ invisible RLM</span></td><td>L</td>
+      <td class="pv" style="font-family:'Tajawal'" dir="rtl">INV-0042: فاتورة مدفوعة</td>
+      <td><button class="copy" data-i="14">Copy</button></td><td class="cp">U+200F U+0049…</td></tr><tr><td>6</td><td>B6 <span class="tag">+ invisible RLM</span></td><td>R</td>
+      <td class="pv" style="font-family:'Tajawal'" dir="rtl">يدعم (Auto Layout) لاحقاً</td>
+      <td><button class="copy" data-i="15">Copy</button></td><td class="cp">U+200F U+064A…</td></tr><tr><td>7</td><td>B7 <span class="tag">+ invisible RLM</span></td><td>R</td>
+      <td class="pv" style="font-family:'Tajawal'" dir="rtl">المجموع: ١٢٣٬٤٥٦ د.أ</td>
+      <td><button class="copy" data-i="16">Copy</button></td><td class="cp">U+200F U+0627…</td></tr><tr><td>8</td><td>B8 <span class="tag">+ invisible RLM</span></td><td>R</td>
+      <td class="pv" style="font-family:'Tajawal'" dir="rtl">مرحبا Arkan</td>
+      <td><button class="copy" data-i="17">Copy</button></td><td class="cp">U+200F U+0645…</td></tr><tr><td>9</td><td>B9 <span class="tag">+ invisible RLM</span></td><td>L</td>
+      <td class="pv" style="font-family:'Tajawal'" dir="rtl">Dashboard لوحة التحكم الرئيسية</td>
+      <td><button class="copy" data-i="18">Copy</button></td><td class="cp">U+200F U+0044…</td></tr><tr><td>10</td><td>B10 <span class="tag">+ invisible RLM</span></td><td>L</td>
+      <td class="pv" style="font-family:'Tajawal'" dir="rtl">Version 2 الإصدار الجديد</td>
+      <td><button class="copy" data-i="19">Copy</button></td><td class="cp">U+200F U+0056…</td></tr></table></section><section><h3>Frame <code>S4A-Tajawal-shaping</code></h3>
+  <table><tr><th>#</th><th>Row</th><th>Text</th><th></th><th>Code points</th></tr><tr><td>1</td><td>S1 joined</td>
+      <td class="pv" style="font-family:'Tajawal'" dir="rtl">ببببب</td><td><button class="copy" data-i="20">Copy</button></td>
+      <td class="cp">U+0628 U+0628 U+0628 U+0628 U+0628</td></tr><tr><td>2</td><td>S1 isolated</td>
+      <td class="pv" style="font-family:'Tajawal'" dir="rtl">ب‌ب‌ب‌ب‌ب</td><td><button class="copy" data-i="21">Copy</button></td>
+      <td class="cp">U+0628 U+200C U+0628 U+200C U+0628 U+200C U+0628 U+200C U+0628</td></tr><tr><td>3</td><td>S2 joined</td>
+      <td class="pv" style="font-family:'Tajawal'" dir="rtl">لا</td><td><button class="copy" data-i="22">Copy</button></td>
+      <td class="cp">U+0644 U+0627</td></tr><tr><td>4</td><td>S2 isolated</td>
+      <td class="pv" style="font-family:'Tajawal'" dir="rtl">ل‌ا</td><td><button class="copy" data-i="23">Copy</button></td>
+      <td class="cp">U+0644 U+200C U+0627</td></tr><tr><td>5</td><td>S3 joined</td>
+      <td class="pv" style="font-family:'Tajawal'" dir="rtl">سلام</td><td><button class="copy" data-i="24">Copy</button></td>
+      <td class="cp">U+0633 U+0644 U+0627 U+0645</td></tr><tr><td>6</td><td>S3 isolated</td>
+      <td class="pv" style="font-family:'Tajawal'" dir="rtl">س‌ل‌ا‌م</td><td><button class="copy" data-i="25">Copy</button></td>
+      <td class="cp">U+0633 U+200C U+0644 U+200C U+0627 U+200C U+0645</td></tr></table></section><section><h3>Frame <code>S4A-Tajawal-visual</code> <small>(visual-only, inspected by eye)</small></h3>
+  <table><tr><th>#</th><th>Case</th><th>Layer settings (otherwise as base)</th><th>Text</th><th></th></tr><tr><td>1</td><td>V1</td><td>Fixed width <b>360</b>, auto height, align <b>right</b></td><td class="pv" style="font-family:'Tajawal'" dir="rtl">هذه فقرة عربية طويلة تلتف على عدة أسطر لاختبار التفاف النص ومحاذاته إلى اليمين داخل Figma مع رقم الفاتورة INV-2026-00042 والتاريخ 08/11/2026.</td><td><button class="copy" data-i="26">Copy</button></td></tr><tr><td>2</td><td>V2</td><td>Auto width, letter spacing <b>4 px</b></td><td class="pv" style="font-family:'Tajawal'" dir="rtl">مرحبا بالعالم</td><td><button class="copy" data-i="27">Copy</button></td></tr><tr><td>3</td><td>V3</td><td>Auto width, weight <b>Bold</b></td><td class="pv" style="font-family:'Tajawal';font-weight:700" dir="rtl">خط عريض Bold</td><td><button class="copy" data-i="28">Copy</button></td></tr></table></section>
+<h2 style="margin-top:28px">Cairo</h2><section><h3>Frame <code>S4A-Cairo-asIs</code></h3>
+  <table><tr><th>#</th><th>Case</th><th>1st strong</th><th>Text (preview)</th><th></th><th>starts with</th></tr><tr><td>1</td><td>B1</td><td>R</td>
+      <td class="pv" style="font-family:'Cairo'" dir="rtl">مرحبا بالعالم</td>
+      <td><button class="copy" data-i="29">Copy</button></td><td class="cp">U+0645 U+0631…</td></tr><tr><td>2</td><td>B2</td><td>R</td>
+      <td class="pv" style="font-family:'Cairo'" dir="rtl">فاتورة INV-2026-00042</td>
+      <td><button class="copy" data-i="30">Copy</button></td><td class="cp">U+0641 U+0627…</td></tr><tr><td>3</td><td>B3</td><td>L</td>
+      <td class="pv" style="font-family:'Cairo'" dir="rtl">Figma يدعم العربية</td>
+      <td><button class="copy" data-i="31">Copy</button></td><td class="cp">U+0046 U+0069…</td></tr><tr><td>4</td><td>B4</td><td>R</td>
+      <td class="pv" style="font-family:'Cairo'" dir="rtl">2026 عام التحويل</td>
+      <td><button class="copy" data-i="32">Copy</button></td><td class="cp">U+0032 U+0030…</td></tr><tr><td>5</td><td>B5</td><td>L</td>
+      <td class="pv" style="font-family:'Cairo'" dir="rtl">INV-0042: فاتورة مدفوعة</td>
+      <td><button class="copy" data-i="33">Copy</button></td><td class="cp">U+0049 U+004E…</td></tr><tr><td>6</td><td>B6</td><td>R</td>
+      <td class="pv" style="font-family:'Cairo'" dir="rtl">يدعم (Auto Layout) لاحقاً</td>
+      <td><button class="copy" data-i="34">Copy</button></td><td class="cp">U+064A U+062F…</td></tr><tr><td>7</td><td>B7</td><td>R</td>
+      <td class="pv" style="font-family:'Cairo'" dir="rtl">المجموع: ١٢٣٬٤٥٦ د.أ</td>
+      <td><button class="copy" data-i="35">Copy</button></td><td class="cp">U+0627 U+0644…</td></tr><tr><td>8</td><td>B8</td><td>R</td>
+      <td class="pv" style="font-family:'Cairo'" dir="rtl">مرحبا Arkan</td>
+      <td><button class="copy" data-i="36">Copy</button></td><td class="cp">U+0645 U+0631…</td></tr><tr><td>9</td><td>B9</td><td>L</td>
+      <td class="pv" style="font-family:'Cairo'" dir="rtl">Dashboard لوحة التحكم الرئيسية</td>
+      <td><button class="copy" data-i="37">Copy</button></td><td class="cp">U+0044 U+0061…</td></tr><tr><td>10</td><td>B10</td><td>L</td>
+      <td class="pv" style="font-family:'Cairo'" dir="rtl">Version 2 الإصدار الجديد</td>
+      <td><button class="copy" data-i="38">Copy</button></td><td class="cp">U+0056 U+0065…</td></tr></table></section><section><h3>Frame <code>S4A-Cairo-rlm</code></h3>
+  <table><tr><th>#</th><th>Case</th><th>1st strong</th><th>Text (preview)</th><th></th><th>starts with</th></tr><tr><td>1</td><td>B1 <span class="tag">+ invisible RLM</span></td><td>R</td>
+      <td class="pv" style="font-family:'Cairo'" dir="rtl">مرحبا بالعالم</td>
+      <td><button class="copy" data-i="39">Copy</button></td><td class="cp">U+200F U+0645…</td></tr><tr><td>2</td><td>B2 <span class="tag">+ invisible RLM</span></td><td>R</td>
+      <td class="pv" style="font-family:'Cairo'" dir="rtl">فاتورة INV-2026-00042</td>
+      <td><button class="copy" data-i="40">Copy</button></td><td class="cp">U+200F U+0641…</td></tr><tr><td>3</td><td>B3 <span class="tag">+ invisible RLM</span></td><td>L</td>
+      <td class="pv" style="font-family:'Cairo'" dir="rtl">Figma يدعم العربية</td>
+      <td><button class="copy" data-i="41">Copy</button></td><td class="cp">U+200F U+0046…</td></tr><tr><td>4</td><td>B4 <span class="tag">+ invisible RLM</span></td><td>R</td>
+      <td class="pv" style="font-family:'Cairo'" dir="rtl">2026 عام التحويل</td>
+      <td><button class="copy" data-i="42">Copy</button></td><td class="cp">U+200F U+0032…</td></tr><tr><td>5</td><td>B5 <span class="tag">+ invisible RLM</span></td><td>L</td>
+      <td class="pv" style="font-family:'Cairo'" dir="rtl">INV-0042: فاتورة مدفوعة</td>
+      <td><button class="copy" data-i="43">Copy</button></td><td class="cp">U+200F U+0049…</td></tr><tr><td>6</td><td>B6 <span class="tag">+ invisible RLM</span></td><td>R</td>
+      <td class="pv" style="font-family:'Cairo'" dir="rtl">يدعم (Auto Layout) لاحقاً</td>
+      <td><button class="copy" data-i="44">Copy</button></td><td class="cp">U+200F U+064A…</td></tr><tr><td>7</td><td>B7 <span class="tag">+ invisible RLM</span></td><td>R</td>
+      <td class="pv" style="font-family:'Cairo'" dir="rtl">المجموع: ١٢٣٬٤٥٦ د.أ</td>
+      <td><button class="copy" data-i="45">Copy</button></td><td class="cp">U+200F U+0627…</td></tr><tr><td>8</td><td>B8 <span class="tag">+ invisible RLM</span></td><td>R</td>
+      <td class="pv" style="font-family:'Cairo'" dir="rtl">مرحبا Arkan</td>
+      <td><button class="copy" data-i="46">Copy</button></td><td class="cp">U+200F U+0645…</td></tr><tr><td>9</td><td>B9 <span class="tag">+ invisible RLM</span></td><td>L</td>
+      <td class="pv" style="font-family:'Cairo'" dir="rtl">Dashboard لوحة التحكم الرئيسية</td>
+      <td><button class="copy" data-i="47">Copy</button></td><td class="cp">U+200F U+0044…</td></tr><tr><td>10</td><td>B10 <span class="tag">+ invisible RLM</span></td><td>L</td>
+      <td class="pv" style="font-family:'Cairo'" dir="rtl">Version 2 الإصدار الجديد</td>
+      <td><button class="copy" data-i="48">Copy</button></td><td class="cp">U+200F U+0056…</td></tr></table></section><section><h3>Frame <code>S4A-Cairo-shaping</code></h3>
+  <table><tr><th>#</th><th>Row</th><th>Text</th><th></th><th>Code points</th></tr><tr><td>1</td><td>S1 joined</td>
+      <td class="pv" style="font-family:'Cairo'" dir="rtl">ببببب</td><td><button class="copy" data-i="49">Copy</button></td>
+      <td class="cp">U+0628 U+0628 U+0628 U+0628 U+0628</td></tr><tr><td>2</td><td>S1 isolated</td>
+      <td class="pv" style="font-family:'Cairo'" dir="rtl">ب‌ب‌ب‌ب‌ب</td><td><button class="copy" data-i="50">Copy</button></td>
+      <td class="cp">U+0628 U+200C U+0628 U+200C U+0628 U+200C U+0628 U+200C U+0628</td></tr><tr><td>3</td><td>S2 joined</td>
+      <td class="pv" style="font-family:'Cairo'" dir="rtl">لا</td><td><button class="copy" data-i="51">Copy</button></td>
+      <td class="cp">U+0644 U+0627</td></tr><tr><td>4</td><td>S2 isolated</td>
+      <td class="pv" style="font-family:'Cairo'" dir="rtl">ل‌ا</td><td><button class="copy" data-i="52">Copy</button></td>
+      <td class="cp">U+0644 U+200C U+0627</td></tr><tr><td>5</td><td>S3 joined</td>
+      <td class="pv" style="font-family:'Cairo'" dir="rtl">سلام</td><td><button class="copy" data-i="53">Copy</button></td>
+      <td class="cp">U+0633 U+0644 U+0627 U+0645</td></tr><tr><td>6</td><td>S3 isolated</td>
+      <td class="pv" style="font-family:'Cairo'" dir="rtl">س‌ل‌ا‌م</td><td><button class="copy" data-i="54">Copy</button></td>
+      <td class="cp">U+0633 U+200C U+0644 U+200C U+0627 U+200C U+0645</td></tr></table></section><section><h3>Frame <code>S4A-Cairo-visual</code> <small>(visual-only, inspected by eye)</small></h3>
+  <table><tr><th>#</th><th>Case</th><th>Layer settings (otherwise as base)</th><th>Text</th><th></th></tr><tr><td>1</td><td>V1</td><td>Fixed width <b>360</b>, auto height, align <b>right</b></td><td class="pv" style="font-family:'Cairo'" dir="rtl">هذه فقرة عربية طويلة تلتف على عدة أسطر لاختبار التفاف النص ومحاذاته إلى اليمين داخل Figma مع رقم الفاتورة INV-2026-00042 والتاريخ 08/11/2026.</td><td><button class="copy" data-i="55">Copy</button></td></tr><tr><td>2</td><td>V2</td><td>Auto width, letter spacing <b>4 px</b></td><td class="pv" style="font-family:'Cairo'" dir="rtl">مرحبا بالعالم</td><td><button class="copy" data-i="56">Copy</button></td></tr><tr><td>3</td><td>V3</td><td>Auto width, weight <b>Bold</b></td><td class="pv" style="font-family:'Cairo';font-weight:700" dir="rtl">خط عريض Bold</td><td><button class="copy" data-i="57">Copy</button></td></tr></table></section>
+<h2 style="margin-top:28px">Noto Sans Arabic</h2><section><h3>Frame <code>S4A-NotoSansArabic-asIs</code></h3>
+  <table><tr><th>#</th><th>Case</th><th>1st strong</th><th>Text (preview)</th><th></th><th>starts with</th></tr><tr><td>1</td><td>B1</td><td>R</td>
+      <td class="pv" style="font-family:'Noto Sans Arabic'" dir="rtl">مرحبا بالعالم</td>
+      <td><button class="copy" data-i="58">Copy</button></td><td class="cp">U+0645 U+0631…</td></tr><tr><td>2</td><td>B2</td><td>R</td>
+      <td class="pv" style="font-family:'Noto Sans Arabic'" dir="rtl">فاتورة INV-2026-00042</td>
+      <td><button class="copy" data-i="59">Copy</button></td><td class="cp">U+0641 U+0627…</td></tr><tr><td>3</td><td>B3</td><td>L</td>
+      <td class="pv" style="font-family:'Noto Sans Arabic'" dir="rtl">Figma يدعم العربية</td>
+      <td><button class="copy" data-i="60">Copy</button></td><td class="cp">U+0046 U+0069…</td></tr><tr><td>4</td><td>B4</td><td>R</td>
+      <td class="pv" style="font-family:'Noto Sans Arabic'" dir="rtl">2026 عام التحويل</td>
+      <td><button class="copy" data-i="61">Copy</button></td><td class="cp">U+0032 U+0030…</td></tr><tr><td>5</td><td>B5</td><td>L</td>
+      <td class="pv" style="font-family:'Noto Sans Arabic'" dir="rtl">INV-0042: فاتورة مدفوعة</td>
+      <td><button class="copy" data-i="62">Copy</button></td><td class="cp">U+0049 U+004E…</td></tr><tr><td>6</td><td>B6</td><td>R</td>
+      <td class="pv" style="font-family:'Noto Sans Arabic'" dir="rtl">يدعم (Auto Layout) لاحقاً</td>
+      <td><button class="copy" data-i="63">Copy</button></td><td class="cp">U+064A U+062F…</td></tr><tr><td>7</td><td>B7</td><td>R</td>
+      <td class="pv" style="font-family:'Noto Sans Arabic'" dir="rtl">المجموع: ١٢٣٬٤٥٦ د.أ</td>
+      <td><button class="copy" data-i="64">Copy</button></td><td class="cp">U+0627 U+0644…</td></tr><tr><td>8</td><td>B8</td><td>R</td>
+      <td class="pv" style="font-family:'Noto Sans Arabic'" dir="rtl">مرحبا Arkan</td>
+      <td><button class="copy" data-i="65">Copy</button></td><td class="cp">U+0645 U+0631…</td></tr><tr><td>9</td><td>B9</td><td>L</td>
+      <td class="pv" style="font-family:'Noto Sans Arabic'" dir="rtl">Dashboard لوحة التحكم الرئيسية</td>
+      <td><button class="copy" data-i="66">Copy</button></td><td class="cp">U+0044 U+0061…</td></tr><tr><td>10</td><td>B10</td><td>L</td>
+      <td class="pv" style="font-family:'Noto Sans Arabic'" dir="rtl">Version 2 الإصدار الجديد</td>
+      <td><button class="copy" data-i="67">Copy</button></td><td class="cp">U+0056 U+0065…</td></tr></table></section><section><h3>Frame <code>S4A-NotoSansArabic-rlm</code></h3>
+  <table><tr><th>#</th><th>Case</th><th>1st strong</th><th>Text (preview)</th><th></th><th>starts with</th></tr><tr><td>1</td><td>B1 <span class="tag">+ invisible RLM</span></td><td>R</td>
+      <td class="pv" style="font-family:'Noto Sans Arabic'" dir="rtl">مرحبا بالعالم</td>
+      <td><button class="copy" data-i="68">Copy</button></td><td class="cp">U+200F U+0645…</td></tr><tr><td>2</td><td>B2 <span class="tag">+ invisible RLM</span></td><td>R</td>
+      <td class="pv" style="font-family:'Noto Sans Arabic'" dir="rtl">فاتورة INV-2026-00042</td>
+      <td><button class="copy" data-i="69">Copy</button></td><td class="cp">U+200F U+0641…</td></tr><tr><td>3</td><td>B3 <span class="tag">+ invisible RLM</span></td><td>L</td>
+      <td class="pv" style="font-family:'Noto Sans Arabic'" dir="rtl">Figma يدعم العربية</td>
+      <td><button class="copy" data-i="70">Copy</button></td><td class="cp">U+200F U+0046…</td></tr><tr><td>4</td><td>B4 <span class="tag">+ invisible RLM</span></td><td>R</td>
+      <td class="pv" style="font-family:'Noto Sans Arabic'" dir="rtl">2026 عام التحويل</td>
+      <td><button class="copy" data-i="71">Copy</button></td><td class="cp">U+200F U+0032…</td></tr><tr><td>5</td><td>B5 <span class="tag">+ invisible RLM</span></td><td>L</td>
+      <td class="pv" style="font-family:'Noto Sans Arabic'" dir="rtl">INV-0042: فاتورة مدفوعة</td>
+      <td><button class="copy" data-i="72">Copy</button></td><td class="cp">U+200F U+0049…</td></tr><tr><td>6</td><td>B6 <span class="tag">+ invisible RLM</span></td><td>R</td>
+      <td class="pv" style="font-family:'Noto Sans Arabic'" dir="rtl">يدعم (Auto Layout) لاحقاً</td>
+      <td><button class="copy" data-i="73">Copy</button></td><td class="cp">U+200F U+064A…</td></tr><tr><td>7</td><td>B7 <span class="tag">+ invisible RLM</span></td><td>R</td>
+      <td class="pv" style="font-family:'Noto Sans Arabic'" dir="rtl">المجموع: ١٢٣٬٤٥٦ د.أ</td>
+      <td><button class="copy" data-i="74">Copy</button></td><td class="cp">U+200F U+0627…</td></tr><tr><td>8</td><td>B8 <span class="tag">+ invisible RLM</span></td><td>R</td>
+      <td class="pv" style="font-family:'Noto Sans Arabic'" dir="rtl">مرحبا Arkan</td>
+      <td><button class="copy" data-i="75">Copy</button></td><td class="cp">U+200F U+0645…</td></tr><tr><td>9</td><td>B9 <span class="tag">+ invisible RLM</span></td><td>L</td>
+      <td class="pv" style="font-family:'Noto Sans Arabic'" dir="rtl">Dashboard لوحة التحكم الرئيسية</td>
+      <td><button class="copy" data-i="76">Copy</button></td><td class="cp">U+200F U+0044…</td></tr><tr><td>10</td><td>B10 <span class="tag">+ invisible RLM</span></td><td>L</td>
+      <td class="pv" style="font-family:'Noto Sans Arabic'" dir="rtl">Version 2 الإصدار الجديد</td>
+      <td><button class="copy" data-i="77">Copy</button></td><td class="cp">U+200F U+0056…</td></tr></table></section><section><h3>Frame <code>S4A-NotoSansArabic-shaping</code></h3>
+  <table><tr><th>#</th><th>Row</th><th>Text</th><th></th><th>Code points</th></tr><tr><td>1</td><td>S1 joined</td>
+      <td class="pv" style="font-family:'Noto Sans Arabic'" dir="rtl">ببببب</td><td><button class="copy" data-i="78">Copy</button></td>
+      <td class="cp">U+0628 U+0628 U+0628 U+0628 U+0628</td></tr><tr><td>2</td><td>S1 isolated</td>
+      <td class="pv" style="font-family:'Noto Sans Arabic'" dir="rtl">ب‌ب‌ب‌ب‌ب</td><td><button class="copy" data-i="79">Copy</button></td>
+      <td class="cp">U+0628 U+200C U+0628 U+200C U+0628 U+200C U+0628 U+200C U+0628</td></tr><tr><td>3</td><td>S2 joined</td>
+      <td class="pv" style="font-family:'Noto Sans Arabic'" dir="rtl">لا</td><td><button class="copy" data-i="80">Copy</button></td>
+      <td class="cp">U+0644 U+0627</td></tr><tr><td>4</td><td>S2 isolated</td>
+      <td class="pv" style="font-family:'Noto Sans Arabic'" dir="rtl">ل‌ا</td><td><button class="copy" data-i="81">Copy</button></td>
+      <td class="cp">U+0644 U+200C U+0627</td></tr><tr><td>5</td><td>S3 joined</td>
+      <td class="pv" style="font-family:'Noto Sans Arabic'" dir="rtl">سلام</td><td><button class="copy" data-i="82">Copy</button></td>
+      <td class="cp">U+0633 U+0644 U+0627 U+0645</td></tr><tr><td>6</td><td>S3 isolated</td>
+      <td class="pv" style="font-family:'Noto Sans Arabic'" dir="rtl">س‌ل‌ا‌م</td><td><button class="copy" data-i="83">Copy</button></td>
+      <td class="cp">U+0633 U+200C U+0644 U+200C U+0627 U+200C U+0645</td></tr></table></section><section><h3>Frame <code>S4A-NotoSansArabic-visual</code> <small>(visual-only, inspected by eye)</small></h3>
+  <table><tr><th>#</th><th>Case</th><th>Layer settings (otherwise as base)</th><th>Text</th><th></th></tr><tr><td>1</td><td>V1</td><td>Fixed width <b>360</b>, auto height, align <b>right</b></td><td class="pv" style="font-family:'Noto Sans Arabic'" dir="rtl">هذه فقرة عربية طويلة تلتف على عدة أسطر لاختبار التفاف النص ومحاذاته إلى اليمين داخل Figma مع رقم الفاتورة INV-2026-00042 والتاريخ 08/11/2026.</td><td><button class="copy" data-i="84">Copy</button></td></tr><tr><td>2</td><td>V2</td><td>Auto width, letter spacing <b>4 px</b></td><td class="pv" style="font-family:'Noto Sans Arabic'" dir="rtl">مرحبا بالعالم</td><td><button class="copy" data-i="85">Copy</button></td></tr><tr><td>3</td><td>V3</td><td>Auto width, weight <b>Bold</b></td><td class="pv" style="font-family:'Noto Sans Arabic';font-weight:700" dir="rtl">خط عريض Bold</td><td><button class="copy" data-i="86">Copy</button></td></tr></table></section>
+
+<script>
+const STRINGS = ["مرحبا بالعالم","فاتورة INV-2026-00042","Figma يدعم العربية","2026 عام التحويل","INV-0042: فاتورة مدفوعة","يدعم (Auto Layout) لاحقاً","المجموع: ١٢٣٬٤٥٦ د.أ","مرحبا Arkan","Dashboard لوحة التحكم الرئيسية","Version 2 الإصدار الجديد","‏مرحبا بالعالم","‏فاتورة INV-2026-00042","‏Figma يدعم العربية","‏2026 عام التحويل","‏INV-0042: فاتورة مدفوعة","‏يدعم (Auto Layout) لاحقاً","‏المجموع: ١٢٣٬٤٥٦ د.أ","‏مرحبا Arkan","‏Dashboard لوحة التحكم الرئيسية","‏Version 2 الإصدار الجديد","ببببب","ب‌ب‌ب‌ب‌ب","لا","ل‌ا","سلام","س‌ل‌ا‌م","هذه فقرة عربية طويلة تلتف على عدة أسطر لاختبار التفاف النص ومحاذاته إلى اليمين داخل Figma مع رقم الفاتورة INV-2026-00042 والتاريخ 08/11/2026.","مرحبا بالعالم","خط عريض Bold","مرحبا بالعالم","فاتورة INV-2026-00042","Figma يدعم العربية","2026 عام التحويل","INV-0042: فاتورة مدفوعة","يدعم (Auto Layout) لاحقاً","المجموع: ١٢٣٬٤٥٦ د.أ","مرحبا Arkan","Dashboard لوحة التحكم الرئيسية","Version 2 الإصدار الجديد","‏مرحبا بالعالم","‏فاتورة INV-2026-00042","‏Figma يدعم العربية","‏2026 عام التحويل","‏INV-0042: فاتورة مدفوعة","‏يدعم (Auto Layout) لاحقاً","‏المجموع: ١٢٣٬٤٥٦ د.أ","‏مرحبا Arkan","‏Dashboard لوحة التحكم الرئيسية","‏Version 2 الإصدار الجديد","ببببب","ب‌ب‌ب‌ب‌ب","لا","ل‌ا","سلام","س‌ل‌ا‌م","هذه فقرة عربية طويلة تلتف على عدة أسطر لاختبار التفاف النص ومحاذاته إلى اليمين داخل Figma مع رقم الفاتورة INV-2026-00042 والتاريخ 08/11/2026.","مرحبا بالعالم","خط عريض Bold","مرحبا بالعالم","فاتورة INV-2026-00042","Figma يدعم العربية","2026 عام التحويل","INV-0042: فاتورة مدفوعة","يدعم (Auto Layout) لاحقاً","المجموع: ١٢٣٬٤٥٦ د.أ","مرحبا Arkan","Dashboard لوحة التحكم الرئيسية","Version 2 الإصدار الجديد","‏مرحبا بالعالم","‏فاتورة INV-2026-00042","‏Figma يدعم العربية","‏2026 عام التحويل","‏INV-0042: فاتورة مدفوعة","‏يدعم (Auto Layout) لاحقاً","‏المجموع: ١٢٣٬٤٥٦ د.أ","‏مرحبا Arkan","‏Dashboard لوحة التحكم الرئيسية","‏Version 2 الإصدار الجديد","ببببب","ب‌ب‌ب‌ب‌ب","لا","ل‌ا","سلام","س‌ل‌ا‌م","هذه فقرة عربية طويلة تلتف على عدة أسطر لاختبار التفاف النص ومحاذاته إلى اليمين داخل Figma مع رقم الفاتورة INV-2026-00042 والتاريخ 08/11/2026.","مرحبا بالعالم","خط عريض Bold"];
+document.addEventListener('click', async (e) => {
+  const b = e.target.closest('button.copy'); if (!b) return;
+  const text = STRINGS[Number(b.dataset.i)];
+  try { await navigator.clipboard.writeText(text); }
+  catch { const t = document.createElement('textarea'); t.value = text; document.body.append(t); t.select(); document.execCommand('copy'); t.remove(); }
+  b.classList.add('done'); b.textContent = 'Copied';
+  setTimeout(() => { b.classList.remove('done'); b.textContent = 'Copy'; }, 1500);
+});
+</script>
+</body></html>
