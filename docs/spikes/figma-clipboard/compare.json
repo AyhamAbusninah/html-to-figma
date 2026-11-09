@@ -1,0 +1,128 @@
+[
+  {
+    "route": "B-file",
+    "v": "v1",
+    "rectType": "FRAME",
+    "rectGeometryFill": "PASS",
+    "textType": "TEXT",
+    "textTopAndEdge": "PASS",
+    "textWidth": "128 (captured 130)",
+    "font": "PASS",
+    "visibleWithoutClick": "yes"
+  },
+  {
+    "route": "B-file",
+    "v": "v2",
+    "rectType": "FRAME",
+    "rectGeometryFill": "PASS",
+    "textType": "TEXT",
+    "textTopAndEdge": "PASS",
+    "textWidth": "116 (captured 150)",
+    "font": "PASS",
+    "visibleWithoutClick": "yes"
+  },
+  {
+    "route": "B-file",
+    "v": "v3",
+    "rectType": "FRAME",
+    "rectGeometryFill": "PASS",
+    "textType": "TEXT",
+    "textTopAndEdge": "PASS",
+    "textWidth": "182 (captured 170)",
+    "font": "PASS",
+    "visibleWithoutClick": "yes"
+  },
+  {
+    "route": "B-clipboard",
+    "v": "v1",
+    "rectType": "FRAME",
+    "rectGeometryFill": "PASS",
+    "textType": "TEXT",
+    "textTopAndEdge": "PASS",
+    "textWidth": "128 (captured 130)",
+    "font": "PASS",
+    "visibleWithoutClick": "yes"
+  },
+  {
+    "route": "B-clipboard",
+    "v": "v2",
+    "rectType": "FRAME",
+    "rectGeometryFill": "PASS",
+    "textType": "TEXT",
+    "textTopAndEdge": "PASS",
+    "textWidth": "116 (captured 150)",
+    "font": "PASS",
+    "visibleWithoutClick": "yes"
+  },
+  {
+    "route": "B-clipboard",
+    "v": "v3",
+    "rectType": "FRAME",
+    "rectGeometryFill": "PASS",
+    "textType": "TEXT",
+    "textTopAndEdge": "PASS",
+    "textWidth": "182 (captured 170)",
+    "font": "PASS",
+    "visibleWithoutClick": "yes"
+  },
+  {
+    "route": "A-minimal",
+    "v": "v1",
+    "rectType": "RECTANGLE",
+    "rectGeometryFill": "PASS",
+    "textType": "TEXT",
+    "textTopAndEdge": "PASS",
+    "textWidth": "128 (captured 130)",
+    "font": "FAIL (MIXED (node fontName unresolved))",
+    "visibleWithoutClick": "NO"
+  },
+  {
+    "route": "A-minimal",
+    "v": "v2",
+    "rectType": "RECTANGLE",
+    "rectGeometryFill": "PASS",
+    "textType": "TEXT",
+    "textTopAndEdge": "FAIL (top 134 vs 140, edge 380 vs 380)",
+    "textWidth": "150 (captured 150)",
+    "font": "FAIL (MIXED (node fontName unresolved))",
+    "visibleWithoutClick": "NO"
+  },
+  {
+    "route": "A-minimal",
+    "v": "v3",
+    "rectType": "RECTANGLE",
+    "rectGeometryFill": "PASS",
+    "textType": "TEXT",
+    "textTopAndEdge": "PASS",
+    "textWidth": "170 (captured 170)",
+    "font": "FAIL (MIXED (node fontName unresolved))",
+    "visibleWithoutClick": "NO"
+  },
+  {
+    "route": "A-observed",
+    "v": "v1",
+    "rectType": "RECTANGLE",
+    "rectGeometryFill": "PASS",
+    "textType": "TEXT",
+    "textTopAndEdge": "FAIL (top 134 vs 140, edge 10 vs 20)",
+    "textWidth": "128 (captured 130)",
+    "font": "PASS",
+    "visibleWithoutClick": "NO"
+  },
+  {
+    "route": "A-observed",
+    "v": "v2",
+    "rectType": "RECTANGLE",
+    "rectGeometryFill": "PASS",
+    "textType": "TEXT",
+    "textTopAndEdge": "FAIL (top 134 vs 140, edge 379 vs 380)",
+    "textWidth": "150 (captured 150)",
+    "font": "PASS",
+    "visibleWithoutClick": "NO"
+  },
+  {
+    "route": "A-observed",
+    "v": "v3",
+    "result": "NOT FOUND"
+  }
+]

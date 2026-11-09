@@ -1,0 +1,29 @@
+{
+  "about": "Read back from a REAL Figma Web document (file agTC4SsB2ElXf8e4oAPudc, Starter plan) with the official Figma MCP use_figma tool (read-only Plugin API), 2026-11-09. Coordinates are relative to each pasted root frame. 'visibleWithoutClick' is the user's observation on the canvas.",
+  "routes": {
+    "B-file": {
+      "how": "generate_figma_design (official, capture into existing file), page = renderPlanHtml(buildPlan(test doc))",
+      "v1": { "root": "1:2", "rect": { "type": "FRAME", "x": 20, "y": 20, "w": 120, "h": 80, "fill": [0.2, 0.4, 1], "radius": 8 }, "text": { "type": "TEXT", "x": 20, "y": 140, "w": 128, "h": 32, "font": "Inter Regular", "align": "LEFT", "fill": [0.0667, 0.0667, 0.0667], "visibleWithoutClick": true } },
+      "v2": { "root": "2:2", "rect": { "type": "FRAME", "x": 20, "y": 20, "w": 120, "h": 80, "fill": [0.2, 0.4, 1], "radius": 8 }, "text": { "type": "TEXT", "x": 264, "y": 140, "w": 116, "h": 32, "font": "Noto Sans Arabic Regular", "align": "RIGHT", "fill": [0.0667, 0.0667, 0.0667], "visibleWithoutClick": true } },
+      "v3": { "root": "3:2", "rect": { "type": "FRAME", "x": 20, "y": 20, "w": 120, "h": 80, "fill": [0.2, 0.4, 1], "radius": 8 }, "text": { "type": "TEXT", "x": 198, "y": 140, "w": 182, "h": 32, "font": "Noto Sans Arabic Regular", "align": "RIGHT", "fill": [0.0667, 0.0667, 0.0667], "visibleWithoutClick": true, "note": "wrapped in an extra auto-layout FRAME 170x32 at (210,140); text overflows it by 12 px to the left" } }
+    },
+    "B-clipboard": {
+      "how": "Figma capture.js clipboard mode (#figmacapture without endpoint) in the user's Chrome, Ctrl+V in Figma Web",
+      "v1": { "root": "5:2", "rect": { "type": "FRAME", "x": 20, "y": 20, "w": 120, "h": 80, "fill": [0.2, 0.4, 1], "radius": 8 }, "text": { "type": "TEXT", "x": 20, "y": 140, "w": 128, "h": 32, "font": "Inter Regular", "align": "LEFT", "fill": [0.0667, 0.0667, 0.0667], "visibleWithoutClick": true, "note": "an earlier paste (6:2) captured before the Inter web font loaded came in as Arimo, w 119" } },
+      "v2": { "root": "11:7", "rect": { "type": "FRAME", "x": 20, "y": 20, "w": 120, "h": 80, "fill": [0.2, 0.4, 1], "radius": 8 }, "text": { "type": "TEXT", "x": 264, "y": 140, "w": 116, "h": 32, "font": "Noto Sans Arabic Regular", "align": "RIGHT", "fill": [0.0667, 0.0667, 0.0667], "visibleWithoutClick": true } },
+      "v3": { "root": "5:7", "rect": { "type": "FRAME", "x": 20, "y": 20, "w": 120, "h": 80, "fill": [0.2, 0.4, 1], "radius": 8 }, "text": { "type": "TEXT", "x": 198, "y": 140, "w": 182, "h": 32, "font": "Noto Sans Arabic Regular", "align": "RIGHT", "fill": [0.0667, 0.0667, 0.0667], "visibleWithoutClick": true, "note": "same extra auto-layout wrapper as B-file v3" } }
+    },
+    "A-minimal": {
+      "how": "our encoder (spikes/figma-clipboard) → copy event text/html → Ctrl+V in Figma Web; text without derivedTextData and without text flags",
+      "v1": { "root": "13:17", "rect": { "type": "RECTANGLE", "x": 20, "y": 20, "w": 120, "h": 80, "fill": [0.2, 0.4, 1], "radius": 8 }, "text": { "type": "TEXT", "x": 20, "y": 140, "w": 128, "h": 32, "font": "MIXED (node fontName unresolved)", "align": "LEFT", "fill": [0.0667, 0.0667, 0.0667], "visibleWithoutClick": false } },
+      "v2": { "root": "13:48", "rect": { "type": "RECTANGLE", "x": 20, "y": 20, "w": 120, "h": 80, "fill": [0.2, 0.4, 1], "radius": 8 }, "text": { "type": "TEXT", "x": 230, "y": 134, "w": 150, "h": 32, "font": "MIXED (node fontName unresolved)", "align": "RIGHT", "fill": [0.0667, 0.0667, 0.0667], "visibleWithoutClick": false, "note": "Figma server render: Arabic letters in reversed order (ملاعلاب ابحرم); user saw left-to-right after clicking" } },
+      "v3": { "root": "13:52", "rect": { "type": "RECTANGLE", "x": 20, "y": 20, "w": 120, "h": 80, "fill": [0.2, 0.4, 1], "radius": 8 }, "text": { "type": "TEXT", "x": 210, "y": 140, "w": 170, "h": 64, "font": "MIXED (node fontName unresolved)", "align": "RIGHT", "fill": [0.0667, 0.0667, 0.0667], "visibleWithoutClick": false, "note": "wrapped onto 2 lines, Arabic letters reversed/unjoined" } }
+    },
+    "A-observed": {
+      "how": "as A-minimal plus the text flags observed in a real Figma copy (textBidiVersion, hasHadRTLText, layout versions, ligature flags); still no derivedTextData",
+      "v1": { "root": "13:67", "rect": { "type": "RECTANGLE", "x": 20, "y": 20, "w": 120, "h": 80, "fill": [0.2, 0.4, 1], "radius": 8 }, "text": { "type": "TEXT", "x": 10, "y": 134, "w": 128, "h": 32, "font": "Inter Regular", "align": "LEFT", "fill": [0.0667, 0.0667, 0.0667], "visibleWithoutClick": false, "note": "position read after the user clicked/edited the text; may include an accidental nudge" } },
+      "v2": { "root": "13:71", "rect": { "type": "RECTANGLE", "x": 20, "y": 20, "w": 120, "h": 80, "fill": [0.2, 0.4, 1], "radius": 8 }, "text": { "type": "TEXT", "x": 229, "y": 134, "w": 150, "h": 32, "font": "Noto Sans Arabic Regular", "align": "RIGHT", "fill": [0.0667, 0.0667, 0.0667], "visibleWithoutClick": false, "note": "Figma server render shows correct RTL shaping (مرحبا بالعالم) once laid out; canvas shows nothing until the text is clicked" } },
+      "v3": { "missing": "user reported pasting it; not found in the file" }
+    }
+  }
+}

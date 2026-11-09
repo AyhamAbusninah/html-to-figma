@@ -12,6 +12,8 @@ export default tseslint.config(
       'fixtures/**',
       'spikes/**',
       'recovery/**',
+      // Packaged release output (scripts/package-extension.mjs), gitignored; exists locally after a verify run
+      'release/**',
       'test-results/**',
       'playwright-report/**',
     ],

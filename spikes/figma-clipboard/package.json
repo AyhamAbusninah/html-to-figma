@@ -1,0 +1,12 @@
+{
+  "name": "h2f-spike-figma-clipboard",
+  "private": true,
+  "type": "module",
+  "description": "ISOLATED SPIKE (Route A): inspect Figma's undocumented clipboard format. Not part of the pnpm workspace or any build. See README.md for the ToS risk.",
+  "scripts": {
+    "decode": "node decode.mjs"
+  },
+  "dependencies": {
+    "kiwi-schema": "0.5.0"
+  }
+}

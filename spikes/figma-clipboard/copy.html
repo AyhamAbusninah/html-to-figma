@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>H2F spike: Copy to Figma</title>
+<style>
+  body { font: 14px/1.5 system-ui, sans-serif; margin: 24px; max-width: 900px; color: #111; }
+  table { border-collapse: collapse; }
+  td, th { padding: 6px 10px; border-bottom: 1px solid #ddd; text-align: left; }
+  button { font: inherit; padding: 4px 10px; cursor: pointer; }
+  #status { margin-top: 16px; font-weight: 600; }
+</style>
+</head>
+<body>
+<h1>Copy to Figma (Route A spike, local only)</h1>
+<p>Each button puts one test design on your clipboard in Figma's clipboard format, generated from our RenderPlan.
+Then switch to Figma, click an empty canvas area, press Esc, and press <b>Ctrl+V</b>.</p>
+<table id="t"><tr><th>Payload</th><th>Size</th><th>Copy (copy event)</th><th>Copy (Clipboard API)</th></tr></table>
+<p id="status"></p>
+<script>
+  const status = document.getElementById('status');
+  let payloads = {};
+  function viaCopyEvent(p) {
+    const onCopy = (e) => {
+      e.clipboardData.setData('text/html', p.html);
+      e.clipboardData.setData('text/plain', p.text);
+      e.preventDefault();
+    };
+    document.addEventListener('copy', onCopy, { once: true });
+    const ok = document.execCommand('copy');
+    document.removeEventListener('copy', onCopy);
+    return ok ? Promise.resolve() : Promise.reject(new Error('execCommand returned false'));
+  }
+  function viaClipboardApi(p) {
+    return navigator.clipboard.write([
+      new ClipboardItem({
+        'text/html': new Blob([p.html], { type: 'text/html' }),
+        'text/plain': new Blob([p.text], { type: 'text/plain' }),
+      }),
+    ]);
+  }
+  fetch('/payloads').then((r) => r.json()).then((j) => {
+    payloads = j.payloads;
+    const t = document.getElementById('t');
+    for (const [k, p] of Object.entries(payloads)) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${k}</td><td>${(p.bytes / 1024).toFixed(1)} KB</td><td><button data-k="${k}" data-m="event">Copy</button></td><td><button data-k="${k}" data-m="api">Copy</button></td>`;
+      t.appendChild(tr);
+    }
+  });
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    const p = payloads[b.dataset.k];
+    (b.dataset.m === 'event' ? viaCopyEvent(p) : viaClipboardApi(p))
+      .then(() => { status.textContent = `✅ Copied ${b.dataset.k} (${b.dataset.m}). Now paste in Figma with Ctrl+V.`; })
+      .catch((err) => { status.textContent = `❌ Copy failed (${b.dataset.m}): ${err}`; });
+  });
+</script>
+</body>
+</html>

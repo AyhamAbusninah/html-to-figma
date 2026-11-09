@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>H2F spike: clipboard inspector</title>
+<style>
+  body { font: 14px/1.5 system-ui, sans-serif; margin: 24px; max-width: 900px; color: #111; }
+  #drop { border: 2px dashed #888; border-radius: 8px; padding: 40px; text-align: center; background: #f7f7f8; }
+  #drop:focus { outline: 3px solid #36f; }
+  pre { background: #f3f4f6; padding: 12px; overflow: auto; font-size: 12px; }
+  .warn { color: #a40; }
+</style>
+</head>
+<body>
+<h1>Clipboard inspector (Route A spike, local only)</h1>
+<p>Copy layers in Figma (Ctrl+C), click the box below, press <b>Ctrl+V</b>. Nothing is uploaded; the page only reads
+the paste and lets you save it as <code>sample.json</code> on your computer.</p>
+<div id="drop" tabindex="0">Click here, then press Ctrl+V</div>
+<p><button id="save" disabled>Save sample.json</button> <span id="status"></span></p>
+<pre id="out">No paste yet.</pre>
+<script>
+  const out = document.getElementById('out');
+  const save = document.getElementById('save');
+  let sample = null;
+  function b64len(s) { return s ? Math.floor((s.length * 3) / 4) : 0; }
+  function first(re, s) { const m = s.match(re); return m ? m[1] : null; }
+  document.addEventListener('paste', (e) => {
+    e.preventDefault();
+    const types = [...e.clipboardData.types];
+    const html = e.clipboardData.getData('text/html');
+    const text = e.clipboardData.getData('text/plain');
+    const meta = first(/\(figmeta\)([\s\S]*?)\(\/figmeta\)/, html);
+    const buffer = first(/\(figma\)([\s\S]*?)\(\/figma\)/, html);
+    const h2d = first(/\(figh2d\)([\s\S]*?)\(\/figh2d\)/, html);
+    let metaJson = null;
+    try { metaJson = meta ? JSON.parse(atob(meta)) : null; } catch (err) { metaJson = 'undecodable: ' + err; }
+    let prelude = null, version = null;
+    if (buffer) {
+      const bytes = Uint8Array.from(atob(buffer.slice(0, 32)), (c) => c.charCodeAt(0));
+      prelude = String.fromCharCode(...bytes.slice(0, 8));
+      version = new DataView(bytes.buffer).getUint32(8, true);
+    }
+    sample = { capturedAt: new Date().toISOString(), types, html, text };
+    save.disabled = false;
+    out.textContent = JSON.stringify({
+      clipboardTypes: types,
+      htmlBytes: html.length,
+      envelope: { figmeta: !!meta, figmaBuffer: !!buffer, figh2d: !!h2d },
+      figmeta: metaJson,
+      buffer: buffer ? { approxBytes: b64len(buffer), prelude, version } : null,
+      h2dApproxBytes: h2d ? b64len(h2d) : null,
+      textPlain: text.slice(0, 120),
+    }, null, 2);
+    const status = document.getElementById('status');
+    const drop = document.getElementById('drop');
+    if (buffer) {
+      drop.style.background = '#dcfce7';
+      drop.textContent = '✅ This is a Figma copy (Figma buffer found).';
+      if (location.protocol.startsWith('http')) {
+        fetch('/sample', { method: 'POST', body: JSON.stringify(sample) })
+          .then((r) => r.json())
+          .then((j) => { status.textContent = 'Saved automatically: results/' + j.saved; })
+          .catch((err) => { status.textContent = 'Auto-save failed (' + err + '). Use Save sample.json.'; });
+      }
+    } else if (h2d) {
+      drop.style.background = '#fee2e2';
+      drop.textContent = '❌ Not a Figma copy: this is the capture script\'s clipboard data. Copy in Figma (click the canvas, select, Ctrl+C) and paste again.';
+    } else {
+      drop.style.background = '#fee2e2';
+      drop.textContent = '❌ No Figma data in this paste. Copy in Figma (click the canvas, select, Ctrl+C) and paste again.';
+    }
+  });
+  save.addEventListener('click', () => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(sample)], { type: 'application/json' }));
+    a.download = 'sample.json';
+    a.click();
+  });
+</script>
+</body>
+</html>
