@@ -29,6 +29,7 @@ export {
 } from './css.ts';
 export { parseCssColor, isTransparent } from './color.ts';
 export {
+  buildCapture,
   buildCaptureDocument,
   resolvePageBackground,
   stripFragment,

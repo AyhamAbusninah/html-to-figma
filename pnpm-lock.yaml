@@ -50,6 +50,9 @@ importers:
       '@h2f/core':
         specifier: workspace:*
         version: link:../core
+      '@h2f/figma-plugin':
+        specifier: workspace:*
+        version: link:../figma-plugin
       '@h2f/schema':
         specifier: workspace:*
         version: link:../schema

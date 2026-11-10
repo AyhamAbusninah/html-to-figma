@@ -1,6 +1,7 @@
 /** Popup: Idle → Busy → Done | Error (EXT-O-1). Pure logic lives in ../shared/popup-model.ts. */
 import type { CaptureDocument } from '@h2f/schema';
 import { CAPTURE_GLOBAL, LIMITS } from '../config/constants.ts';
+import { figmaCopyNote, figmaSvg } from '../shared/figma-copy.ts';
 import type { CaptureResult } from '../shared/messages.ts';
 import {
   captureFilename,
@@ -23,6 +24,7 @@ function show(state: (typeof STATES)[number]) {
 let tab: chrome.tabs.Tab | undefined;
 let json = '';
 let captured: CaptureDocument | undefined;
+let textLines: Record<string, string[]> = {};
 
 async function init() {
   [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -58,6 +60,7 @@ async function capture() {
       );
     }
     captured = result.document;
+    textLines = result.textLines ?? {};
     json = JSON.stringify(result.document);
     showDone(result.document, result.bytes, result.durationMs);
   } catch (e) {
@@ -89,6 +92,7 @@ function showDone(doc: CaptureDocument, bytes: number, durationMs: number) {
   );
   $('notCaptured').hidden = summary.length === 0;
   $('downloadNote').textContent = '';
+  $('figmaNote').textContent = '';
   const copy = copyState(bytes);
   const copyButton = $('copy') as HTMLButtonElement;
   copyButton.disabled = copy.disabled;
@@ -141,7 +145,25 @@ async function copyToClipboard() {
   }
 }
 
+/** Copy to Figma (EXT-O-7): SVG as text/plain, which Figma Web imports as editable layers on Ctrl+V. */
+async function copyToFigma() {
+  if (!captured) return;
+  const note = $('figmaNote');
+  try {
+    const { svg, skipped } = figmaSvg(captured, textLines);
+    await Promise.race([
+      navigator.clipboard.writeText(svg),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timed out')), 4000)),
+    ]);
+    const bytes = new Blob([svg]).size;
+    note.textContent = figmaCopyNote(bytes, skipped, formatBytes(bytes));
+  } catch (e) {
+    note.textContent = `Copy failed: ${e instanceof Error ? e.message : String(e)}. Try again.`;
+  }
+}
+
 $('capture').addEventListener('click', () => void capture());
+$('copyFigma').addEventListener('click', () => void copyToFigma());
 $('retry').addEventListener('click', () => show('idle'));
 $('download').addEventListener('click', () => void download());
 $('copy').addEventListener('click', () => void copyToClipboard());

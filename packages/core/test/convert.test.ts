@@ -2,6 +2,7 @@
 import { validateCapture, type CaptureNode, type FrameNode, type TextNode } from '@h2f/schema';
 import { describe, expect, it } from 'vitest';
 import {
+  buildCapture,
   buildCaptureDocument,
   CaptureTooLargeError,
   RAW_STYLE_KEYS,
@@ -185,6 +186,49 @@ describe('text (EXT-X-1..5, EXT-G-1)', () => {
         ['بالعالم', 150, 150],
       ]);
       expect(split.every((n) => n.style.textAlign === 'right')).toBe(true);
+    });
+
+    it('textLines side output: the page line breaks of each multi-line TEXT, by node id', () => {
+      const split = text(
+        ' rest of the text wraps here',
+        rect(60, 0, 240, 20),
+        rect(10, 24, 290, 20),
+        rect(10, 48, 100, 20),
+      );
+      split.lines = [
+        line(1, 12, rect(60, 0, 240, 20)),
+        line(13, 23, rect(10, 24, 290, 20)),
+        line(24, 28, rect(10, 48, 100, 20)),
+      ];
+      const plain = text('alpha beta gamma', rect(10, 100, 120, 20), rect(10, 124, 60, 20));
+      plain.lines = [line(0, 10, rect(10, 100, 120, 20)), line(11, 16, rect(10, 124, 60, 20))];
+      const r = buildCapture(
+        page([
+          el('p', rect(10, 0, 300, 72), {}, [split]),
+          el('p', rect(10, 100, 300, 44), {}, [plain]),
+        ]),
+        {
+          extractorVersion: '0.3.0',
+          capturedAt: '2026-11-10T12:00:00.000Z',
+        },
+      );
+      const texts = all(r.document.root).filter((n) => n.type === 'TEXT') as TextNode[];
+      expect(texts.map((t) => t.characters)).toEqual([
+        'rest of the',
+        'text wraps here',
+        'alpha beta gamma',
+      ]);
+      // Single-line runs need no entry; the 2-line run and the plain paragraph get their lines.
+      expect(r.textLines).toEqual({
+        [texts[1]!.id]: ['text wraps', 'here'],
+        [texts[2]!.id]: ['alpha beta', 'gamma'],
+      });
+      expect(
+        buildCaptureDocument(page([]), {
+          extractorVersion: '0.3.0',
+          capturedAt: '2026-11-10T12:00:00.000Z',
+        }).root.children,
+      ).toEqual([]);
     });
 
     it('inconsistent line data falls back to one layer', () => {

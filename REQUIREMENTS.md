@@ -288,6 +288,7 @@ type Effect =
 | EXT-O-3 | **Copy to clipboard** MUST be available only when the payload is ≤ 5 MB. Above that it is disabled with the tooltip "Too large to paste — use Download". |
 | EXT-O-4 | The JSON MUST be minified. Size thresholds: warn at > 25 MB (E-4), hard fail at > 200 MB. |
 | EXT-O-5 | The Done screen MUST show the stats from `meta.stats` and a list of warnings grouped by code with counts. |
+| EXT-O-7 | **Copy to Figma (2026-11-10, extension 0.3.0):** the Done screen MUST offer **Copy to Figma**, which writes one SVG of the capture (built from the plugin's render plan, the page's own line breaks, `text/plain`) to the clipboard, so that Ctrl+V in Figma Web creates editable layers without the plugin or the desktop app. Text uses physical `text-anchor`, `y = line top + font-size` and PostScript-style font names; the layer tree stays flat so items can be selected and removed (measured rules: `docs/spikes/FIGMA_CLIPBOARD.md` §4b). The JSON file stays the contract for the plugin. |
 | EXT-O-6 | Large captures MUST NOT be passed through `chrome.runtime` messaging as a single message if they exceed the message size limit. They MUST be assembled in the context that performs the download (e.g. chunked transfer or a Blob URL created in the content script's page context). |
 
 ### 3.12 Benchmark Coverage Matrix (informative)

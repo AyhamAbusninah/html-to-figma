@@ -4,7 +4,7 @@
  *
  * R2 slice 1: full traversal (collector) → conversion (@h2f/core) → validation.
  */
-import { buildCaptureDocument } from '@h2f/core';
+import { buildCapture } from '@h2f/core';
 import { validateCapture } from '@h2f/schema';
 import { CAPTURE_GLOBAL } from '../config/constants.ts';
 import { EXTENSION_VERSION } from '../config/version.ts';
@@ -14,12 +14,13 @@ import { collectPageSnapshot } from './collect.ts';
 async function capture(): Promise<CaptureResult> {
   const started = performance.now();
   let document;
+  let textLines: Record<string, string[]>;
   try {
     await window.document.fonts.ready;
-    document = buildCaptureDocument(collectPageSnapshot(window), {
+    ({ document, textLines } = buildCapture(collectPageSnapshot(window), {
       extractorVersion: EXTENSION_VERSION,
       capturedAt: new Date().toISOString(),
-    });
+    }));
   } catch (e) {
     return { ok: false, stage: 'capture', message: e instanceof Error ? e.message : String(e) };
   }
@@ -37,6 +38,7 @@ async function capture(): Promise<CaptureResult> {
   return {
     ok: true,
     document,
+    textLines,
     bytes: document.meta.stats.bytes,
     durationMs: Math.round(performance.now() - started),
   };

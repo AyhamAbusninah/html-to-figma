@@ -81,6 +81,8 @@ interface Ctx {
   svgCount: number;
   warnings: CaptureWarning[];
   aggregated: Map<string, { count: number; nodeIds: string[] }>;
+  /** Side output, not part of CaptureDocument: the page's own line breaks of multi-line TEXT nodes, by node id. */
+  textLines: Map<string, string[]>;
 }
 
 interface OrderKey {
@@ -107,7 +109,13 @@ export function createContext(offsetX: number, offsetY: number): Ctx {
     svgCount: 0,
     warnings: [],
     aggregated: new Map(),
+    textLines: new Map(),
   };
+}
+
+/** Exported side output of a conversion (see Ctx.textLines). */
+export function collectTextLines(ctx: Ctx): Record<string, string[]> {
+  return Object.fromEntries(ctx.textLines);
 }
 
 function warn(ctx: Ctx, code: string, nodeId: string, message: string, detail?: string) {
@@ -240,6 +248,9 @@ function convertText(raw: RawText, parent: RawElement, ctx: Ctx, path: number[])
         parent.style.direction,
       )
     : [];
+  // The browser's line breaks for each line of the text node (used by Copy to Figma, which can't re-wrap text).
+  const lineText = (l: RawTextLine) =>
+    normalizeWhitespace(raw.text.slice(l.start, l.end), whiteSpace).replace(/\n$/, '');
   if (lines && runs.length > 1) {
     // One TEXT per run of lines that share their aligned edge (OQ-11): exact position for a text node that
     // starts or ends mid-line, and a plain paragraph still stays one editable layer.
@@ -257,6 +268,7 @@ function convertText(raw: RawText, parent: RawElement, ctx: Ctx, path: number[])
         last - first + 1,
         parent.style,
       );
+      if (last > first) ctx.textLines.set(node.id, lines.slice(first, last + 1).map(lineText));
       out.push({ node, key: { layer: 1, z: 0, path: [...path, i] } });
     });
     return out;
@@ -268,6 +280,7 @@ function convertText(raw: RawText, parent: RawElement, ctx: Ctx, path: number[])
     countLines(raw.rects),
     parent.style,
   );
+  if (lines) ctx.textLines.set(node.id, lines.map(lineText));
   return [{ node, key: { layer: 1, z: 0, path } }];
 }
 

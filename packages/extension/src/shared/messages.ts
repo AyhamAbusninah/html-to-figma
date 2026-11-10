@@ -8,5 +8,12 @@ export type WorkerResponse =
 
 /** What `globalThis.__h2fCapture()` resolves to in the page (returned via chrome.scripting results). */
 export type CaptureResult =
-  | { ok: true; document: CaptureDocument; bytes: number; durationMs: number }
+  | {
+      ok: true;
+      document: CaptureDocument;
+      /** The page's line breaks of multi-line TEXT nodes, by node id (for Copy to Figma; not in the file). */
+      textLines: Record<string, string[]>;
+      bytes: number;
+      durationMs: number;
+    }
   | { ok: false; stage: 'capture' | 'validate'; message: string; issues?: CaptureIssue[] };

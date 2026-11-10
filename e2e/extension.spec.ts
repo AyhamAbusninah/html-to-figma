@@ -16,8 +16,8 @@ import {
   type Variant,
 } from './helpers.ts';
 
-/** The reference build is the R0-recovered 0.1.0; the rebuilt extension is 0.2.1 (R2 capture + OQ-11 line split). */
-const VERSION: Record<Variant, string> = { rebuilt: '0.2.1', reference: '0.1.0' };
+/** The reference build is the R0-recovered 0.1.0; the rebuilt extension is 0.3.0 (R2 capture, OQ-11 line split, Copy to Figma). */
+const VERSION: Record<Variant, string> = { rebuilt: '0.3.0', reference: '0.1.0' };
 
 let fixtures: FixtureServer;
 test.beforeAll(async () => {
@@ -115,6 +115,54 @@ for (const variant of Object.keys(VARIANTS) as Variant[]) {
           expect(Number(stats.Nodes)).toBeGreaterThan(50); // R2: full tree
         }
         await expect(popup.locator('#copy')).toBeEnabled();
+
+        if (variant === 'rebuilt') {
+          // Copy to Figma (EXT-O-7): the clipboard gets one SVG that Figma Web imports on Ctrl+V. The clipboard
+          // API is stubbed to read back exactly what the popup wrote; the paste itself is verified in real
+          // Figma Web (docs/spikes/FIGMA_CLIPBOARD.md §4b), which CI can't run.
+          await popup.evaluate(() => {
+            const w = window as unknown as { __copied: string[] };
+            w.__copied = [];
+            navigator.clipboard.writeText = async (t: string) => void w.__copied.push(t);
+          });
+          await popup.locator('#copyFigma').click();
+          await expect(popup.locator('#figmaNote')).toContainText('In Figma: click the canvas');
+          const svg = await popup.evaluate(() => {
+            const copied = (window as unknown as { __copied: string[] }).__copied;
+            const xml = new DOMParser().parseFromString(copied[0] ?? '', 'image/svg+xml');
+            const texts = [...xml.querySelectorAll('text')];
+            const width = (s: string) => Number(xml.documentElement.getAttribute(s));
+            return {
+              copies: copied.length,
+              wellFormed:
+                !xml.querySelector('parsererror') && xml.documentElement.tagName === 'svg',
+              width: width('width'),
+              height: width('height'),
+              first: [...xml.documentElement.children]
+                .find((c) => c.tagName !== 'defs')
+                ?.getAttribute('id'),
+              texts: texts.length,
+              arabicRight: texts.filter(
+                (t) => /[؀-ۿ]/.test(t.textContent ?? '') && t.getAttribute('text-anchor') === 'end',
+              ).length,
+              direction: texts.filter((t) => t.hasAttribute('direction')).length,
+              psFonts: texts.every((t) =>
+                /^[^,\s]+-[^,\s]+, /.test(t.getAttribute('font-family') ?? ''),
+              ),
+            };
+          });
+          expect(svg).toMatchObject({
+            copies: 1,
+            wellFormed: true,
+            width: expected.width,
+            height: expected.height,
+            first: 'Background',
+            direction: 0,
+            psFonts: true,
+          });
+          expect(svg.texts).toBeGreaterThan(5);
+          if (fixture === 'rtl-arabic.html') expect(svg.arabicRight).toBeGreaterThan(20);
+        }
 
         // Download through chrome.downloads. Playwright's download interception (acceptDownloads) ignores the
         // `filename` option (it names the file after the blob URL), so we assert the options our popup passes to

@@ -1,6 +1,6 @@
 import { SCHEMA_VERSION, type CaptureDocument, type RGBA } from '@h2f/schema';
 import { isTransparent, parseCssColor } from './color.ts';
-import { collectWarnings, convertTree, createContext } from './convert.ts';
+import { collectTextLines, collectWarnings, convertTree, createContext } from './convert.ts';
 import type { RawPageSnapshot } from './raw-snapshot.ts';
 
 const WHITE: RGBA = { r: 1, g: 1, b: 1, a: 1 };
@@ -42,6 +42,17 @@ export interface BuildOptions {
  * serialization. Throws CaptureTooLargeError above MAX_NODES (EXT-T-10).
  */
 export function buildCaptureDocument(raw: RawPageSnapshot, options: BuildOptions): CaptureDocument {
+  return buildCapture(raw, options).document;
+}
+
+/**
+ * buildCaptureDocument plus `textLines`: the page's own line breaks of every multi-line TEXT node, by node id.
+ * A side output for consumers that can't wrap text themselves (Copy to Figma, SVG); not part of the contract.
+ */
+export function buildCapture(
+  raw: RawPageSnapshot,
+  options: BuildOptions,
+): { document: CaptureDocument; textLines: Record<string, string[]> } {
   const width = Math.max(raw.scroll.width, raw.viewport.width);
   const height = Math.max(raw.scroll.height, raw.viewport.height);
   const rtl = raw.computedDirection === 'rtl';
@@ -52,7 +63,7 @@ export function buildCaptureDocument(raw: RawPageSnapshot, options: BuildOptions
     (rtl ? Math.max(0, raw.scroll.width - (raw.clientWidth ?? raw.scroll.width)) : 0);
   const ctx = createContext(offsetX, raw.scrollOffset?.y ?? 0);
   const children = raw.tree ? convertTree(raw.tree, ctx) : [];
-  return {
+  const document: CaptureDocument = {
     schemaVersion: SCHEMA_VERSION,
     meta: {
       sourceUrl: stripFragment(raw.url),
@@ -87,4 +98,5 @@ export function buildCaptureDocument(raw: RawPageSnapshot, options: BuildOptions
       children,
     },
   };
+  return { document, textLines: collectTextLines(ctx) };
 }

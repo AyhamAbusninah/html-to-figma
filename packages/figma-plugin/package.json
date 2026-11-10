@@ -17,7 +17,8 @@
   "exports": {
     "./plan": "./src/plan/plan.ts",
     "./fonts": "./src/plan/fonts.ts",
-    "./known-figma-fonts": "./src/config/known-figma-fonts.ts"
+    "./known-figma-fonts": "./src/config/known-figma-fonts.ts",
+    "./svg": "./src/svg/svg.ts"
   },
   "sideEffects": false
 }

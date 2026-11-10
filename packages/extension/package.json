@@ -1,6 +1,6 @@
 {
   "name": "@h2f/extension",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "Chrome MV3 extension: page collector, capture UX, privileged asset fetch",
@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@h2f/core": "workspace:*",
+    "@h2f/figma-plugin": "workspace:*",
     "@h2f/schema": "workspace:*"
   },
   "devDependencies": {

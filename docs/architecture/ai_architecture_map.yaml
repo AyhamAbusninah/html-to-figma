@@ -2,7 +2,7 @@
 # Maintained by the AI workflow (docs/AI_WORKFLOW.md). Every path:line was verified at `commit`.
 schema_version: 1
 generated: "2026-11-10"
-commit: bfc1bb2
+commit: copy-to-figma (feat/copy-to-figma)
 
 project:
   name: "HTML to Figma (H2F)"
@@ -17,6 +17,7 @@ project:
     - "New computed style needed by the engine: add the property to RAW_STYLE_KEYS (packages/core/src/raw-snapshot.ts:9); the collector copies every key automatically (collect.ts:62)."
     - "Schema change: edit packages/schema/src/schema.ts, run `pnpm schema:generate` (writes capture.schema.json + src/generated/validators.*). `schema:check` fails on drift. v1.0.0 is frozen by packages/schema/test/contract.test.ts:31: an additive change needs a minor bump (version.ts:2), a new baseline under contract/, and contract-test updates."
     - "New warning code: add it to WARNING_CODES (packages/schema/src/warnings.ts:5); emit with warn(ctx, CODE, ...) (core/src/convert.ts:113); aggregated codes also need AGGREGATED + AGGREGATED_MESSAGE (convert.ts:46-66)."
+    - "Copy to Figma output change: edit packages/figma-plugin/src/svg/svg.ts + its tests; re-verify by a real paste in Figma Web (rules can only be measured there)."
     - "Extension version bump: packages/extension/package.json, public/manifest.json, src/config/version.ts, e2e/extension.spec.ts VERSION, INSTALL.md. package-extension.mjs:76 fails if manifest ≠ package.json."
     - "New extension permission: also add it to ALLOWED_PERMISSIONS (scripts/package-extension.mjs:35), REQUIREMENTS EXT-P-3a, INSTALL.md permission table; packaging fails otherwise."
     - "New exported core helper: re-export from packages/core/src/index.ts (the extension imports only '@h2f/core')."
@@ -26,6 +27,7 @@ project:
 entry_points:
   - {id: popup-capture, symbol: "capture()", location: "packages/extension/src/popup/popup.ts:36", kind: "user action (toolbar popup)", does: "Injects content.js on demand via chrome.scripting.executeScript (popup.ts:42), calls globalThis.__h2fCapture, enforces failBytes (popup.ts:55), shows stats"}
   - {id: popup-download, symbol: "download()", location: "packages/extension/src/popup/popup.ts:100", kind: "user action", does: "Saves figma-capture_<site>_<time>.json via chrome.downloads"}
+  - {id: popup-copy-to-figma, symbol: "copyToFigma()", location: "packages/extension/src/popup/popup.ts:149", kind: "user action (EXT-O-7)", does: "figmaSvg(doc, textLines) (shared/figma-copy.ts) → buildPlan + planToSvg → navigator.clipboard.writeText(svg); Ctrl+V in Figma Web creates editable layers, no plugin"}
   - {id: popup-clipboard, symbol: "copyToClipboard()", location: "packages/extension/src/popup/popup.ts:129", kind: "user action", does: "Copies the JSON (≤ 5 MB, popup-model.ts:68)"}
   - {id: content-capture, symbol: "capture()", location: "packages/extension/src/content/index.ts:36", kind: "injected IIFE, exposed as globalThis.__h2fCapture (index.ts:67)", does: "fonts.ready → collectPageSnapshot → buildCaptureDocument → validateCapture → bytes"}
   - {id: service-worker, symbol: "chrome.runtime.onMessage", location: "packages/extension/src/background/service-worker.ts:9", kind: "MV3 message router", does: "h2f:ping; h2f:fetch-asset is a stub returning not-implemented (service-worker.ts:15)"}
@@ -120,6 +122,21 @@ domains:
     blast_radius: high
     blast_notes: "Changes show up in Figma, the preview and the spike outputs at once."
 
+  - id: svg-writer
+    trace_depth: deep
+    entry_points: ["planToSvg packages/figma-plugin/src/svg/svg.ts:134", "figmaSvg packages/extension/src/shared/figma-copy.ts:10"]
+    core_logic_files: ["packages/figma-plugin/src/svg/svg.ts", "packages/extension/src/shared/figma-copy.ts", "packages/core/src/convert.ts (textLines)"]
+    hidden_hooks_or_events:
+      - "Line breaks come from the page: engine side output textLines (convert.ts Ctx.textLines → buildCapture → CaptureResult.textLines), not from CaptureDocument"
+      - "Figma SVG-import rules measured in real Figma Web (docs/spikes/FIGMA_CLIPBOARD.md §4b, spikes/figma-svg/README.md)"
+    critical_invariants:
+      - "Serializer only: every box/color/position from buildPlan; never a second layout engine; no font loading in the popup."
+      - "text-anchor physical (no direction attr); y = line top + font-size; font-family '<PostScript>, <family>'; per-line RLM/LRM via withDirectionMark."
+      - "Flat tree for editing: Background + sections directly in the root, clip-path only when a child overflows, no empty backgrounds, text without id (named by content)."
+      - "Local only: SVG goes to the clipboard, nothing is sent anywhere."
+    blast_radius: high
+    blast_notes: "Changes are only verifiable in real Figma Web (paste); CI checks structure (e2e/extension.spec.ts Copy to Figma block) and unit output (figma-plugin/test/svg.test.ts)."
+
   - id: plugin-adapter
     trace_depth: deep
     entry_points: ["executePlan packages/figma-plugin/src/adapter/render.ts:73", "render packages/figma-plugin/src/main/code.ts:14"]
@@ -169,6 +186,7 @@ hidden_dependencies:
   - {id: raw-snapshot-lockstep, what: "RawPageSnapshot is unversioned and shared by collector (extension) and engine (core)", why_it_matters: "Changing a raw field needs both sides in the same commit; old recovered bundles are only compared on meta/root (R0 invariant test)."}
   - {id: plan-shared-by-preview-and-spikes, what: "buildPlan is used by plugin main, preview app and spikes", why_it_matters: "A planner change alters Figma output, the Fedora preview and spike evidence together."}
   - {id: duplicated-limits, what: "MAX_NODES (core/convert.ts:35) vs LIMITS.maxNodes (extension/config/constants.ts); PASTE_MAX_BYTES (plugin ui.ts:10) vs LIMITS.clipboardMaxBytes", why_it_matters: "Changing one copy does not change the other; LIMITS.maxNodes/maxImageSide/maxSvgBytes/maxPseudoElements are not referenced anywhere yet."}
+  - {id: text-lines-side-channel, what: "CaptureResult.textLines (node id → page line strings) produced by core convertText for multi-line TEXT", why_it_matters: "Copy to Figma can't re-wrap text; ids must stay those of the CaptureDocument; not saved in the JSON file."}
   - {id: e2e-text-matching, what: "vertical-slice step 4 re-measures DOM text independently", why_it_matters: "Any change to text rects, whitespace or splitting must keep that measurement in sync."}
   - {id: version-in-five-places, what: "Extension version in package.json, manifest.json, config/version.ts, e2e/extension.spec.ts, INSTALL.md", why_it_matters: "Mismatch fails packaging or e2e."}
   - {id: real-figma-gap, what: "Plugin dev mode needs the Figma desktop app (macOS/Windows); the user is on Fedora", why_it_matters: "Real Figma verification (R5) needs a Mac/Windows machine or an Org plan; use the preview + Figma mock locally, the official Figma MCP (generate_figma_design) to sanity-check HTML in real Figma Web."}
@@ -202,7 +220,8 @@ known_gaps:
   - "Rich text: one style per TEXT; a word split across inline elements (e.g. <mark>) doesn't join Arabic letters across layers (OQ-11 option B, v1.1)."
   - "No auto-layout inference: output is absolute-positioned frames (html.to.design offers auto layout)."
   - "Real Figma never exercised by the plugin (B-1/B-2); plugin verified only against the mock."
-  - "Direct Copy → Ctrl+V into Figma without the plugin is blocked: only Figma's capture.js/h2d path works and needs Figma's written permission (OPEN_QUESTIONS CB-2); fig-kiwi route stopped (CB-3)."
+  - "Copy to Figma (SVG, 0.3.0) gives groups + vectors + editable text, not real frames or auto layout; wrapped paragraphs become groups of line layers; justified text is start-aligned. Native frames by paste need Figma's capture.js/h2d (permission, CB-2) or fig-kiwi (legal review, CB-3)."
+  - "Form-control text (controlText) uses the content box as its rect, so single-line input text sits up to ~4 px high in Figma (plugin and SVG)."
   - "LIMITS.maxNodes/maxImageSide/maxSvgBytes/maxPseudoElements defined but unused (extension/src/config/constants.ts)."
   - "Doc drift: README 'Status (2026-11-08)' predates 0.2.1, the preview and the clipboard spike."
 
@@ -213,7 +232,7 @@ roadmap_to_goal:   # what still separates H2F from an html.to.design-class tool,
   - {step: "Pseudo-elements (temporary materialization, OQ-7) and icon fonts (OQ-16)", touch: ["collect.ts", "convert.ts"], blast_radius: high}
   - {step: "Element picker (OQ-4) + scroll-area expansion (OQ-5)", touch: ["popup.ts", "content/index.ts", "collect.ts", "schema captureMode"], blast_radius: medium}
   - {step: "Rich text runs (OQ-11 B) and auto-layout inference", touch: ["schema (minor bump)", "convert.ts", "plan.ts", "render.ts"], blast_radius: critical}
-  - {step: "Extension-only Copy → Ctrl+V into Figma Web (no plugin, no desktop app): see docs/architecture notes in OPEN_QUESTIONS CB-1..CB-4; options are Figma's own capture.js clipboard path (works, needs Figma's permission), an SVG clipboard serializer from the RenderPlan (documented import, fidelity unproven), or our own fig-kiwi encoder (ToS risk, text needs glyph layout)", touch: ["new serializer next to buildPlan output (no second layout engine)", "popup.ts Copy button (clipboardWrite already granted)", "spikes first"], blast_radius: high}
+  - {step: "DONE 0.3.0: extension-only Copy → Ctrl+V via SVG (EXT-O-7). Next: real frames/auto layout by paste only via Figma permission (CB-2) or legal review (CB-3)", touch: ["figma-plugin/src/svg/svg.ts", "extension popup"], blast_radius: high}
   - {step: "Real Figma validation (R5) on macOS/Windows or Org plan; then distribution (R6)", touch: ["docs/verification"], blast_radius: low}
 
 change_playbook:

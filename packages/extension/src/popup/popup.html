@@ -27,7 +27,7 @@
 
       <section id="done" hidden>
         <p class="ok" id="doneTitle">
-          Capture complete. Download the file and import it in the Figma plugin.
+          Capture complete. Copy to Figma, then press Ctrl+V on a Figma canvas.
         </p>
         <dl id="stats"></dl>
         <div id="notCaptured" class="note" hidden>
@@ -35,8 +35,13 @@
           <ul id="notCapturedList"></ul>
         </div>
         <div class="actions">
-          <button id="download" class="primary" type="button">Download JSON</button>
-          <button id="copy" type="button">Copy to clipboard</button>
+          <button id="copyFigma" class="primary" type="button">Copy to Figma</button>
+        </div>
+        <p id="figmaNote" class="muted" aria-live="polite"></p>
+        <p class="muted">For the Figma plugin (JSON file):</p>
+        <div class="actions">
+          <button id="download" type="button">Download JSON</button>
+          <button id="copy" type="button">Copy JSON</button>
         </div>
         <p id="downloadNote" class="muted" aria-live="polite"></p>
         <p id="copyNote" class="muted" aria-live="polite"></p>

@@ -36,12 +36,14 @@ flowchart TD
     COLLECT["collect.ts collectPageSnapshot: DOM, computed styles, shadow DOM, text rects, line ranges"]
     LIMITS[("config/constants.ts LIMITS, RESTRICTED_URL_PATTERNS")]
     FAILBYTES["refuse #gt; 200 MB · clipboard ≤ 5 MB"]
+    COPYFIG["popup copyToFigma() → figma-copy.ts figmaSvg (EXT-O-7)"]
   end
   subgraph CORE["Engine · packages/core (pure)"]
     RAW[("RawPageSnapshot (internal, unversioned)")]
     BUILD["document.ts buildCaptureDocument"]
     CONVERT["convert.ts convertTree / convertElement: pruned hierarchy, paint order, placeholders"]
     TEXT["text.ts: whitespace, align, groupLines (OQ-11)"]
+    LINES[("textLines side output: page line breaks")]
     CSS["css.ts / color.ts parsers"]
     MAXN["countNode: throw above 10,000 nodes"]
     WARN[("Ctx warnings + stats")]
@@ -58,6 +60,7 @@ flowchart TD
     PLAN["plan/plan.ts buildPlan (pure): fonts, RLM/LRM, placeholders"]
     FONTS["plan/fonts.ts FontResolver + config/fonts.ts (Arabic rules)"]
     ADAPT["adapter/render.ts executePlan: load fonts, create nodes, isolate failures"]
+    SVGW["svg/svg.ts planToSvg: flat SVG, physical anchors, PostScript fonts"]
     FIGMA[("Figma document: editable layers")]
   end
   subgraph PREV["Preview · packages/preview (Fedora, no Figma)"]
@@ -79,10 +82,16 @@ flowchart TD
     G3["Element picker, scroll-area expansion"]
     G4["Rich text runs, auto layout"]
     G5["Real Figma validation (needs macOS/Windows)"]
-    G6["Direct paste into Figma (needs Figma permission)"]
+    G6["Native frames / auto layout by paste (needs Figma permission or legal review)"]
   end
 
   USER --&gt; POPUP
+  POPUP --&gt; COPYFIG
+  COPYFIG --&gt; PLAN
+  COPYFIG --&gt; SVGW
+  CONVERT --&gt; LINES
+  LINES -.-&gt; COPYFIG
+  SVGW --&gt;|"clipboard, Ctrl+V in Figma Web"| FIGMA
   POPUP --&gt;|"chrome.scripting.executeScript"| CONTENT
   POPUP -.-&gt; SW
   SW -.-&gt; FETCH
@@ -131,7 +140,7 @@ flowchart TD
   classDef dead fill:#f3f4f6,stroke:#9ca3af,color:#6b7280,stroke-dasharray:4 3
   class VALID,MAXN,FAILBYTES,PKG,UNIV failclosed
   class G1,G2,G3,G4,G5,G6,ROUTEA hazard
-  class RAW,DOC,WARN,LIMITS,FROZEN,FIGMA state
+  class RAW,DOC,WARN,LIMITS,FROZEN,FIGMA,LINES state
   class FETCH dead
 </pre>
 </div>

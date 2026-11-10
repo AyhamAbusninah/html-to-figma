@@ -24,7 +24,17 @@ Chrome extension                                       Figma plugin
 | `spikes/s4-rtl/` | Spike S4: Arabic/RTL text via the Plugin API. |
 | `recovery/2026-11-08/` | Pre-loss build outputs, kept as behavioral references (see `docs/verification/R0.md`). |
 
-## Status (2026-11-08)
+## Status (2026-11-10)
+
+**Copy to Figma (extension 0.3.0):** capture a page, click **Copy to Figma**, press Ctrl+V in Figma Web: editable
+layers (text, shapes, Arabic/RTL) without the plugin or the desktop app, verified in real Figma Web
+([`docs/spikes/FIGMA_CLIPBOARD.md`](docs/spikes/FIGMA_CLIPBOARD.md) §4b). Boxes arrive as shapes in groups (no
+auto layout); images and CSS backgrounds are still placeholders.
+
+Architecture map for humans and agents: [`docs/architecture/MAP.html`](docs/architecture/MAP.html) ·
+[`ai_architecture_map.yaml`](docs/architecture/ai_architecture_map.yaml) · workflow: [`docs/AI_WORKFLOW.md`](docs/AI_WORKFLOW.md).
+
+Earlier status (2026-11-08):
 
 **MVP vertical slice working (R2):** real page → extension capture → CaptureDocument → plugin import → editable
 node tree, verified in Chromium and against a strict Figma API mock on 7 generic pages and 4 Frappe/ERPNext pages
