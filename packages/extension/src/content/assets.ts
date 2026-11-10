@@ -11,7 +11,7 @@
  *   scroll position restored. Also used for <iframe>/<object>/<embed>. Still failing → placeholder (EXT-I-5).
  * - <img src=*.svg> → the SVG text, so logos stay editable vectors (EXT-S-5).
  */
-import type { RawElement, RawImageAsset, RawPageSnapshot } from '@h2f/core';
+import type { RawElement, RawImageAsset, RawPageSnapshot, RawText } from '@h2f/core';
 import type { WorkerRequest, WorkerResponse } from '../shared/messages.ts';
 
 export type AssetJob =
@@ -22,7 +22,36 @@ export type AssetJob =
   /** <iframe>/<object>/<embed>: content not readable; Tier 3 screenshot only. */
   | { kind: 'frame'; raw: RawElement; el: HTMLElement }
   /** CSS background images of a (non-replaced) element: one composite per url() layer (EXT-I-8). */
-  | { kind: 'bg'; raw: RawElement; el: Element; layers: { url: string; layer: number }[] };
+  | {
+      kind: 'bg';
+      raw: RawElement;
+      el: Element;
+      layers: { url: string; layer: number }[];
+      box: BgBox;
+    }
+  /** An icon-font glyph (EXT-X-9): drawn with the page's font instead of a text layer. */
+  | {
+      kind: 'glyph';
+      raw: RawText;
+      el: Element;
+      text: string;
+      font: string;
+      color: string;
+      width: number;
+      height: number;
+    };
+
+/** What compositing a background needs, read during the DOM walk (the element may be gone later). */
+export interface BgBox {
+  width: number;
+  height: number;
+  border: [number, number, number, number]; // left, top, right, bottom
+  padding: [number, number, number, number];
+  size: string;
+  position: string;
+  repeat: string;
+  origin: string;
+}
 
 const MAX_SIDE = 4096; // Figma's image limit (EXT-I-7)
 const CONCURRENCY = 6;
@@ -211,7 +240,10 @@ async function serializeSvg(el: SVGSVGElement): Promise<string> {
 }
 
 /** <img src=*.svg>: fetch the text and make a standalone, sanitized SVG at the rendered size (EXT-S-5). */
-async function fetchSvgImage(el: HTMLImageElement): Promise<string | null> {
+async function fetchSvgImage(
+  el: HTMLImageElement,
+  rect: { width: number; height: number },
+): Promise<string | null> {
   const url = el.currentSrc || el.src;
   const blob = await withTimeout(fetchBlob(url));
   if (!blob) return null;
@@ -219,7 +251,6 @@ async function fetchSvgImage(el: HTMLImageElement): Promise<string | null> {
   const doc = new DOMParser().parseFromString(text, 'image/svg+xml');
   const svg = doc.documentElement;
   if (svg.tagName.toLowerCase() !== 'svg' || doc.querySelector('parsererror')) return null;
-  const rect = el.getBoundingClientRect();
   if (!svg.getAttribute('viewBox')) {
     const w = parseFloat(svg.getAttribute('width') ?? '') || el.naturalWidth || rect.width;
     const h = parseFloat(svg.getAttribute('height') ?? '') || el.naturalHeight || rect.height;
@@ -395,7 +426,15 @@ async function encodeVideo(el: HTMLVideoElement): Promise<Encoded | null> {
 async function resolveJob(job: AssetJob, assets: Record<string, RawImageAsset>): Promise<void> {
   if (job.kind === 'frame') return; // Tier 3 only
   if (job.kind === 'bg') {
-    job.raw.bgAssets = await compositeBackgrounds(job.el, job.layers, assets);
+    job.raw.bgAssets = await compositeBackgrounds(job.box, job.layers, assets);
+    return;
+  }
+  if (job.kind === 'glyph') {
+    const enc = await drawGlyph(job).catch(() => null);
+    if (enc) {
+      assets[enc.id] = enc.asset;
+      job.raw.iconAssetId = enc.id;
+    }
     return;
   }
   try {
@@ -404,7 +443,8 @@ async function resolveJob(job: AssetJob, assets: Record<string, RawImageAsset>):
       return;
     }
     if (job.kind === 'img' && /\.svg(\?|#|$)/i.test(job.el.currentSrc || job.el.src)) {
-      const svg = await fetchSvgImage(job.el);
+      // The size read during the DOM walk: the element may be gone now (materialized ::before content).
+      const svg = await fetchSvgImage(job.el, job.raw.rect);
       if (svg) {
         job.raw.svg = svg;
         return;
@@ -448,7 +488,11 @@ export async function resolveAssets(
   };
   await Promise.all(Array.from({ length: Math.min(CONCURRENCY, jobs.length) }, worker));
   await screenshotCrops(
-    jobs.filter((j) => j.kind === 'frame' || (j.kind !== 'bg' && j.raw.assetFailed && !j.raw.svg)),
+    jobs.filter(
+      (j): j is Extract<AssetJob, { raw: RawElement }> =>
+        j.kind === 'frame' ||
+        (j.kind !== 'bg' && j.kind !== 'glyph' && Boolean(j.raw.assetFailed) && !j.raw.svg),
+    ),
     assets,
   );
   snapshot.assets = assets;
@@ -466,7 +510,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * or wider than the viewport stay placeholders. The scroll position is restored afterwards.
  */
 async function screenshotCrops(
-  jobs: readonly AssetJob[],
+  jobs: readonly Extract<AssetJob, { raw: RawElement }>[],
   assets: Record<string, RawImageAsset>,
 ): Promise<void> {
   if (!jobs.length || !runtime()) return;
@@ -651,37 +695,28 @@ function tileSize(value: string, iw: number, ih: number, W: number, H: number): 
  * background-size, -position (padding box) and -repeat; returns the asset id per layer (null = not readable).
  */
 async function compositeBackgrounds(
-  el: Element,
+  box: BgBox,
   layers: { url: string; layer: number }[],
   assets: Record<string, RawImageAsset>,
 ): Promise<(string | null)[]> {
-  const cs = getComputedStyle(el);
-  const r = el.getBoundingClientRect();
-  const n = (v: string) => parseFloat(v) || 0;
+  const r = { width: box.width, height: box.height };
   /** Positioning area per background-origin (default padding-box): [left, top, width, height] in the border box. */
   const area = (origin: string): [number, number, number, number] => {
-    const [bl, bt, br, bb] = [
-      cs.borderLeftWidth,
-      cs.borderTopWidth,
-      cs.borderRightWidth,
-      cs.borderBottomWidth,
-    ].map(n) as [number, number, number, number];
+    const [bl, bt, br, bb] = box.border;
     if (origin === 'border-box') return [0, 0, r.width, r.height];
-    const [pl, pt, pr, pb] =
-      origin === 'content-box'
-        ? ([cs.paddingLeft, cs.paddingTop, cs.paddingRight, cs.paddingBottom].map(n) as [
-            number,
-            number,
-            number,
-            number,
-          ])
-        : [0, 0, 0, 0];
+    const [pl, pt, pr, pb] = origin === 'content-box' ? box.padding : [0, 0, 0, 0];
     return [
       bl + pl,
       bt + pt,
       Math.max(1, r.width - bl - br - pl - pr),
       Math.max(1, r.height - bt - bb - pt - pb),
     ];
+  };
+  const cs = {
+    backgroundSize: box.size,
+    backgroundPosition: box.position,
+    backgroundRepeat: box.repeat,
+    backgroundOrigin: box.origin,
   };
   const scale = Math.min(
     2,
@@ -741,4 +776,31 @@ async function compositeBackgrounds(
     }
   }
   return ids;
+}
+
+// ── Icon fonts (EXT-X-9) ────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Draws an icon glyph with the page's own font (ligatures included, e.g. Material "home") at 2× into a transparent
+ * PNG the size of the text box. Fails (→ stays text) when the font isn't loaded.
+ */
+async function drawGlyph(job: Extract<AssetJob, { kind: 'glyph' }>): Promise<Encoded | null> {
+  if (!document.fonts.check(job.font, job.text)) return null;
+  const scale = Math.min(4, 2 * Math.max(1, globalThis.devicePixelRatio || 1));
+  const w = Math.max(1, Math.ceil(job.width * scale));
+  const h = Math.max(1, Math.ceil(job.height * scale));
+  const canvas = new OffscreenCanvas(w, h);
+  const g = canvas.getContext('2d')!;
+  g.scale(scale, scale);
+  g.font = job.font;
+  g.fillStyle = job.color;
+  g.textBaseline = 'alphabetic';
+  const m = g.measureText(job.text);
+  // The text box is the glyph's content area: its top is the baseline minus the font ascent.
+  g.fillText(
+    job.text,
+    0,
+    m.fontBoundingBoxAscent + (job.height - m.fontBoundingBoxAscent - m.fontBoundingBoxDescent) / 2,
+  );
+  return encode(canvas, w, h, job.width, job.height, { source: 'canvas' });
 }

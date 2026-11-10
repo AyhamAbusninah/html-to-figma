@@ -18,7 +18,7 @@ async function capture(): Promise<CaptureResult> {
   let textLines: Record<string, string[]>;
   try {
     await window.document.fonts.ready;
-    const { snapshot, jobs } = collectPage(window);
+    const { snapshot, jobs } = await collectPage(window);
     await resolveAssets(snapshot, jobs);
     ({ document, textLines } = buildCapture(snapshot, {
       extractorVersion: EXTENSION_VERSION,

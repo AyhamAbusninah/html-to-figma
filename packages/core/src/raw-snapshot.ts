@@ -138,6 +138,8 @@ export interface RawText {
    * a text node that starts or ends mid-line from being drawn as one block over its inline neighbors (OQ-11).
    */
   lines?: RawTextLine[];
+  /** Icon-font glyph drawn by the collector (EXT-X-9): emitted as an IMAGE instead of a TEXT. */
+  iconAssetId?: string;
 }
 
 export interface RawTextLine {

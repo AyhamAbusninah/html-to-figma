@@ -412,6 +412,32 @@ describe('replaced content, controls, warnings', () => {
     expect(codes).not.toContain('IMAGE_NOT_CAPTURED');
   });
 
+  it('icon-font glyphs drawn by the collector become IMAGE nodes at the glyph box (EXT-X-9)', () => {
+    const glyph = text('\uf00c', rect(10, 10, 16, 20));
+    glyph.iconAssetId = 'img_icon';
+    const raw = page([
+      el('i', rect(10, 10, 16, 20), {}, [glyph], { idAttr: '', classes: ['fa-check'] }),
+    ]);
+    raw.assets = {
+      img_icon: {
+        mime: 'image/png',
+        data: 'iVBORw0KGgo=',
+        width: 32,
+        height: 40,
+        source: 'canvas',
+      },
+    };
+    const doc = build(raw);
+    expect(validateCapture(doc).ok).toBe(true);
+    expect(doc.root.children[0]).toMatchObject({
+      type: 'IMAGE',
+      name: 'icon · i.fa-check',
+      assetId: 'img_icon',
+      rect: { x: 10, y: 10, width: 16, height: 20 },
+    });
+    expect(doc.meta.stats).toMatchObject({ textCount: 0, imageCount: 1 });
+  });
+
   it('form controls: value text in the content box; password masked even if the collector failed to (EXT-X-6/7)', () => {
     const input = (text: string, inputType: string, isPlaceholder = false) =>
       el(

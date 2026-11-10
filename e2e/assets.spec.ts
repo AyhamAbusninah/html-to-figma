@@ -41,6 +41,10 @@ async function capture(page: Page, name: string) {
   )) as { ok: boolean; document: CaptureDocument; textLines: Record<string, string[]> };
   expect(r.ok).toBe(true);
   expect(await dom(page), 'capture must not modify the page').toBe(before);
+  expect(
+    await page.evaluate(() => document.adoptedStyleSheets.length),
+    'style sheets restored',
+  ).toBe(0);
   expect(validateCapture(r.document).ok).toBe(true);
   const nodes: CaptureNode[] = [];
   const walk = (n: CaptureNode) => {
@@ -124,4 +128,53 @@ test('hero background: color, photo and gradient overlay stack in CSS order (lan
   expect(hero, 'hero frame with image + gradient fills').toBeTruthy();
   const types = hero!.type === 'FRAME' ? hero!.fills.map((p) => p.type) : [];
   expect(types.indexOf('IMAGE')).toBeLessThan(types.indexOf('GRADIENT_LINEAR')); // overlay above the photo
+});
+
+test('::before/::after materialized for the read (counters, attr, quotes, url, dots), page restored (EXT-T-11)', async ({
+  page,
+}) => {
+  const { nodes } = await capture(page, 'pseudo-elements.html');
+  const texts = nodes
+    .filter((n) => n.type === 'TEXT')
+    .map((n) => (n.type === 'TEXT' ? n.characters : ''));
+  for (const t of ['1', '2', '3', 'kg', 'pcs', '“', '”', '★', '→']) expect(texts).toContain(t);
+  expect(texts.some((t) => /counter\(\w|attr\(\w/.test(t))).toBe(false); // unresolved values
+  const dots = nodes.filter(
+    (n) =>
+      n.type === 'FRAME' &&
+      n.name === '::before' &&
+      Math.round(n.rect.width) === 8 &&
+      Math.round(n.rect.height) === 8,
+  );
+  expect(dots.length).toBe(4); // status pills
+  expect(
+    nodes.some(
+      (n) => n.type === 'FRAME' && n.name === '::before' && Math.round(n.rect.width) === 48,
+    ),
+  ).toBe(true);
+  // content: url(icon-star.svg) → the image at its natural size (24×24): vectors (SVG) or pixels.
+  const urlStar = nodes.find(
+    (n) =>
+      ((n.type === 'IMAGE' && n.assetId !== null) || n.type === 'SVG') &&
+      Math.round(n.rect.width) === 24 &&
+      Math.round(n.rect.height) === 24,
+  );
+  expect(urlStar?.rect).toMatchObject({ width: 24, height: 24 });
+});
+
+test('icon fonts: Font Awesome, Material ligatures and PUA glyphs become images; labels stay text (EXT-X-9)', async ({
+  page,
+}) => {
+  const { nodes, document } = await capture(page, 'icon-fonts.html');
+  const icons = nodes.filter((n) => n.type === 'IMAGE' && n.name.startsWith('icon ·'));
+  expect(icons.length).toBeGreaterThanOrEqual(15);
+  for (const n of icons)
+    expect(n.type === 'IMAGE' && n.assetId && document.assets.images[n.assetId]!.mime).toBe(
+      'image/png',
+    );
+  const texts = nodes
+    .filter((n) => n.type === 'TEXT')
+    .map((n) => (n.type === 'TEXT' ? n.characters : ''));
+  expect(texts.some((t) => /[\uE000-\uF8FF]/.test(t))).toBe(false); // no icon codepoints left as text
+  for (const label of ['Saved', 'Settings', 'Delete']) expect(texts).toContain(label);
 });

@@ -15,7 +15,8 @@ import {
 
 /**
  * Collector: reads the live page into a RawPageSnapshot. Only browser reads happen here. Every interpretation of
- * those values lives in @h2f/core (plan §3). Read-only: the page DOM is never modified (AC-EXT-8).
+ * those values lives in @h2f/core (plan §3). The one temporary DOM change is ::before/::after materialization
+ * (pseudo.ts, EXT-T-11), fully undone right after the read (AC-EXT-8).
  */
 
 /** Elements that never render (EXT-T-2). */
@@ -58,7 +59,9 @@ const TEXT_INPUTS = new Set([
   'reset',
 ]);
 
+import { ICON_FONT_FAMILIES } from '../config/constants.ts';
 import type { AssetJob } from './assets.ts';
+import { MATERIALIZED_ATTR, materializePseudos } from './pseudo.ts';
 
 /** Replaced elements whose content the asset phase resolves (set per collectPageSnapshot call). */
 let jobs: AssetJob[] = [];
@@ -151,7 +154,21 @@ function control(
   };
 }
 
-function collectText(node: Text, whiteSpace: string): RawText | null {
+/** Private Use Area (U+E000–F8FF, planes 15–16): icon-font codepoints (EXT-X-9 rule a). */
+const PUA = /^[\uE000-\uF8FF\u{F0000}-\u{10FFFF}]+$/u;
+
+/** EXT-X-9: every character in the PUA, or the first font family is a known icon font (ligatures). */
+function isIconGlyph(text: string, fontFamily: string): boolean {
+  if (PUA.test(text)) return true;
+  const first = fontFamily
+    .split(',')[0]!
+    .trim()
+    .replace(/^["']|["']$/g, '');
+  return ICON_FONT_FAMILIES.some((re) => re.test(first));
+}
+
+function collectText(node: Text, cs: CSSStyleDeclaration): RawText | null {
+  const whiteSpace = cs.whiteSpace;
   const text = node.nodeValue ?? '';
   const collapses = whiteSpace === 'normal' || whiteSpace === 'nowrap' || whiteSpace === 'pre-line';
   let start = 0;
@@ -169,6 +186,26 @@ function collectText(node: Text, whiteSpace: string): RawText | null {
     .filter((r) => r.width > 0 && r.height > 0)
     .map(rectOf);
   const raw: RawText = { kind: 'text', text, rects };
+  const trimmed = text.slice(start, end);
+  if (rects.length && cs.visibility === 'visible' && isIconGlyph(trimmed, cs.fontFamily)) {
+    // Icon glyph (EXT-X-9): drawn with the page's own font in the asset phase, emitted as an image.
+    const x1 = Math.min(...rects.map((r) => r.x));
+    const y1 = Math.min(...rects.map((r) => r.y));
+    const width = Math.max(...rects.map((r) => r.x + r.width)) - x1;
+    const height = Math.max(...rects.map((r) => r.y + r.height)) - y1;
+    const font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+    jobs.push({
+      kind: 'glyph',
+      raw,
+      el: node.parentElement!,
+      text: trimmed,
+      font,
+      color: cs.color,
+      width,
+      height,
+    });
+    return raw;
+  }
   const lines = collectLines(node, text, start, end, rects, collapses);
   if (lines) raw.lines = lines;
   return raw;
@@ -248,11 +285,13 @@ function collectElement(el: Element): RawElement | null {
   const cs = getComputedStyle(el);
   if (cs.display === 'none') return null;
 
+  // A materialized ::before/::after (pseudo.ts) is named after the pseudo-element.
+  const pseudoOf = el.getAttribute(MATERIALIZED_ATTR);
   const raw: RawElement = {
     kind: 'element',
-    tag,
-    idAttr: el.id || '',
-    classes: Array.from(el.classList),
+    tag: pseudoOf ? `::${pseudoOf}` : tag,
+    idAttr: pseudoOf ? '' : el.id || '',
+    classes: pseudoOf ? [] : Array.from(el.classList),
     rect: rectOf(el.getBoundingClientRect()),
     style: pickStyle(cs),
     children: [],
@@ -285,7 +324,29 @@ function collectElement(el: Element): RawElement | null {
       raw.rect.height > 0 &&
       !/\btext\b/.test(cs.backgroundClip)
     )
-      jobs.push({ kind: 'bg', raw, el, layers });
+      jobs.push({
+        kind: 'bg',
+        raw,
+        el,
+        layers,
+        box: {
+          width: raw.rect.width,
+          height: raw.rect.height,
+          border: [
+            cs.borderLeftWidth,
+            cs.borderTopWidth,
+            cs.borderRightWidth,
+            cs.borderBottomWidth,
+          ].map((v) => parseFloat(v) || 0) as [number, number, number, number],
+          padding: [cs.paddingLeft, cs.paddingTop, cs.paddingRight, cs.paddingBottom].map(
+            (v) => parseFloat(v) || 0,
+          ) as [number, number, number, number],
+          size: cs.backgroundSize,
+          position: cs.backgroundPosition,
+          repeat: cs.backgroundRepeat,
+          origin: cs.backgroundOrigin,
+        },
+      });
   }
   const ctrl = readControl(el, tag);
   if (ctrl) raw.control = ctrl;
@@ -303,7 +364,7 @@ function collectElement(el: Element): RawElement | null {
       const c = collectElement(child as Element);
       if (c) children.push(c);
     } else if (child.nodeType === Node.TEXT_NODE) {
-      const t = collectText(child as Text, cs.whiteSpace);
+      const t = collectText(child as Text, cs);
       if (t) children.push(t);
     }
   }
@@ -311,10 +372,23 @@ function collectElement(el: Element): RawElement | null {
   return raw;
 }
 
-/** The DOM read plus the replaced elements whose pixels/markup the asset phase resolves (see assets.ts). */
-export function collectPage(win: Window): { snapshot: RawPageSnapshot; jobs: AssetJob[] } {
+/**
+ * The DOM read plus the replaced elements whose pixels/markup the asset phase resolves (see assets.ts).
+ * ::before/::after are materialized for the read and removed right after, also on error (EXT-T-11, EXT-C-4).
+ */
+export async function collectPage(
+  win: Window,
+): Promise<{ snapshot: RawPageSnapshot; jobs: AssetJob[] }> {
   jobs = [];
-  const snapshot = collectPageSnapshot(win);
+  const m = await materializePseudos(win.document, (el) =>
+    flatChildren(el).filter((n): n is Element => n.nodeType === Node.ELEMENT_NODE),
+  );
+  let snapshot: RawPageSnapshot;
+  try {
+    snapshot = collectPageSnapshot(win);
+  } finally {
+    m.cleanup();
+  }
   const out = jobs;
   jobs = [];
   return { snapshot, jobs: out };

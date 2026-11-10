@@ -54,7 +54,7 @@ domains:
       - "Wrapped text: per-line character ranges by binary search on char rects → RawText.lines (collect.ts:181)"
       - "Form controls read values, passwords masked at the source (collect.ts:104)"
     critical_invariants:
-      - "Read-only: never mutate the page DOM (AC-EXT-8; e2e compares outerHTML before/after capture). Touching UA shadow roots mutated pages, hence the custom-element-only rule."
+      - "Read-only except ::before/::after materialization (content/pseudo.ts, EXT-T-11): spans + data-h2f-pseudo + an adopted style sheet exist only during the synchronous DOM read and are removed in finally; e2e asserts outerHTML and adoptedStyleSheets unchanged (AC-EXT-8). Touching UA shadow roots mutated pages, hence the custom-element-only rule."
       - "Browser reads only; all interpretation belongs in @h2f/core (unit-testable without a browser)."
       - "Password values never leave readControl unmasked (EXT-X-7; e2e asserts 'secret-password-123' absent)."
       - "Universal: no site-specific selectors/tokens (check-universal)."
@@ -216,7 +216,7 @@ critical_invariants:
 known_gaps:
   - "Images (R4, in progress on feat/images-icons): inline SVG, <img src=*.svg>, same-origin/data/blob/CORS images, canvas and video are captured (content/assets.ts). Cross-origin images: Tier 2 service-worker fetch, Tier 3 screenshot crops (also iframes). CSS gradients and background images are fills. Still missing: page-level (html/body) background images, repeating/conic gradients and background-clip:text (first color), image borders, object-position. The Figma plugin still draws images/SVG as placeholders (Copy to Figma and the preview draw them)."
   - "Gradients: linear/radial supported (core/src/gradient.ts); repeating/conic fall back to the first color."
-  - "::before/::after not captured (OQ-7 decided B, not implemented); text-overflow ellipsis not applied; icon fonts (OQ-16) not rasterized."
+  - "::before/::after (materialized) and icon fonts (rasterized) are captured; still missing: pseudo-elements on shadow hosts, ::marker list bullets, text-overflow ellipsis, rotations (bounding box only)."
   - "Element picker (OQ-4, MVP) and inner scroll-area expansion (OQ-5) not implemented; captureMode is always 'page' (document.ts:61)."
   - "Rich text: one style per TEXT; a word split across inline elements (e.g. <mark>) doesn't join Arabic letters across layers (OQ-11 option B, v1.1)."
   - "No auto-layout inference: output is absolute-positioned frames (html.to.design offers auto layout)."

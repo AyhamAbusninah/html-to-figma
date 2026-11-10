@@ -256,6 +256,23 @@ function usableLines(raw: RawText): RawTextLine[] | undefined {
 
 function convertText(raw: RawText, parent: RawElement, ctx: Ctx, path: number[]): Emitted[] {
   if (parent.style.visibility !== 'visible' || raw.rects.length === 0) return [];
+  // Icon-font glyph drawn by the collector (EXT-X-9): an image at the glyph box, never a text layer.
+  if (raw.iconAssetId && ctx.assets?.[raw.iconAssetId]) {
+    const id = newId(ctx);
+    countNode(ctx);
+    ctx.imageCount++;
+    ctx.usedAssets.add(raw.iconAssetId);
+    const node: ImageNode = {
+      id,
+      name: `icon · ${layerName(parent)}`,
+      type: 'IMAGE',
+      rect: toDoc(ctx, unionRect(raw.rects)),
+      opacity: 1,
+      assetId: raw.iconAssetId,
+      scaleMode: 'STRETCH',
+    };
+    return [{ node, key: { layer: 1, z: 0, path } }];
+  }
   // Transparent text inside a background-clip:text element takes the gradient's color.
   const clip = ctx.clipTextColor;
   const override =

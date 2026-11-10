@@ -20,6 +20,19 @@ export const RESTRICTED_URL_PATTERNS: readonly RegExp[] = [
   /^https:\/\/microsoftedge\.microsoft\.com\/addons/i,
 ];
 
+/**
+ * Icon fonts (EXT-X-9 rule b, SYS-5): families whose glyphs are icons even when they use ordinary letters
+ * (ligature fonts such as Material). Matched against the first family of the computed font-family, case-insensitive.
+ * Rule a (every character in the Private Use Area) needs no list.
+ */
+export const ICON_FONT_FAMILIES: readonly RegExp[] = [
+  /^font ?awesome/i,
+  /^material (icons|symbols)/i,
+  /^bootstrap-icons$/i,
+  /^icomoon$/i,
+  /^glyphicons halflings$/i,
+];
+
 /** Size and count limits (OQ-12, EXT-O-3/4). */
 export const LIMITS = {
   maxNodes: 10_000,
