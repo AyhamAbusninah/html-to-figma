@@ -137,6 +137,64 @@ describe('text (EXT-X-1..5, EXT-G-1)', () => {
     });
   });
 
+  describe('wrapped text that starts or ends mid-line (OQ-11)', () => {
+    const line = (start: number, end: number, ...rects: ReturnType<typeof rect>[]) => ({
+      start,
+      end,
+      rects,
+    });
+
+    it('LTR: a first line that starts after an inline element becomes its own layer', () => {
+      // "<b>Bold</b> rest of the text wraps here" → the text node starts at x=60 on line 1.
+      const t = text(
+        ' rest of the text wraps here',
+        rect(60, 0, 240, 20),
+        rect(10, 24, 290, 20),
+        rect(10, 48, 100, 20),
+      );
+      t.lines = [
+        line(1, 12, rect(60, 0, 240, 20)),
+        line(13, 22, rect(10, 24, 290, 20)),
+        line(23, 28, rect(10, 48, 100, 20)),
+      ];
+      const texts = kids(page([el('p', rect(10, 0, 300, 72), {}, [t])])) as TextNode[];
+      expect(texts.map((n) => [n.characters, n.rect, n.lineCount])).toEqual([
+        ['rest of the', { x: 60, y: 0, width: 240, height: 20 }, 1],
+        ['text wraps here', { x: 10, y: 24, width: 290, height: 44 }, 2],
+      ]);
+      expect(build(page([el('p', rect(10, 0, 300, 72), {}, [t])])).meta.stats.textCount).toBe(2);
+    });
+
+    it('RTL: the right edge decides; a paragraph whose lines share it stays one layer', () => {
+      const lines = [line(0, 5, rect(50, 0, 250, 20)), line(6, 13, rect(150, 24, 150, 20))];
+      const shared = text('مرحبا بالعالم', rect(50, 0, 250, 20), rect(150, 24, 150, 20));
+      shared.lines = lines;
+      const [one] = kids(
+        page([el('p', rect(0, 0, 300, 44), { direction: 'rtl' }, [shared])]),
+      ) as TextNode[];
+      expect(one).toMatchObject({ characters: 'مرحبا بالعالم', lineCount: 2 });
+
+      // After a label on the right, line 1 ends at x=240, not at the paragraph's right edge (300).
+      const afterTag = text('مرحبا بالعالم', rect(50, 0, 190, 20), rect(150, 24, 150, 20));
+      afterTag.lines = [line(0, 5, rect(50, 0, 190, 20)), line(6, 13, rect(150, 24, 150, 20))];
+      const split = kids(
+        page([el('p', rect(0, 0, 300, 44), { direction: 'rtl' }, [afterTag])]),
+      ) as TextNode[];
+      expect(split.map((n) => [n.characters, n.rect.x, n.rect.width])).toEqual([
+        ['مرحبا', 50, 190],
+        ['بالعالم', 150, 150],
+      ]);
+      expect(split.every((n) => n.style.textAlign === 'right')).toBe(true);
+    });
+
+    it('inconsistent line data falls back to one layer', () => {
+      const t = text('one two', rect(60, 0, 40, 20), rect(10, 24, 30, 20));
+      t.lines = [line(0, 3, rect(60, 0, 40, 20)), line(2, 7, rect(10, 24, 30, 20))]; // overlapping ranges
+      const texts = kids(page([el('p', rect(10, 0, 100, 44), {}, [t])])) as TextNode[];
+      expect(texts.map((n) => n.characters)).toEqual(['one two']);
+    });
+  });
+
   it('skips whitespace-only text, text without rects, and text under visibility:hidden', () => {
     const raw = page([
       el('div', rect(0, 0, 10, 10), { visibility: 'hidden' }, [text('hidden', rect(0, 0, 5, 5))]),

@@ -1,4 +1,5 @@
 import {
+  lineTops,
   RAW_STYLE_KEYS,
   type RawControl,
   type RawElement,
@@ -7,6 +8,7 @@ import {
   type RawRect,
   type RawStyle,
   type RawText,
+  type RawTextLine,
   type ReplacedKind,
 } from '@h2f/core';
 
@@ -160,7 +162,77 @@ function collectText(node: Text, whiteSpace: string): RawText | null {
   const rects = Array.from(range.getClientRects())
     .filter((r) => r.width > 0 && r.height > 0)
     .map(rectOf);
-  return { kind: 'text', text, rects };
+  const raw: RawText = { kind: 'text', text, rects };
+  const lines = collectLines(node, text, start, end, rects, collapses);
+  if (lines) raw.lines = lines;
+  return raw;
+}
+
+const isLowSurrogate = (s: string, i: number) => {
+  const c = s.charCodeAt(i);
+  return c >= 0xdc00 && c <= 0xdfff;
+};
+
+/**
+ * Character range of each line box of a wrapped text node (OQ-11), found by binary search on per-character rects:
+ * line breaking follows logical order, so a character's line index never decreases with its offset. Costs about
+ * log2(length) rect reads per line. Returns undefined for single-line text or when the measurement is inconsistent.
+ */
+function collectLines(
+  node: Text,
+  text: string,
+  start: number,
+  end: number,
+  rects: RawRect[],
+  collapses: boolean,
+): RawTextLine[] | undefined {
+  const tops = lineTops(rects);
+  if (tops.length < 2) return undefined;
+  const range = document.createRange();
+  // Top of the first character at or after i that has a box (collapsed spaces have none).
+  const topAt = (i: number): number => {
+    for (let j = i; j < end; j++) {
+      range.setStart(node, j);
+      range.setEnd(node, j + 1);
+      const r = Array.from(range.getClientRects()).find((c) => c.height > 0);
+      if (r) return r.y;
+    }
+    return Infinity;
+  };
+  const bounds = [start];
+  for (let k = 0; k + 1 < tops.length; k++) {
+    const threshold = (tops[k]! + tops[k + 1]!) / 2;
+    let lo = bounds[bounds.length - 1]!;
+    let hi = end;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (topAt(mid) > threshold) hi = mid;
+      else lo = mid + 1;
+    }
+    if (lo > start && isLowSurrogate(text, lo)) lo--;
+    if (lo <= bounds[bounds.length - 1]! || lo >= end) return undefined;
+    bounds.push(lo);
+  }
+  bounds.push(end);
+  const lines: RawTextLine[] = [];
+  for (let k = 0; k + 1 < bounds.length; k++) {
+    let s = bounds[k]!;
+    let e = bounds[k + 1]!;
+    if (collapses) {
+      // The space at a soft wrap hangs past the line end; it is not part of the visible line.
+      while (s < e && /\s/.test(text[s]!)) s++;
+      while (e > s && /\s/.test(text[e - 1]!)) e--;
+    }
+    if (s === e) return undefined;
+    range.setStart(node, s);
+    range.setEnd(node, e);
+    const lineRects = Array.from(range.getClientRects())
+      .filter((r) => r.width > 0 && r.height > 0)
+      .map(rectOf);
+    if (!lineRects.length) return undefined;
+    lines.push({ start: s, end: e, rects: lineRects });
+  }
+  return lines;
 }
 
 function collectElement(el: Element): RawElement | null {

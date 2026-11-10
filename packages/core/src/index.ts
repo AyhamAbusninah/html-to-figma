@@ -7,11 +7,19 @@ export type {
   RawStyle,
   RawStyleKey,
   RawText,
+  RawTextLine,
   ReplacedKind,
 } from './raw-snapshot.ts';
 export { RAW_STYLE_KEYS } from './raw-snapshot.ts';
 export { CaptureTooLargeError, MAX_NODES } from './convert.ts';
-export { normalizeWhitespace, resolveTextAlign, hasArabic, countLines } from './text.ts';
+export {
+  normalizeWhitespace,
+  resolveTextAlign,
+  hasArabic,
+  countLines,
+  lineTops,
+  groupLines,
+} from './text.ts';
 export {
   parseFontFamilies,
   parseBoxShadow,

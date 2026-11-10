@@ -24,6 +24,8 @@
     - ellipsis: characters = visible prefix + "…" (EXT-X-8), lineCount 1.
     - inline-mixed: one TEXT node per DOM text node — "This paragraph mixes ", "bold", " and ",
       "italic", … each with its own weight/style/colour/decoration (EXT-X-1).
+      ", then ends in plain text." wraps after inline content, so it is split by line: ", then ends in" (its own
+      layer after x²) and "plain text." (OQ-11).
     - stack-missing: fontFamily stack ["Definitely Missing Font","Inter","sans-serif"] verbatim;
       Chrome rendered Inter; plugin reports substitution (PLG-F-5).
     - generic-*: fontFamily ["serif"], ["monospace"], ["system-ui"], ["cursive"] kept literal (EXT-X-4).

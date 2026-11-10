@@ -16,8 +16,8 @@ import {
   type Variant,
 } from './helpers.ts';
 
-/** The reference build is the R0-recovered 0.1.0; the rebuilt extension is 0.2.0 (R2 capture). */
-const VERSION: Record<Variant, string> = { rebuilt: '0.2.0', reference: '0.1.0' };
+/** The reference build is the R0-recovered 0.1.0; the rebuilt extension is 0.2.1 (R2 capture + OQ-11 line split). */
+const VERSION: Record<Variant, string> = { rebuilt: '0.2.1', reference: '0.1.0' };
 
 let fixtures: FixtureServer;
 test.beforeAll(async () => {

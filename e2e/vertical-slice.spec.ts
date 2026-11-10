@@ -13,6 +13,7 @@ import {
   validateCapture,
   type CaptureDocument,
   type CaptureNode,
+  type Rect,
 } from '../packages/schema/src/index.ts';
 import {
   descendants,
@@ -90,8 +91,8 @@ function domTextSamples(page: Page) {
     const rtl = getComputedStyle(document.documentElement).direction === 'rtl';
     const se = document.scrollingElement!;
     const ox = scrollX + (rtl ? Math.max(0, se.scrollWidth - se.clientWidth) : 0);
-    const out: { text: string; rect: { x: number; y: number; width: number; height: number } }[] =
-      [];
+    type R = { x: number; y: number; width: number; height: number };
+    const out: { text: string; rect: R; lines: R[] }[] = [];
     const tw = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     while (tw.nextNode()) {
       const n = tw.currentNode as Text;
@@ -142,7 +143,25 @@ function domTextSamples(page: Page) {
         y1 = Math.min(...rects.map((x) => x.top));
       const x2 = Math.max(...rects.map((x) => x.right)),
         y2 = Math.max(...rects.map((x) => x.bottom));
-      out.push({ text, rect: { x: x1 + ox, y: y1 + scrollY, width: x2 - x1, height: y2 - y1 } });
+      // Line boxes: rects grouped by top (same rule as the engine), each as one doc-space union.
+      const bands: DOMRect[][] = [];
+      for (const x of [...rects].sort((a, b) => a.top - b.top)) {
+        const last = bands[bands.length - 1];
+        if (last && x.top - last[0]!.top <= x.height / 2) last.push(x);
+        else bands.push([x]);
+      }
+      const lines = bands.map((b) => {
+        const l = Math.min(...b.map((x) => x.left)),
+          t = Math.min(...b.map((x) => x.top));
+        const rr = Math.max(...b.map((x) => x.right)),
+          bb = Math.max(...b.map((x) => x.bottom));
+        return { x: l + ox, y: t + scrollY, width: rr - l, height: bb - t };
+      });
+      out.push({
+        text,
+        rect: { x: x1 + ox, y: y1 + scrollY, width: x2 - x1, height: y2 - y1 },
+        lines,
+      });
     }
     return out;
   });
@@ -254,17 +273,38 @@ async function runSlice(browser: Browser, name: string, url: string) {
     expect(v.ok, JSON.stringify(!v.ok && v.errors)).toBe(true);
     writeFileSync(join(OUT, `${name}.capture.json`), JSON.stringify(doc, null, 1));
 
-    // 4. Every visible DOM text node is a TEXT node with the same characters and rect (±0.5 px).
+    // 4. Every visible DOM text node is a TEXT node with the same characters and rect (±0.5 px), or, when it
+    // wraps and starts or ends mid-line (OQ-11), consecutive TEXT nodes that together hold its characters and
+    // each cover exactly the browser's line boxes for their lines.
     const texts = textNodes(doc);
+    const near = (a: Rect, b: Rect) =>
+      Math.abs(a.x - b.x) <= 0.5 &&
+      Math.abs(a.y - b.y) <= 0.5 &&
+      Math.abs(a.width - b.width) <= 0.5 &&
+      Math.abs(a.height - b.height) <= 0.5;
+    const union = (rs: Rect[]): Rect => {
+      const x = Math.min(...rs.map((r) => r.x)),
+        y = Math.min(...rs.map((r) => r.y));
+      const w = Math.max(...rs.map((r) => r.x + r.width)) - x,
+        h = Math.max(...rs.map((r) => r.y + r.height)) - y;
+      return { x, y, width: w, height: h };
+    };
+    const splitMatch = (s: (typeof samples)[number], i: number) => {
+      let line = 0;
+      let chars = '';
+      for (let j = i; j < texts.length && line < s.lines.length; j++) {
+        const t = texts[j]!;
+        const own = s.lines.slice(line, line + t.lineCount);
+        if (own.length !== t.lineCount || !near(t.rect, union(own))) return false;
+        line += t.lineCount;
+        chars += t.characters;
+      }
+      return line === s.lines.length && chars.replace(/ /g, '') === s.text.replace(/ /g, '');
+    };
     const missing = samples.filter(
       (s) =>
-        !texts.some(
-          (t) =>
-            t.characters === s.text &&
-            Math.abs(t.rect.x - s.rect.x) <= 0.5 &&
-            Math.abs(t.rect.y - s.rect.y) <= 0.5 &&
-            Math.abs(t.rect.width - s.rect.width) <= 0.5 &&
-            Math.abs(t.rect.height - s.rect.height) <= 0.5,
+        !texts.some((t, i) =>
+          t.characters === s.text ? near(t.rect, s.rect) : s.lines.length > 1 && splitMatch(s, i),
         ),
     );
     expect(samples.length).toBeGreaterThan(5);

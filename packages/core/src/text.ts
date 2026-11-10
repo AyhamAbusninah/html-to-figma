@@ -97,12 +97,53 @@ export function textStyle(
   };
 }
 
-/** Number of distinct line boxes among client rects (rects whose tops differ by more than half a line). */
-export function countLines(rects: readonly { y: number; height: number }[]): number {
+/** Top of each distinct line box among client rects (tops more than half a line apart), ascending. */
+export function lineTops(rects: readonly { y: number; height: number }[]): number[] {
   const tops: number[] = [];
   for (const r of [...rects].sort((a, b) => a.y - b.y)) {
     const last = tops[tops.length - 1];
     if (last === undefined || r.y - last > r.height / 2) tops.push(r.y);
   }
-  return Math.max(1, tops.length);
+  return tops;
+}
+
+/** Number of distinct line boxes among client rects. */
+export function countLines(rects: readonly { y: number; height: number }[]): number {
+  return Math.max(1, lineTops(rects).length);
+}
+
+/** Lines whose aligned edges differ by at most this much still form one block (sub-pixel layout noise). */
+const EDGE_TOLERANCE = 1;
+
+/**
+ * Splits the line boxes of one wrapped text node into runs that a single fixed-width Figma text box reproduces:
+ * consecutive lines that share the edge their alignment pins (left, right or center; justify pins the start edge).
+ * A text node that starts mid-line, after a link or badge, has a first line whose edge differs, so that line
+ * becomes its own run instead of being drawn from the box edge over its neighbors (OQ-11, PREVIEW §4).
+ * Returns [first, last] line index pairs (inclusive), in order. A plain paragraph gives one run.
+ */
+export function groupLines(
+  lines: readonly { rects: readonly { x: number; width: number }[] }[],
+  align: TextNode['style']['textAlign'],
+  direction: string,
+): [number, number][] {
+  const edge = (rects: readonly { x: number; width: number }[]) => {
+    const left = Math.min(...rects.map((r) => r.x));
+    const right = Math.max(...rects.map((r) => r.x + r.width));
+    if (align === 'center') return (left + right) / 2;
+    if (align === 'right' || (align === 'justify' && direction === 'rtl')) return right;
+    return left;
+  };
+  const runs: [number, number][] = [];
+  let runEdge = NaN;
+  lines.forEach((line, i) => {
+    const e = edge(line.rects);
+    const run = runs[runs.length - 1];
+    if (run && Math.abs(e - runEdge) <= EDGE_TOLERANCE) run[1] = i;
+    else {
+      runs.push([i, i]);
+      runEdge = e;
+    }
+  });
+  return runs;
 }

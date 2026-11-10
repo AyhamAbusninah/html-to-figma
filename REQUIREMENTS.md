@@ -223,7 +223,7 @@ type Effect =
 
 | ID | Requirement |
 |---|---|
-| EXT-X-1 | Each non-whitespace DOM `Text` node MUST produce one `TextNode`, styled from its parent element's computed style. **[OQ-11]** |
+| EXT-X-1 | Each non-whitespace DOM `Text` node MUST produce one `TextNode`, styled from its parent element's computed style. **[OQ-11]** Exception: a text node that wraps and whose line boxes don't all share the edge their alignment pins (it starts or ends mid-line next to an inline element) MUST produce one `TextNode` per run of lines that do, each positioned at those line boxes, so no layer is drawn over its neighbors. |
 | EXT-X-2 | Whitespace MUST be normalized per `white-space`: `normal`/`nowrap` collapse runs to single spaces and trim leading/trailing spaces at line edges, while `pre`/`pre-wrap`/`pre-line`/`break-spaces` preserve whitespace as specified. |
 | EXT-X-3 | `text-transform` MUST be emitted as `textCase`, not applied to `characters`, so the text stays editable in Figma. |
 | EXT-X-4 | `font-family` MUST be emitted as the full ordered stack with quotes removed. Generic families (`sans-serif`, `serif`, `monospace`, `system-ui`) are kept as the literal generic. |

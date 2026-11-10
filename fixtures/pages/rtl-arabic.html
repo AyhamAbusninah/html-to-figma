@@ -20,7 +20,9 @@
     - align-start → right; align-end → left; align-left / align-center / align-right / justify
       keep their physical value (EXT-RTL-2).
     - font-tajawal / font-cairo / font-noto: fontFamily stacks start with that family; paragraphs
-      wrap to ≥ 3 lines (lineCount ≥ 3) in a 560px column. Figma renders with the same family.
+      wrap to ≥ 3 lines in a 560px column. Figma renders with the same family. Each starts after a label
+      tag, so its first line is its own TEXT layer (lineCount 1, beside the tag) and the remaining lines
+      form a second layer (OQ-11).
     - stack-inter-first: stack ["Inter","Tajawal","sans-serif"]. Chrome draws Latin in Inter and
       Arabic in Tajawal; the plugin MUST use Tajawal for the whole node (never Inter) (PLG-F-6).
     - stack-latin-only: stack ["Inter","sans-serif"] with Arabic text → plugin falls back to

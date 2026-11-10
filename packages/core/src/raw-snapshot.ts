@@ -107,6 +107,18 @@ export interface RawText {
   text: string;
   /** Client rects of the visible (trimmed) text range. Empty means not rendered. */
   rects: RawRect[];
+  /**
+   * Set only when the text wraps onto more than one line box: each line's UTF-16 range [start, end) in `text`
+   * (whitespace at the wrap trimmed) and that range's client rects, in logical order. The engine uses it to keep
+   * a text node that starts or ends mid-line from being drawn as one block over its inline neighbors (OQ-11).
+   */
+  lines?: RawTextLine[];
+}
+
+export interface RawTextLine {
+  start: number;
+  end: number;
+  rects: RawRect[];
 }
 
 export type RawNode = RawElement | RawText;

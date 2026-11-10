@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   countLines,
+  groupLines,
   isTranslationOnly,
   normalizeWhitespace,
   parseBoxShadow,
@@ -119,6 +120,27 @@ describe('text helpers', () => {
       ]),
     ).toBe(2);
     expect(countLines([])).toBe(1);
+  });
+
+  it('groupLines: runs of lines sharing the edge their alignment pins (OQ-11)', () => {
+    const L = (x: number, width: number) => ({ rects: [{ x, width }] });
+    // Starts mid-line (x=60), then two full lines from x=10, last line shorter.
+    const ltr = [L(60, 240), L(10, 290), L(10.4, 120)];
+    expect(groupLines(ltr, 'left', 'ltr')).toEqual([
+      [0, 0],
+      [1, 2],
+    ]);
+    // Same lines right-aligned: right edges 300, 300, 130.4 → the short last line is its own run.
+    expect(groupLines(ltr, 'right', 'ltr')).toEqual([
+      [0, 1],
+      [2, 2],
+    ]);
+    expect(groupLines([L(0, 100), L(25, 50)], 'center', 'ltr')).toEqual([[0, 1]]);
+    expect(groupLines([L(0, 300), L(100, 200)], 'justify', 'rtl')).toEqual([[0, 1]]);
+    expect(groupLines([L(0, 300), L(100, 200)], 'justify', 'ltr')).toEqual([
+      [0, 0],
+      [1, 1],
+    ]);
   });
 
   it('textStyle: line-height normal/px, letter-spacing normal, weight, italic, decoration, case', () => {

@@ -23,8 +23,14 @@ import {
   px,
   solidOrNull,
 } from './css.ts';
-import type { RawElement, RawRect, RawText } from './raw-snapshot.ts';
-import { countLines, normalizeWhitespace, textStyle } from './text.ts';
+import type { RawElement, RawRect, RawText, RawTextLine } from './raw-snapshot.ts';
+import {
+  countLines,
+  groupLines,
+  normalizeWhitespace,
+  resolveTextAlign,
+  textStyle,
+} from './text.ts';
 
 export const MAX_NODES = 10_000;
 
@@ -205,10 +211,56 @@ function textNode(
   };
 }
 
+/**
+ * Line ranges from the collector, or undefined when they are absent or inconsistent (then the text node is
+ * converted as one block, the pre-OQ-11 behavior).
+ */
+function usableLines(raw: RawText): RawTextLine[] | undefined {
+  const lines = raw.lines;
+  if (!lines || lines.length < 2) return undefined;
+  let prev = 0;
+  for (const l of lines) {
+    if (l.start < prev || l.end <= l.start || l.end > raw.text.length) return undefined;
+    if (!l.rects.some((r) => r.width > 0 && r.height > 0)) return undefined;
+    prev = l.end;
+  }
+  return lines;
+}
+
 function convertText(raw: RawText, parent: RawElement, ctx: Ctx, path: number[]): Emitted[] {
   if (parent.style.visibility !== 'visible' || raw.rects.length === 0) return [];
-  const characters = normalizeWhitespace(raw.text, parent.style['white-space']);
+  const whiteSpace = parent.style['white-space'];
+  const characters = normalizeWhitespace(raw.text, whiteSpace);
   if (!characters) return [];
+  const lines = usableLines(raw);
+  const runs = lines
+    ? groupLines(
+        lines.map((l) => ({ rects: l.rects.filter((r) => r.width > 0 && r.height > 0) })),
+        resolveTextAlign(parent.style['text-align'], parent.style.direction),
+        parent.style.direction,
+      )
+    : [];
+  if (lines && runs.length > 1) {
+    // One TEXT per run of lines that share their aligned edge (OQ-11): exact position for a text node that
+    // starts or ends mid-line, and a plain paragraph still stays one editable layer.
+    const out: Emitted[] = [];
+    runs.forEach(([first, last], i) => {
+      const slice = raw.text.slice(lines[first]!.start, lines[last]!.end);
+      const chars = normalizeWhitespace(slice, whiteSpace).replace(/\n$/, '');
+      if (!chars) return;
+      const rects = lines.slice(first, last + 1).flatMap((l) => l.rects);
+      const visible = rects.filter((r) => r.width > 0 && r.height > 0);
+      const node = textNode(
+        ctx,
+        chars,
+        toDoc(ctx, unionRect(visible)),
+        last - first + 1,
+        parent.style,
+      );
+      out.push({ node, key: { layer: 1, z: 0, path: [...path, i] } });
+    });
+    return out;
+  }
   const node = textNode(
     ctx,
     characters,

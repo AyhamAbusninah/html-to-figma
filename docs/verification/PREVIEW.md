@@ -42,7 +42,7 @@ scroll position, so it now returns to the top-left.
 Screenshots of these stay **local only** (third-party and internal content) in the session scratchpad. Committed
 evidence from our own fixtures: `docs/verification/preview/{rtl-arabic,dashboard}.{page,preview}.png`.
 
-## 4. Main finding: paragraphs with inline elements overlap
+## 4. Main finding: paragraphs with inline elements overlap (fixed)
 
 On text-heavy pages (Wikipedia), lines of the same paragraph overlap. **Cause (conversion, not preview):** each DOM
 text node becomes one TEXT layer whose rect is the bounding box of all its line fragments (OQ-11 option A). A text
@@ -50,10 +50,21 @@ node that starts mid-line (after a link or badge) and wraps gets a box spanning 
 it starts at the box edge and lands on its neighbors. The preview draws the plugin's own plan, so **real Figma would
 show the same overlap.**
 
-Proposed fix (engine/collector, needs approval, not done here): for multi-line text nodes, emit one TEXT layer per
-line fragment (the collector already has the per-line client rects; it would also need each line's character
-range), or implement OQ-11 option B (merge an inline formatting context into one TEXT layer with styled ranges). Per-line
-fragments are simpler and positionally exact; option B is better for editing.
+**Fixed (2026-11-09), within OQ-11 option A.** The collector now records, for a text node that wraps, each line's
+character range (binary search on per-character rects, about log2(length) reads per line) and that line's rects. The
+engine groups consecutive lines that share the edge their alignment pins (left, right, center; justify pins the start
+edge) and emits one TEXT layer per group. A text node that starts mid-line, after a link or a label, gets its first
+line as its own layer at its exact position; a plain paragraph still becomes one editable layer. Option B (one layer
+with styled ranges) remains the v1.1 item for editing.
+
+Evidence (fixture pages, plan drawn by the preview renderer; browser page, before, after):
+
+| Case | Page | Before | After |
+|---|---|---|---|
+| Arabic paragraphs that start after a label tag (`rtl-arabic.html`) | ![](preview/overlap-arabic-tags.page.png) | ![](preview/overlap-arabic-tags.before.png) | ![](preview/overlap-arabic-tags.after.png) |
+| Latin paragraph with inline runs (`typography.html`, `inline-mixed`) | ![](preview/overlap-inline-mixed.page.png) | ![](preview/overlap-inline-mixed.before.png) | ![](preview/overlap-inline-mixed.after.png) |
+
+The vertical-slice e2e test checks every split text node against the browser's own line boxes (±0.5 px).
 
 ## 5. Limitations
 
