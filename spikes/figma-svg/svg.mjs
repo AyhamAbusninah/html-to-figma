@@ -34,6 +34,13 @@ const num = (v) => String(Math.round(v * 100) / 100);
 const rgb = (c) =>
   `rgb(${Math.round(c.r * 255)},${Math.round(c.g * 255)},${Math.round(c.b * 255)})`;
 
+/** PostScript-style name ("Noto Sans Arabic" + "Semi Bold" → "NotoSansArabic-SemiBold"), which Figma's SVG import
+ * resolves to the exact style, followed by the CSS family for browsers. */
+export function fontFamilyList(font) {
+  const ps = `${font.family.replace(/\s+/g, '')}-${font.style.replace(/\s+/g, '')}`;
+  return `${ps}, ${font.family}`;
+}
+
 /** Unique XML id from the layer name (Figma names imported layers after `id`). */
 function idFactory() {
   const used = new Map();
@@ -74,18 +81,30 @@ function shape(id, x, y, w, h, radii, attrs) {
 /**
  * @param {RenderPlan} plan
  * @param {Measure} measure
- * @param {{ rtl?: 'direction' | 'marks' }} [options]
- *   How right-to-left text is encoded (what Figma honors is the question this spike answers):
- *   'direction' (default): SVG direction="rtl", text-anchor resolved in that direction (standard SVG);
- *   'marks': left-to-right SVG text wrapped in U+200F RIGHT-TO-LEFT MARKs, text-anchor in physical terms.
+ * @param {{ rtl?: 'physical' | 'direction' | 'marks' }} [options]
+ *   How right-to-left text is encoded:
+ *   'physical' (default): text-anchor in physical terms (start = left edge, end = right edge), no direction
+ *     attribute. Figma's SVG import reads text-anchor this way and ignores `direction` (measured 2026-11-10),
+ *     and its text engine orders Arabic itself. Browsers misplace neutral characters at line ends in this mode.
+ *   'direction': SVG direction="rtl", text-anchor resolved in that direction (standard SVG; right in browsers,
+ *     wrong in Figma: right-aligned lines start at the right edge).
+ *   'marks': physical anchors with U+200F RIGHT-TO-LEFT MARKs around each line.
+ * @param {{ target?: 'figma' | 'browser' }} [options]
+ *   'figma' (default): Figma's SVG import puts a text box's top at (y - font-size) whatever the font's real ascent,
+ *     and only resolves weights from a PostScript-style family name ("Cairo-SemiBold"); both measured 2026-11-10.
+ *     So y = line top + font-size, and font-family lists the PostScript name first, the CSS family second.
+ *   'browser': y = line top + measured ascent (correct when a browser draws the SVG).
  * @returns {{ svg: string, stats: { boxes: number, texts: number, placeholders: number, lines: number }, skipped: string[] }}
  */
 export function planToSvg(plan, measure, options = {}) {
-  const rtlMode = options.rtl ?? 'direction';
+  const rtlMode = options.rtl ?? 'physical';
+  const target = options.target ?? 'figma';
   const id = idFactory();
   const defs = [];
   const skipped = new Set();
   const stats = { boxes: 0, texts: 0, placeholders: 0, lines: 0 };
+  /** Expected boxes of each emitted text (absolute), keyed by the SVG id, for comparing against Figma. */
+  const textBoxes = [];
   let defId = 0;
 
   const filterFor = (effects) => {
@@ -133,6 +152,8 @@ export function planToSvg(plan, measure, options = {}) {
     const { weight, italic } = styleToCss(n.font.style);
     const font = { family: n.font.family, weight, italic, size: n.fontSize };
     const { ascent, descent } = measure.metrics(font);
+    // Distance from a line's content top to the y written in the SVG (see options.target).
+    const baselineOffset = target === 'figma' ? n.fontSize : ascent;
     const lh = n.lineHeight.unit === 'PIXELS' ? n.lineHeight.value : null;
     let chars = n.characters;
     if (n.textCase === 'UPPER') chars = chars.toUpperCase();
@@ -157,7 +178,7 @@ export function planToSvg(plan, measure, options = {}) {
     if (n.align === 'JUSTIFIED') skipped.add('justified text drawn start-aligned');
     const deco = n.decoration === 'UNDERLINE' ? ' text-decoration="underline"' : n.decoration === 'STRIKETHROUGH' ? ' text-decoration="line-through"' : '';
     const attrs =
-      ` font-family="${esc(n.font.family)}" font-size="${num(n.fontSize)}" font-weight="${weight}"` +
+      ` font-family="${esc(fontFamilyList(n.font))}" font-size="${num(n.fontSize)}" font-weight="${weight}"` +
       (italic ? ' font-style="italic"' : '') +
       (n.letterSpacing.value ? ` letter-spacing="${num(n.letterSpacing.value)}"` : '') +
       ` fill="${rgb(n.fill.color)}"${n.fill.opacity < 1 ? ` fill-opacity="${num(n.fill.opacity)}"` : ''}` +
@@ -165,9 +186,11 @@ export function planToSvg(plan, measure, options = {}) {
       ` text-anchor="${anchor}"${useDir ? ' direction="rtl"' : ''}${deco} xml:space="preserve"`;
     const body =
       lines.length === 1
-        ? `<tspan x="${num(x)}" y="${num(top + ascent)}">${esc(mark + lines[0] + mark)}</tspan>`
-        : lines.map((l, i) => `<tspan x="${num(x)}" y="${num(top + ascent + i * pitch)}">${esc(mark + l + mark)}</tspan>`).join('');
-    return `<text id="${esc(id(n.name))}"${attrs}>${body}</text>`;
+        ? `<tspan x="${num(x)}" y="${num(top + baselineOffset)}">${esc(mark + lines[0] + mark)}</tspan>`
+        : lines.map((l, i) => `<tspan x="${num(x)}" y="${num(top + baselineOffset + i * pitch)}">${esc(mark + l + mark)}</tspan>`).join('');
+    const tid = id(n.name);
+    textBoxes.push({ id: tid, x: ax, y: ay, width: n.width, height: n.height, anchor: n.anchor, lines: lines.length });
+    return `<text id="${esc(tid)}"${attrs}>${body}</text>`;
   };
 
   const visit = (n, ox, oy) => {
@@ -207,5 +230,5 @@ export function planToSvg(plan, measure, options = {}) {
     (defs.length ? `<defs>${defs.join('')}</defs>` : '') +
     body +
     '</svg>';
-  return { svg, stats, skipped: [...skipped] };
+  return { svg, stats, skipped: [...skipped], textBoxes };
 }

@@ -21,9 +21,9 @@
 canvas, press <b>Esc</b>, then <b>Ctrl+V</b>. Try <b>Copy (SVG text)</b> first; if Figma pastes nothing or plain
 text, try the other buttons. <b>Download .svg</b> lets you drag the file onto the canvas instead.</p>
 <p><b>Arabic/RTL encoding:</b>
-  <label><input type="radio" name="rtl" value="direction" checked> A: SVG <code>direction="rtl"</code></label>
-  <label><input type="radio" name="rtl" value="marks"> B: right-to-left marks</label>
-  <span class="meta">(only matters for Arabic text; test V2 with both)</span></p>
+  <label><input type="radio" name="rtl" value="physical" checked> Figma (physical anchors, default)</label>
+  <label><input type="radio" name="rtl" value="direction"> A: SVG <code>direction="rtl"</code> (browser-correct, wrong in Figma)</label>
+  <label><input type="radio" name="rtl" value="marks"> B: right-to-left marks</label></p>
 <div id="rows">Loading…</div>
 <script type="module">
   import { planToSvg } from './svg.mjs';
@@ -46,8 +46,13 @@ text, try the other buttons. <b>Download .svg</b> lets you drag the file onto th
   for (const v of index) {
     const plan = await (await fetch(`out/${v.id}.plan.json`)).json();
     await loadFonts(plan.fonts.map((f) => ({ family: f.family, ...styleToCss(f.style), size: 16 })));
-    const r = planToSvg(plan, measure, { rtl: 'direction' });
-    built[v.id] = { direction: r.svg, marks: planToSvg(plan, measure, { rtl: 'marks' }).svg };
+    const r = planToSvg(plan, measure);
+    built[v.id] = {
+      physical: r.svg,
+      direction: planToSvg(plan, measure, { rtl: 'direction' }).svg,
+      marks: planToSvg(plan, measure, { rtl: 'marks' }).svg,
+      textBoxes: r.textBoxes,
+    };
     window.__svg = built; // for automated checks
     const div = document.createElement('div');
     div.className = 'row';

@@ -8,8 +8,8 @@ reverse-engineered format)? Context and the other routes: `docs/spikes/FIGMA_CLI
 - **No second layout engine:** `svg.mjs` serializes the unchanged `buildPlan` output. The only measurements are
   what SVG needs and the plan lacks: font ascent/descent for the baseline, and line breaks of multi-line text
   (the browser lays the text out at the captured width; `measure.mjs`).
-- **Arabic/RTL:** two encodings, because which one Figma honors is part of the question:
-  A `direction="rtl"` (standard SVG; matches the page in Chromium), B right-to-left marks around LTR text.
+- **Arabic/RTL:** text-anchor is written in physical terms (see the findings below); `direction` and
+  right-to-left marks are kept as options for comparison.
 
 | File | Purpose |
 |---|---|
@@ -30,3 +30,21 @@ cd spikes/figma-svg && python3 -m http.server 4319 --bind 127.0.0.1
 Known limits before any Figma test: CSS background images are not captured by the engine (white text on a missing
 hero image disappears), per-side borders become filled bars, inner shadows / shadow spread / justify / title case
 are not expressible, and SVG text never wraps (lines are fixed when copied).
+
+## Findings in real Figma (2026-11-10, file agTC4SsB2ElXf8e4oAPudc)
+
+Measured with the user's Ctrl+V pastes (round 1) and with Figma's own SVG importer through the official Figma MCP
+(`figma.createNodeFromSvg`, rounds 1–2), reading every text layer back and comparing with the render plan.
+
+| What Figma's SVG import does | Consequence for the serializer |
+|---|---|
+| Each `<svg>` becomes a FRAME; `<g>` → GROUP; rect/path → VECTOR; each `<tspan>` line → its own TEXT layer, editable | Text stays editable; a wrapped paragraph becomes one layer per line |
+| `direction="rtl"` is ignored; `text-anchor` is physical (start = left edge at x, end = right edge at x) | Right-aligned Arabic lines ran off to the right in round 1. Fixed: physical anchors (`rtl: 'physical'`, default) |
+| Arabic shaping and bidi order are done by Figma's text engine (punctuation and mixed Latin land correctly) | No marks or direction attributes needed |
+| A text box's top is placed at `y − font-size`, regardless of the font's real ascent (Tajawal, Cairo, Noto Sans Arabic, Inter at 12/16/24 px: all exact) | `y = line top + font-size` (`target: 'figma'`, default) → every box top equals the captured top |
+| `font-weight` and CSS weights map only to Regular/Bold; a PostScript-style family name selects the exact style (`Cairo-SemiBold`, `Inter-SemiBold`, `Tajawal-Medium`, `Cairo-Black`) | `font-family="<PostScript name>, <family>"` |
+
+Result after the fixes (Arabic fixture page, top 1100 px): every text edge within 0.5 px of the plan horizontally,
+every box top exact, correct fonts and weights, correct Arabic. Evidence: `docs/spikes/figma-svg/`.
+Still open: whether a real Ctrl+V paste behaves exactly like `createNodeFromSvg` after the fixes; justified text;
+the engine gaps (images, background images).
