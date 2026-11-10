@@ -17,10 +17,13 @@ test('V1: frame, rounded rectangle and left-anchored text at plan coordinates', 
   assert.match(svg, /<rect id="Rectangle" x="20" y="20" width="120" height="80" rx="8" fill="rgb\(51,102,255\)"\/>/);
   // top = 140 + (32 - 28.8) / 2 = 141.6; Figma target: y = top + font-size 24 = 165.6
   assert.match(svg, /font-family="Inter-Regular, Inter"[^>]*text-anchor="start"[^>]*><tspan x="20" y="165.6">Hello world<\/tspan>/);
+  // Flat for editing in Figma: background + children directly in the root, no wrapper group, no mask.
+  assert.match(svg, /viewBox="0 0 400 300"><rect id="Background" x="0" y="0" width="400" height="300" fill="rgb\(255,255,255\)"\/><rect id="Rectangle"/);
+  assert.doesNotMatch(svg, /<g|clip-path|<text id=/);
   // browser target: y = top + ascent 21.6 = 163.2
   const b = planToSvg(buildPlan(testDoc('v1'), KNOWN_FIGMA_FONTS), measure, { target: 'browser' }).svg;
   assert.match(b, /<tspan x="20" y="163.2">Hello world/);
-  assert.deepEqual(stats, { boxes: 2, texts: 1, placeholders: 0, lines: 1 });
+  assert.deepEqual(stats, { boxes: 1, texts: 1, placeholders: 0, lines: 1 });
 });
 
 test('V2 Arabic: default physical anchors (Figma); direction mode anchors "start" at the right edge', () => {

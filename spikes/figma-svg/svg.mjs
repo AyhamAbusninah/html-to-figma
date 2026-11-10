@@ -45,7 +45,8 @@ export function fontFamilyList(font) {
 function idFactory() {
   const used = new Map();
   return (name) => {
-    const base = (name || 'layer').replace(/[^\w.-]+/g, '_').replace(/^[^A-Za-z_]+/, 'n_').slice(0, 60) || 'layer';
+    // XML names allow Unicode letters, so Arabic layer names survive (Figma names layers after `id`).
+    const base = (name || 'layer').trim().replace(/[^\p{L}\p{M}\p{N}_.-]+/gu, '_').replace(/^[^\p{L}_]+/u, 'n_').slice(0, 60) || 'layer';
     const n = (used.get(base) ?? 0) + 1;
     used.set(base, n);
     return n === 1 ? base : `${base}_${n}`;
@@ -144,6 +145,7 @@ export function planToSvg(plan, measure, options = {}) {
     if (s.bottom) bars.push(shape(null, ax, ay + n.height - s.bottom, n.width, s.bottom, null, fill));
     if (s.left) bars.push(shape(null, ax, ay, s.left, n.height, null, fill));
     if (s.right) bars.push(shape(null, ax + n.width - s.right, ay, s.right, n.height, null, fill));
+    if (bars.length === 1) return bars[0].replace(/^<(rect|path)/, `<$1 id="${esc(id(`${n.name} border`))}"`);
     return `<g id="${esc(id(`${n.name} border`))}">${bars.join('')}</g>`;
   };
 
@@ -188,9 +190,21 @@ export function planToSvg(plan, measure, options = {}) {
       lines.length === 1
         ? `<tspan x="${num(x)}" y="${num(top + baselineOffset)}">${esc(mark + lines[0] + mark)}</tspan>`
         : lines.map((l, i) => `<tspan x="${num(x)}" y="${num(top + baselineOffset + i * pitch)}">${esc(mark + l + mark)}</tspan>`).join('');
-    const tid = id(n.name);
-    textBoxes.push({ id: tid, x: ax, y: ay, width: n.width, height: n.height, anchor: n.anchor, lines: lines.length });
-    return `<text id="${esc(tid)}"${attrs}>${body}</text>`;
+    // No id: Figma then names each text layer after its characters, like a text layer drawn in Figma.
+    textBoxes.push({ text: lines[0], x: ax, y: ay, width: n.width, height: n.height, anchor: n.anchor, lines: lines.length });
+    // Single line: no id, so Figma names the layer after its text. Several lines: Figma groups the lines; the id
+    // names that group after the first line.
+    return `<text${lines.length > 1 ? ` id="${esc(id(lines[0].slice(0, 40)))}"` : ''}${attrs}>${body}</text>`;
+  };
+
+  /** True when some descendant is painted outside n's box (clipping elsewhere only adds a mask layer in Figma). */
+  const overflows = (n) => {
+    const out = (c, ox, oy) => {
+      const x = ox + c.x, y = oy + c.y;
+      if (x < -0.5 || y < -0.5 || x + c.width > n.width + 0.5 || y + c.height > n.height + 0.5) return true;
+      return c.kind === 'frame' && !c.clipsContent && c.children.some((k) => out(k, x, y));
+    };
+    return n.children.some((c) => out(c, 0, 0));
   };
 
   const visit = (n, ox, oy) => {
@@ -213,9 +227,10 @@ export function planToSvg(plan, measure, options = {}) {
     const kids = n.children.map((c) => visit(c, ax, ay)).join('');
     // Leaf box: one shape named after the layer (no wrapper group).
     if (!kids && !n.strokes) return shape(name, ax, ay, n.width, n.height, n.radii, paint + op);
-    const bg = shape(null, ax, ay, n.width, n.height, n.radii, paint);
+    // An unpainted box only exists for its border or children: no empty background layer.
+    const bg = fill || n.effects.length ? shape(id(`${n.name} background`), ax, ay, n.width, n.height, n.radii, paint) : '';
     let inner = kids;
-    if (n.clipsContent && kids) {
+    if (n.clipsContent && kids && overflows(n)) {
       const cid = `clip${++defId}`;
       defs.push(`<clipPath id="${cid}">${shape(null, ax, ay, n.width, n.height, n.radii, '')}</clipPath>`);
       inner = `<g clip-path="url(#${cid})">${kids}</g>`;
@@ -223,8 +238,14 @@ export function planToSvg(plan, measure, options = {}) {
     return `<g id="${esc(name)}"${op}>${bg}${inner}${strokesFor(n, ax, ay)}</g>`;
   };
 
+  // Root: the SVG becomes a Figma frame that already clips, so its content goes straight into it (no wrapper group,
+  // no mask): a click selects a page section, not the whole page.
   const root = plan.root;
-  const body = visit({ ...root, x: 0, y: 0 }, 0, 0);
+  const rootFill = root.fills[0];
+  const body =
+    shape('Background', 0, 0, root.width, root.height, null,
+      rootFill ? ` fill="${rgb(rootFill.color)}"` : ' fill="rgb(255,255,255)"') +
+    root.children.map((c) => visit(c, 0, 0)).join('');
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" width="${num(root.width)}" height="${num(root.height)}" viewBox="0 0 ${num(root.width)} ${num(root.height)}">` +
     (defs.length ? `<defs>${defs.join('')}</defs>` : '') +

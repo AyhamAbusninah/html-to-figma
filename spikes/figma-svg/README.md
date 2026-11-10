@@ -38,7 +38,7 @@ Measured with the user's Ctrl+V pastes (round 1) and with Figma's own SVG import
 
 | What Figma's SVG import does | Consequence for the serializer |
 |---|---|
-| Each `<svg>` becomes a FRAME; `<g>` → GROUP; rect/path → VECTOR; each `<tspan>` line → its own TEXT layer, editable | Text stays editable; a wrapped paragraph becomes one layer per line |
+| Each `<svg>` becomes a FRAME; `<g>` → GROUP named after `id`; rect/path → VECTOR; `clip-path` → a mask group; a `<text>` with several `<tspan>` lines → a GROUP of single-line TEXT layers; a `<text>` without `id` is named after its characters | Round 2 nested everything under a root wrapper group and a mask, so a click selected the whole page (user report: items could not be removed). Now flat: background + sections directly in the frame, clipping only where content really overflows, no empty backgrounds, text named by content, paragraph groups named by their first line |
 | `direction="rtl"` is ignored; `text-anchor` is physical (start = left edge at x, end = right edge at x) | Right-aligned Arabic lines ran off to the right in round 1. Fixed: physical anchors (`rtl: 'physical'`, default) |
 | Arabic shaping and bidi order are done by Figma's text engine (punctuation and mixed Latin land correctly) | No marks or direction attributes needed |
 | A text box's top is placed at `y − font-size`, regardless of the font's real ascent (Tajawal, Cairo, Noto Sans Arabic, Inter at 12/16/24 px: all exact) | `y = line top + font-size` (`target: 'figma'`, default) → every box top equals the captured top |
