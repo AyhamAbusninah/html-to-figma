@@ -99,6 +99,25 @@ export interface RawElement {
   pseudo?: { before: boolean; after: boolean };
   /** Set when text-overflow is ellipsis and the content overflows horizontally (truncation not reproduced yet). */
   ellipsisTruncated?: boolean;
+  /**
+   * Replaced content resolved by the collector's asset phase: `assetId` of the encoded pixels in
+   * RawPageSnapshot.assets, or `svg` = self-contained, sanitized markup (inline <svg>, or <img src=*.svg>).
+   * `assetFailed` = pixels were looked for but every tier failed (warning IMAGE_FETCH_FAILED).
+   */
+  assetId?: string;
+  svg?: string;
+  assetFailed?: boolean;
+}
+
+/** Encoded image from the collector (CaptureDocument ImageAsset shape). */
+export interface RawImageAsset {
+  mime: 'image/png' | 'image/jpeg' | 'image/gif';
+  /** Base64 without the data: prefix. */
+  data: string;
+  width: number;
+  height: number;
+  source: 'canvas' | 'fetch' | 'screenshot';
+  originalUrl?: string;
 }
 
 export interface RawText {
@@ -148,4 +167,6 @@ export interface RawPageSnapshot {
   clientWidth?: number;
   /** The rendered tree, rooted at <html>. Absent → metadata-only document (R0 skeleton behavior). */
   tree?: RawElement;
+  /** Encoded images referenced by RawElement.assetId, keyed by content hash (EXT-I-9). */
+  assets?: Record<string, RawImageAsset>;
 }

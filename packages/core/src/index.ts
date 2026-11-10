@@ -1,6 +1,7 @@
 export type {
   RawControl,
   RawElement,
+  RawImageAsset,
   RawNode,
   RawPageSnapshot,
   RawRect,

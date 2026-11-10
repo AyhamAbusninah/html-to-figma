@@ -11,10 +11,26 @@ const count = (re: RegExp) => (html.match(re) ?? []).length;
 
 describe('renderPlanHtml', () => {
   it('renders exactly the layers of the plugin plan (same plan the Figma adapter executes)', () => {
-    expect(planCounts(plan)).toEqual({ frame: 2, rect: 0, text: 1, placeholder: 3 });
+    expect(planCounts(plan)).toEqual({
+      frame: 2,
+      rect: 0,
+      text: 1,
+      placeholder: 1,
+      image: 1,
+      svg: 1,
+    });
     expect(count(/class="n /g)).toBe(6);
     expect(count(/data-kind="text"/g)).toBe(1);
-    expect(count(/data-kind="placeholder"/g)).toBe(3);
+    expect(count(/data-kind="placeholder"/g)).toBe(1);
+  });
+
+  it('captured images and SVGs are drawn as <img> (pixels with object-fit and radii; SVG as a data URL)', () => {
+    expect(html).toMatch(
+      /<img class="n media" data-kind="image" data-id="n3"[^>]*src="data:image\/jpeg;base64,\/9j\/" style="[^"]*border-radius:32px 32px 32px 32px;object-fit:contain;"/,
+    );
+    expect(html).toMatch(
+      /data-kind="svg" data-id="n5"[^>]*src="data:image\/svg\+xml;charset=utf-8,%3Csvg%20xmlns/,
+    );
   });
 
   it('uses parent-relative coordinates and sizes from the plan', () => {

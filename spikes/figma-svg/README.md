@@ -48,3 +48,24 @@ Result after the fixes (Arabic fixture page, top 1100 px): every text edge withi
 every box top exact, correct fonts and weights, correct Arabic. Evidence: `docs/spikes/figma-svg/`.
 Still open: whether a real Ctrl+V paste behaves exactly like `createNodeFromSvg` after the fixes; justified text;
 the engine gaps (images, background images).
+
+## Phase 1 findings: images, icons, gradients, paste size (2026-11-10, user's Ctrl+V in Figma Web)
+
+Test board `media.html` (`media.mjs` → `out/media.json`), checked by the user against the browser preview:
+
+| Case | SVG technique | Figma result |
+|---|---|---|
+| A | `<image href="data:image/jpeg;base64,…">` | ✅ image fill |
+| B | one `<image>` in `<defs>` reused with `<use>` ×3 | ✅ |
+| C | `<pattern>` with an image as a rounded rect's fill | ✅ |
+| D | image clipped by `<clipPath><circle>` (avatar) | ✅ |
+| E | nested `<svg viewBox>` icons (star, gradient logo) | ✅ editable vectors, colors changeable |
+| F | `linearGradient` (3 stops, stop-opacity) | ✅ |
+| G | `radialGradient` | ✅ |
+| H | Arabic text over an image | ✅ (text above the image, as on the page) |
+| I | `preserveAspectRatio="xMidYMid slice"` (object-fit: cover) | ✅ cropped, not stretched |
+| J | transparent PNG, and `opacity="0.5"` | ✅ |
+| Size | 2 MB, 8 MB, 26 MB of noise JPEGs | ✅ all pasted |
+
+Consequence: images, inline SVG, gradients and background images can all ship through Copy to Figma; ~26 MB pastes
+work, so the existing 4096 px / JPEG limits are enough.

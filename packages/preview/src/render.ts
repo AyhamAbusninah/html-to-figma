@@ -10,7 +10,9 @@ import type {
   EffectSpec,
   PlanBox,
   PlanNode,
+  PlanImage,
   PlanPlaceholder,
+  PlanSvg,
   PlanText,
   RenderPlan,
   SolidPaintSpec,
@@ -100,10 +102,10 @@ function strokeOverlay(n: PlanBox): string {
   return `<div class="stroke" style="${css}"></div>`;
 }
 
-function box(n: PlanBox): string {
+function box(n: PlanBox, images: RenderPlan['images']): string {
   let css = common(n) + backgroundCss(n.fills) + radiiCss(n.radii) + effectsCss(n.effects);
   if (n.clipsContent) css += 'overflow:hidden;';
-  const kids = n.children.map(node).join('');
+  const kids = n.children.map((c) => node(c, images)).join('');
   return `<div class="n box" data-kind="${n.kind}" data-id="${esc(n.sourceId)}" title="${esc(n.name)}" style="${css}">${strokeOverlay(n)}${kids}</div>`;
 }
 
@@ -135,17 +137,31 @@ function placeholder(n: PlanPlaceholder): string {
   return `<div class="n ph" data-kind="placeholder" data-id="${esc(n.sourceId)}" title="${esc(`${n.name}: ${n.reason}`)}" style="${css}"><span class="ph-label">${esc(n.reason)}</span></div>`;
 }
 
-function node(n: PlanNode): string {
+const FIT = { FILL: 'cover', FIT: 'contain', STRETCH: 'fill' } as const;
+
+/** Captured pixels or SVG drawn as <img> (an SVG in <img> never runs scripts). */
+function media(n: PlanImage | PlanSvg, images: RenderPlan['images']): string {
+  const src =
+    n.kind === 'svg'
+      ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(n.svg)}`
+      : `data:${images[n.assetId]!.mime};base64,${images[n.assetId]!.data}`;
+  const css =
+    common(n) + radiiCss(n.radii) + (n.kind === 'image' ? `object-fit:${FIT[n.scaleMode]};` : '');
+  return `<img class="n media" data-kind="${n.kind}" data-id="${esc(n.sourceId)}" title="${esc(n.name)}" alt="" src="${src}" style="${css}">`;
+}
+
+function node(n: PlanNode, images: RenderPlan['images']): string {
   if (n.kind === 'text') return text(n);
   if (n.kind === 'placeholder') return placeholder(n);
-  return box(n);
+  if (n.kind === 'image' || n.kind === 'svg') return media(n, images);
+  return box(n, images);
 }
 
 /** HTML for the whole plan. The root is positioned at (0, 0) at its natural size; zoom/pan are applied outside. */
 export function renderPlanHtml(plan: RenderPlan): string {
   const r = plan.root;
   const css = `left:0;top:0;width:${px(r.width)};height:${px(r.height)};${backgroundCss(r.fills.length ? r.fills : [{ type: 'SOLID', color: { r: 1, g: 1, b: 1 }, opacity: 1 }])}overflow:hidden;`;
-  return `<div class="n box root" data-kind="frame" data-id="${esc(r.sourceId)}" title="${esc(r.name)}" style="${css}">${r.children.map(node).join('')}</div>`;
+  return `<div class="n box root" data-kind="frame" data-id="${esc(r.sourceId)}" title="${esc(r.name)}" style="${css}">${r.children.map((c) => node(c, plan.images)).join('')}</div>`;
 }
 
 /** Google Fonts stylesheet URLs for the families the plan uses (one per family, so one unknown family can't break all). */
@@ -164,10 +180,8 @@ export function fontStylesheets(plan: RenderPlan): string[] {
 }
 
 /** Counts of rendered elements by kind (for stats and tests). */
-export function planCounts(
-  plan: RenderPlan,
-): Record<'frame' | 'rect' | 'text' | 'placeholder', number> {
-  const c = { frame: 0, rect: 0, text: 0, placeholder: 0 };
+export function planCounts(plan: RenderPlan): Record<PlanNode['kind'], number> {
+  const c = { frame: 0, rect: 0, text: 0, placeholder: 0, image: 0, svg: 0 };
   const visit = (n: PlanNode) => {
     c[n.kind]++;
     if (n.kind === 'frame' || n.kind === 'rect') n.children.forEach(visit);

@@ -116,6 +116,8 @@ const NOT_CAPTURED_LABELS: Record<string, string> = {
   IMAGE_NOT_CAPTURED: 'images (placeholders)',
   SVG_NOT_CAPTURED: 'SVG icons/graphics (placeholders)',
   IFRAME_NOT_CAPTURED: 'embedded frames (placeholders)',
+  IMAGE_FETCH_FAILED: 'images from other sites (placeholders)',
+  SVG_TOO_LARGE: 'very large SVG graphics (placeholders)',
   BACKGROUND_IMAGE_NOT_CAPTURED: 'background images',
   GRADIENT_NOT_CAPTURED: 'gradients',
   PSEUDO_ELEMENT_NOT_CAPTURED: '::before/::after decorations',

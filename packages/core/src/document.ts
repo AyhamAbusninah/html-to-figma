@@ -62,6 +62,7 @@ export function buildCapture(
     (raw.scrollOffset?.x ?? 0) +
     (rtl ? Math.max(0, raw.scroll.width - (raw.clientWidth ?? raw.scroll.width)) : 0);
   const ctx = createContext(offsetX, raw.scrollOffset?.y ?? 0);
+  ctx.assets = raw.assets;
   const children = raw.tree ? convertTree(raw.tree, ctx) : [];
   const document: CaptureDocument = {
     schemaVersion: SCHEMA_VERSION,
@@ -86,7 +87,10 @@ export function buildCapture(
       },
       warnings: collectWarnings(ctx),
     },
-    assets: { images: {} },
+    // Only the images some node references (dedupe by content hash happened in the collector, EXT-I-9).
+    assets: {
+      images: Object.fromEntries([...ctx.usedAssets].map((id) => [id, raw.assets![id]!])),
+    },
     root: {
       id: 'n0',
       name: raw.title || 'page',

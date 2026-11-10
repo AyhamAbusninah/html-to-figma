@@ -16,8 +16,10 @@
 import {
   withDirectionMark,
   type PlanBox,
+  type PlanImage,
   type PlanNode,
   type PlanPlaceholder,
+  type PlanSvg,
   type PlanText,
   type RenderPlan,
 } from '../plan/plan.ts';
@@ -31,7 +33,14 @@ export interface SvgOptions {
 
 export interface SvgResult {
   svg: string;
-  stats: { boxes: number; texts: number; placeholders: number; lines: number };
+  stats: {
+    boxes: number;
+    texts: number;
+    images: number;
+    svgs: number;
+    placeholders: number;
+    lines: number;
+  };
   /** What SVG can't express, for the user-facing note. */
   skipped: string[];
 }
@@ -135,7 +144,7 @@ export function planToSvg(plan: RenderPlan, options: SvgOptions = {}): SvgResult
   const id = idFactory();
   const defs: string[] = [];
   const skipped = new Set<string>();
-  const stats = { boxes: 0, texts: 0, placeholders: 0, lines: 0 };
+  const stats = { boxes: 0, texts: 0, images: 0, svgs: 0, placeholders: 0, lines: 0 };
   let defId = 0;
 
   const filterFor = (effects: PlanBox['effects']): string => {
@@ -247,7 +256,7 @@ export function planToSvg(plan: RenderPlan, options: SvgOptions = {}): SvgResult
     return n.children.some((c) => out(c, 0, 0));
   };
 
-  const placeholder = (n: PlanPlaceholder, ax: number, ay: number): string => {
+  const placeholder = (n: Omit<PlanPlaceholder, 'kind'>, ax: number, ay: number): string => {
     stats.placeholders++;
     return shape(
       id(`${n.name} (${n.reason})`),
@@ -260,12 +269,53 @@ export function planToSvg(plan: RenderPlan, options: SvgOptions = {}): SvgResult
     );
   };
 
+  /** Rounded corners → a clip path (Figma imports it as a mask, verified with the circle avatar case). */
+  const roundClip = (
+    n: { radii?: Radii; width: number; height: number },
+    ax: number,
+    ay: number,
+  ): string => {
+    const r = n.radii;
+    if (!r || !(r.tl || r.tr || r.br || r.bl)) return '';
+    const cid = `clip${++defId}`;
+    defs.push(`<clipPath id="${cid}">${shape(null, ax, ay, n.width, n.height, r, '')}</clipPath>`);
+    return ` clip-path="url(#${cid})"`;
+  };
+
+  // object-fit → preserveAspectRatio: cover crops, contain letterboxes, fill stretches (case I verified in Figma).
+  const ASPECT = { FILL: 'xMidYMid slice', FIT: 'xMidYMid meet', STRETCH: 'none' } as const;
+
+  const image = (n: PlanImage, ax: number, ay: number): string => {
+    const asset = plan.images[n.assetId];
+    if (!asset) return placeholder(n, ax, ay);
+    stats.images++;
+    return (
+      `<image id="${esc(id(n.name))}" x="${num(ax)}" y="${num(ay)}" width="${num(n.width)}" height="${num(n.height)}"` +
+      ` preserveAspectRatio="${ASPECT[n.scaleMode]}"${n.opacity < 1 ? ` opacity="${num(n.opacity)}"` : ''}` +
+      `${roundClip(n, ax, ay)} href="data:${asset.mime};base64,${asset.data}"/>`
+    );
+  };
+
+  /** Captured SVG placed as a nested <svg> at the node's box: Figma keeps it as editable vectors (case E). */
+  const nestedSvg = (n: PlanSvg, ax: number, ay: number): string => {
+    const open = /^<svg\b([^>]*)>/.exec(n.svg);
+    if (!open) return placeholder(n, ax, ay);
+    stats.svgs++;
+    const attrs = open[1]!.replace(/\s(?:x|y|width|height|id)\s*=\s*("[^"]*"|'[^']*')/g, '');
+    const svg =
+      `<svg id="${esc(id(n.name))}" x="${num(ax)}" y="${num(ay)}" width="${num(n.width)}" height="${num(n.height)}"${attrs}>` +
+      n.svg.slice(open[0].length);
+    return n.opacity < 1 ? `<g opacity="${num(n.opacity)}">${svg}</g>` : svg;
+  };
+
   const visit = (n: PlanNode, ox: number, oy: number): string => {
     const ax = ox + n.x;
     const ay = oy + n.y;
     if (n.blendMode) skipped.add('blend modes');
     if (n.kind === 'text') return text(n, ax, ay);
     if (n.kind === 'placeholder') return placeholder(n, ax, ay);
+    if (n.kind === 'image') return image(n, ax, ay);
+    if (n.kind === 'svg') return nestedSvg(n, ax, ay);
     stats.boxes++;
     const fill = n.fills[0];
     if (n.fills.length > 1) skipped.add('multiple fills (first kept)');

@@ -11,6 +11,7 @@ import type {
   FrameNode,
   ImageNode,
   Paint,
+  SvgNode,
   TextNode,
 } from '@h2f/schema';
 import {
@@ -23,7 +24,7 @@ import {
   px,
   solidOrNull,
 } from './css.ts';
-import type { RawElement, RawRect, RawText, RawTextLine } from './raw-snapshot.ts';
+import type { RawElement, RawImageAsset, RawRect, RawText, RawTextLine } from './raw-snapshot.ts';
 import {
   countLines,
   groupLines,
@@ -54,7 +55,11 @@ const AGGREGATED = new Set([
   'ARABIC_LETTER_SPACING_IGNORED',
   'TRANSFORM_UNSUPPORTED',
   'TEXT_ELLIPSIS_NOT_APPLIED',
+  'IMAGE_FETCH_FAILED',
 ]);
+
+/** Serialized SVGs above this become raster-only / placeholders (EXT-S-6). */
+export const MAX_SVG_BYTES = 512 * 1024;
 
 const AGGREGATED_MESSAGE: Record<string, string> = {
   BACKGROUND_IMAGE_NOT_CAPTURED:
@@ -67,6 +72,8 @@ const AGGREGATED_MESSAGE: Record<string, string> = {
   CLIP_MASK_UNSUPPORTED: 'clip-path / mask ignored (element rendered unclipped).',
   ARABIC_LETTER_SPACING_IGNORED: 'letter-spacing set to 0 on Arabic text (EXT-RTL-5).',
   TRANSFORM_UNSUPPORTED: 'Rotated/scaled/skewed elements captured as their bounding box.',
+  IMAGE_FETCH_FAILED:
+    'Some images could not be read (cross-origin without CORS, or not loaded); placeholders instead (EXT-I-5).',
   TEXT_ELLIPSIS_NOT_APPLIED:
     'text-overflow: ellipsis not reproduced yet; truncated text is clipped without "…" (EXT-X-8).',
 };
@@ -83,6 +90,9 @@ interface Ctx {
   aggregated: Map<string, { count: number; nodeIds: string[] }>;
   /** Side output, not part of CaptureDocument: the page's own line breaks of multi-line TEXT nodes, by node id. */
   textLines: Map<string, string[]>;
+  /** Encoded images from the collector, and the ids actually referenced by emitted nodes (only those are kept). */
+  assets?: Record<string, RawImageAsset>;
+  usedAssets: Set<string>;
 }
 
 interface OrderKey {
@@ -110,6 +120,7 @@ export function createContext(offsetX: number, offsetY: number): Ctx {
     warnings: [],
     aggregated: new Map(),
     textLines: new Map(),
+    usedAssets: new Set(),
   };
 }
 
@@ -351,24 +362,64 @@ export function convertElement(el: RawElement, ctx: Ctx, path: number[]): Emitte
   const hidden = s.visibility !== 'visible';
   const radii = zeroArea ? null : parseRadii(s, rect.width, rect.height);
 
-  // Replaced content: explicit placeholders until R4 (assets).
+  // Replaced content: SVG markup or encoded pixels from the collector's asset phase (R4), else a placeholder.
   if (el.replaced) {
     if (zeroArea || hidden) return [];
     const id = newId(ctx);
     const kind = el.replaced.kind;
+    const op = Math.round(opacity * 1000) / 1000;
+    if (el.svg && el.svg.length <= MAX_SVG_BYTES) {
+      countNode(ctx);
+      ctx.svgCount++;
+      const node: SvgNode = {
+        id,
+        name: layerName(el),
+        type: 'SVG',
+        rect,
+        opacity: op,
+        svg: el.svg,
+        fallbackAssetId: null,
+      };
+      return [{ node, key }];
+    }
+    if (el.svg)
+      warn(
+        ctx,
+        'SVG_TOO_LARGE',
+        id,
+        `Serialized SVG is ${Math.round(el.svg.length / 1024)} KB, above the 512 KB limit; placeholder.`,
+      );
+    if (el.assetId && ctx.assets?.[el.assetId]) {
+      countNode(ctx);
+      ctx.imageCount++;
+      ctx.usedAssets.add(el.assetId);
+      const node: ImageNode = {
+        id,
+        name: layerName(el),
+        type: 'IMAGE',
+        rect,
+        opacity: op,
+        assetId: el.assetId,
+        scaleMode: OBJECT_FIT[s['object-fit']] ?? 'STRETCH',
+        ...(radii ? { radii } : {}),
+      };
+      return [{ node, key }];
+    }
+    if (el.assetFailed) warn(ctx, 'IMAGE_FETCH_FAILED', id, '');
     const code =
       kind === 'svg'
         ? 'SVG_NOT_CAPTURED'
         : kind === 'iframe'
           ? 'IFRAME_NOT_CAPTURED'
           : 'IMAGE_NOT_CAPTURED';
-    warn(
-      ctx,
-      code,
-      id,
-      `<${kind}> content is not captured yet (R4); rendered as a placeholder.`,
-      kind,
-    );
+    if (!el.assetFailed && !el.svg)
+      warn(
+        ctx,
+        code,
+        id,
+        `<${kind}> content is not captured yet (R4); rendered as a placeholder.`,
+        kind,
+      );
     countNode(ctx);
     if (kind === 'svg') ctx.svgCount++;
     else ctx.imageCount++;

@@ -10,7 +10,7 @@ describe('Copy to Figma', () => {
       /^<svg xmlns="http:\/\/www.w3.org\/2000\/svg" width="1280" height="2000"/,
     );
     expect(r.svg).toContain('<rect id="Background"');
-    expect(r.stats).toEqual({ boxes: 0, texts: 0, placeholders: 0, lines: 0 });
+    expect(r.stats).toEqual({ boxes: 0, texts: 0, images: 0, svgs: 0, placeholders: 0, lines: 0 });
   });
 
   it('note: how to paste, a large-page hint, and what was approximated', () => {

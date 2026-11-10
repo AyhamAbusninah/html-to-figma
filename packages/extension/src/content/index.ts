@@ -9,7 +9,8 @@ import { validateCapture } from '@h2f/schema';
 import { CAPTURE_GLOBAL } from '../config/constants.ts';
 import { EXTENSION_VERSION } from '../config/version.ts';
 import type { CaptureResult } from '../shared/messages.ts';
-import { collectPageSnapshot } from './collect.ts';
+import { resolveAssets } from './assets.ts';
+import { collectPage } from './collect.ts';
 
 async function capture(): Promise<CaptureResult> {
   const started = performance.now();
@@ -17,7 +18,9 @@ async function capture(): Promise<CaptureResult> {
   let textLines: Record<string, string[]>;
   try {
     await window.document.fonts.ready;
-    ({ document, textLines } = buildCapture(collectPageSnapshot(window), {
+    const { snapshot, jobs } = collectPage(window);
+    await resolveAssets(snapshot, jobs);
+    ({ document, textLines } = buildCapture(snapshot, {
       extractorVersion: EXTENSION_VERSION,
       capturedAt: new Date().toISOString(),
     }));

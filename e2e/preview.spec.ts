@@ -60,13 +60,14 @@ for (const name of ['rtl-arabic.html', 'dashboard.html', 'forms.html']) {
       layers: document.querySelectorAll('#stage .n').length,
       texts: document.querySelectorAll('#stage .n.text').length,
       rtl: document.querySelectorAll('#stage .n.text[dir=rtl]').length,
-      ph: document.querySelectorAll('#stage .n.ph').length,
+      ph: document.querySelectorAll('#stage .n.ph, #stage .n.media').length,
     }));
     expect(counts.layers).toBe(nodes.length);
     expect(counts.texts).toBe(doc.meta.stats.textCount);
     expect(counts.rtl).toBe(
       nodes.filter((n) => n.type === 'TEXT' && n.style.direction === 'rtl').length,
     );
+    // Captured images/SVGs are drawn as <img>, the rest as placeholders: together one layer each.
     expect(counts.ph).toBe(doc.meta.stats.imageCount + doc.meta.stats.svgCount);
 
     // Geometry: every element's box (relative to the root, unscaled) equals the capture rect (±0.5 px).

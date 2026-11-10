@@ -6,7 +6,9 @@ import type {
   FontName,
   PlanBox,
   PlanNode,
+  PlanImage,
   PlanPlaceholder,
+  PlanSvg,
   PlanText,
   RenderPlan,
 } from '../plan/plan.ts';
@@ -141,7 +143,7 @@ export async function executePlan(
     return t;
   };
 
-  const createPlaceholder = (n: PlanPlaceholder): RectangleNode => {
+  const createPlaceholder = (n: PlanPlaceholder | PlanImage | PlanSvg): RectangleNode => {
     const r = track(figma.createRectangle());
     r.resize(Math.max(n.width, 0.01), Math.max(n.height, 0.01));
     applyCommon(r, n);
@@ -157,7 +159,9 @@ export async function executePlan(
 
   const createNode = (n: PlanNode): SceneNode => {
     if (n.kind === 'text') return createText(n);
-    if (n.kind === 'placeholder') return createPlaceholder(n);
+    // Images/SVG: placeholders in the plugin for now (Copy to Figma draws them; plugin node creation pending).
+    if (n.kind === 'placeholder' || n.kind === 'image' || n.kind === 'svg')
+      return createPlaceholder(n);
     if (n.kind === 'rect') {
       const r = track(figma.createRectangle());
       applyBox(r, n);

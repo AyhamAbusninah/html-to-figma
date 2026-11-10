@@ -369,6 +369,49 @@ describe('replaced content, controls, warnings', () => {
     ]);
   });
 
+  it('collected assets: SVG markup → SvgNode, pixels → IMAGE with assetId, only used assets kept (R4)', () => {
+    const asset = {
+      mime: 'image/png' as const,
+      data: 'iVBORw0KGgo=',
+      width: 2,
+      height: 2,
+      source: 'canvas' as const,
+    };
+    const raw = page([
+      el('svg', rect(0, 0, 24, 24), {}, [], {
+        replaced: { kind: 'svg' },
+        svg: '<svg xmlns="http://www.w3.org/2000/svg"/>',
+      }),
+      el('img', rect(30, 0, 64, 64), { 'object-fit': 'contain' }, [], {
+        replaced: { kind: 'img' },
+        assetId: 'img_a',
+      }),
+      el('img', rect(100, 0, 64, 64), {}, [], { replaced: { kind: 'img' }, assetFailed: true }),
+      el('svg', rect(170, 0, 24, 24), {}, [], {
+        replaced: { kind: 'svg' },
+        svg: `<svg>${'x'.repeat(600 * 1024)}</svg>`,
+      }),
+    ]);
+    raw.assets = { img_a: asset, img_unused: asset };
+    const doc = build(raw);
+    expect(validateCapture(doc).ok).toBe(true);
+    const [svg, img, failed, big] = doc.root.children;
+    expect(svg).toMatchObject({
+      type: 'SVG',
+      svg: '<svg xmlns="http://www.w3.org/2000/svg"/>',
+      fallbackAssetId: null,
+    });
+    expect(img).toMatchObject({ type: 'IMAGE', assetId: 'img_a', scaleMode: 'FIT' });
+    expect(failed).toMatchObject({ type: 'IMAGE', assetId: null });
+    expect(big).toMatchObject({ type: 'IMAGE', assetId: null });
+    expect(Object.keys(doc.assets.images)).toEqual(['img_a']);
+    expect(doc.meta.stats).toMatchObject({ imageCount: 2, svgCount: 2 });
+    const codes = doc.meta.warnings.map((w) => w.code);
+    expect(codes).toContain('SVG_TOO_LARGE');
+    expect(codes).toContain('IMAGE_FETCH_FAILED');
+    expect(codes).not.toContain('IMAGE_NOT_CAPTURED');
+  });
+
   it('form controls: value text in the content box; password masked even if the collector failed to (EXT-X-6/7)', () => {
     const input = (text: string, inputType: string, isPlaceholder = false) =>
       el(

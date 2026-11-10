@@ -57,6 +57,11 @@ const TEXT_INPUTS = new Set([
   'reset',
 ]);
 
+import type { AssetJob } from './assets.ts';
+
+/** Replaced elements whose content the asset phase resolves (set per collectPageSnapshot call). */
+let jobs: AssetJob[] = [];
+
 const rectOf = (r: DOMRect): RawRect => ({ x: r.x, y: r.y, width: r.width, height: r.height });
 
 function pickStyle(cs: CSSStyleDeclaration): RawStyle {
@@ -254,6 +259,13 @@ function collectElement(el: Element): RawElement | null {
   const replaced = REPLACED[tag];
   if (replaced) {
     raw.replaced = { kind: replaced };
+    if (cs.visibility === 'visible') {
+      if (replaced === 'svg') jobs.push({ kind: 'svg', raw, el: el as SVGSVGElement });
+      else if (replaced === 'img') jobs.push({ kind: 'img', raw, el: el as HTMLImageElement });
+      else if (replaced === 'canvas')
+        jobs.push({ kind: 'canvas', raw, el: el as HTMLCanvasElement });
+      else if (replaced === 'video') jobs.push({ kind: 'video', raw, el: el as HTMLVideoElement });
+    }
     return raw; // content not traversed (svg internals, iframe document…)
   }
   const ctrl = readControl(el, tag);
@@ -278,6 +290,15 @@ function collectElement(el: Element): RawElement | null {
   }
   raw.children = children;
   return raw;
+}
+
+/** The DOM read plus the replaced elements whose pixels/markup the asset phase resolves (see assets.ts). */
+export function collectPage(win: Window): { snapshot: RawPageSnapshot; jobs: AssetJob[] } {
+  jobs = [];
+  const snapshot = collectPageSnapshot(win);
+  const out = jobs;
+  jobs = [];
+  return { snapshot, jobs: out };
 }
 
 export function collectPageSnapshot(win: Window): RawPageSnapshot {

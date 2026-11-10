@@ -49,6 +49,7 @@ domains:
     entry_points: ["collectPageSnapshot packages/extension/src/content/collect.ts:283"]
     core_logic_files: ["packages/extension/src/content/collect.ts", "packages/core/src/raw-snapshot.ts"]
     hidden_hooks_or_events:
+      - "Asset phase after the DOM read: collectPage → resolveAssets (content/assets.ts) serializes inline SVG (styles inlined, <use> expanded, sanitized, ids prefixed) and encodes pixels (canvas or CORS fetch, ≤4096 px, PNG/JPEG, SHA-256 dedupe) into RawPageSnapshot.assets"
       - "Shadow DOM: open roots + closed roots of custom elements only via chrome.dom.openOrClosedShadowRoot (collect.ts:79); slots flattened (collect.ts:95)"
       - "Wrapped text: per-line character ranges by binary search on char rects → RawText.lines (collect.ts:181)"
       - "Form controls read values, passwords masked at the source (collect.ts:104)"
@@ -213,7 +214,7 @@ critical_invariants:
     - "Capture never modifies the page DOM (AC-EXT-8)."
 
 known_gaps:
-  - "Images, inline SVG, canvas, video, CSS background images are placeholders (R4): collector does not read pixels, service-worker fetch-asset is a stub (service-worker.ts:15), assets.images always {} (document.ts:78)."
+  - "Images (R4, in progress on feat/images-icons): inline SVG, <img src=*.svg>, same-origin/data/blob/CORS images, canvas and video are captured (content/assets.ts). Still placeholders: cross-origin images without CORS (Tier 2 fetch needs a host permission, Tier 3 screenshot crop not built), iframes, CSS background images. The Figma plugin still draws images/SVG as placeholders (Copy to Figma and the preview draw them)."
   - "Gradients not captured although the schema supports them (convert.ts:385 warns GRADIENT_NOT_CAPTURED)."
   - "::before/::after not captured (OQ-7 decided B, not implemented); text-overflow ellipsis not applied; icon fonts (OQ-16) not rasterized."
   - "Element picker (OQ-4, MVP) and inner scroll-area expansion (OQ-5) not implemented; captureMode is always 'page' (document.ts:61)."

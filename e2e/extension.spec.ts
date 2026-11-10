@@ -130,7 +130,10 @@ for (const variant of Object.keys(VARIANTS) as Variant[]) {
           const svg = await popup.evaluate(() => {
             const copied = (window as unknown as { __copied: string[] }).__copied;
             const xml = new DOMParser().parseFromString(copied[0] ?? '', 'image/svg+xml');
-            const texts = [...xml.querySelectorAll('text')];
+            // The writer's own text layers (text inside captured SVG graphics keeps the page's markup).
+            const texts = [...xml.querySelectorAll('text')].filter(
+              (t) => t.closest('svg') === xml.documentElement,
+            );
             const width = (s: string) => Number(xml.documentElement.getAttribute(s));
             return {
               copies: copied.length,

@@ -66,7 +66,7 @@ describe('planToSvg', () => {
       '<rect id="div.card_background" x="20" y="20" width="200" height="100" rx="8" fill="rgb(51,102,255)"/>',
     );
     expect(svg).not.toContain('clip-path'); // the card clips, but nothing overflows it
-    expect(stats).toEqual({ boxes: 1, texts: 1, placeholders: 0, lines: 1 });
+    expect(stats).toEqual({ boxes: 1, texts: 1, images: 0, svgs: 0, placeholders: 0, lines: 1 });
   });
 
   it('text: y = top + font-size, PostScript font name first, no id (Figma names it after its text)', () => {
@@ -147,6 +147,60 @@ describe('planToSvg', () => {
     expect(svg).toContain('>a &lt; b &amp; &quot;c&quot;</tspan>');
     expect(svg).toMatch(/<rect id="img.logo_image_not_captured_"[^>]*stroke-dasharray="4 4"\/>/);
     expect(stats.placeholders).toBe(1);
+  });
+
+  it('images: <image> with the asset as a data URI, object-fit as preserveAspectRatio, rounded corners as a clip', () => {
+    const d = doc([
+      {
+        id: 'n8',
+        name: 'img.hero',
+        type: 'IMAGE',
+        rect: { x: 0, y: 0, width: 200, height: 100 },
+        opacity: 1,
+        assetId: 'a1',
+        scaleMode: 'FILL',
+        radii: { tl: 12, tr: 12, br: 12, bl: 12 },
+      },
+      {
+        id: 'n9',
+        name: 'img.missing',
+        type: 'IMAGE',
+        rect: { x: 0, y: 120, width: 50, height: 50 },
+        opacity: 1,
+        assetId: null,
+        scaleMode: 'STRETCH',
+      },
+    ]);
+    d.assets.images = {
+      a1: { mime: 'image/png', data: 'iVBORw0KGgo=', width: 1, height: 1, source: 'canvas' },
+    };
+    const { svg, stats } = planToSvg(buildPlan(d, MOCK_FONTS));
+    expect(svg).toContain(
+      '<image id="img.hero" x="0" y="0" width="200" height="100" preserveAspectRatio="xMidYMid slice" clip-path="url(#clip1)" href="data:image/png;base64,iVBORw0KGgo="/>',
+    );
+    expect(svg).toContain(
+      '<clipPath id="clip1"><rect x="0" y="0" width="200" height="100" rx="12"/></clipPath>',
+    );
+    expect(stats).toMatchObject({ images: 1, placeholders: 1 });
+  });
+
+  it('SVG nodes: nested <svg> placed at the node box, keeping viewBox and content', () => {
+    const d = doc([
+      {
+        id: 'n10',
+        name: 'svg.icon',
+        type: 'SVG',
+        rect: { x: 40, y: 50, width: 24, height: 24 },
+        opacity: 0.5,
+        fallbackAssetId: null,
+        svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="48" height="48" x="9"><path d="M0 0h24v24z" fill="rgb(255,0,0)"/></svg>',
+      },
+    ]);
+    const { svg, stats } = planToSvg(buildPlan(d, MOCK_FONTS));
+    expect(svg).toContain(
+      '<g opacity="0.5"><svg id="svg.icon" x="40" y="50" width="24" height="24" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M0 0h24v24z" fill="rgb(255,0,0)"/></svg></g>',
+    );
+    expect(stats.svgs).toBe(1);
   });
 
   it('style names map to CSS weights; PostScript names drop spaces', () => {

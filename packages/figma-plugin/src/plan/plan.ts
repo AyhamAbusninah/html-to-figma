@@ -88,7 +88,21 @@ export interface PlanPlaceholder extends PlanBase {
   radii?: { tl: number; tr: number; br: number; bl: number };
 }
 
-export type PlanNode = PlanBox | PlanText | PlanPlaceholder;
+/**
+ * Captured pixels (`RenderPlan.images[assetId]`) or SVG markup. Drawn by Copy to Figma (SVG) and the preview; the
+ * plugin adapter still draws them as placeholders with `reason` (image/SVG node creation in the plugin is pending).
+ */
+export interface PlanImage extends Omit<PlanPlaceholder, 'kind'> {
+  kind: 'image';
+  assetId: string;
+  scaleMode: 'FILL' | 'FIT' | 'STRETCH';
+}
+export interface PlanSvg extends Omit<PlanPlaceholder, 'kind'> {
+  kind: 'svg';
+  svg: string;
+}
+
+export type PlanNode = PlanBox | PlanText | PlanPlaceholder | PlanImage | PlanSvg;
 
 export interface FontSubstitution {
   requested: string;
@@ -101,6 +115,8 @@ export interface FontSubstitution {
 
 export interface RenderPlan {
   root: PlanBox;
+  /** Encoded images referenced by PlanImage nodes (the document's assets). */
+  images: CaptureDocument['assets']['images'];
   /** Unique fonts to load before creating text (PLG-F-1). */
   fonts: FontName[];
   substitutions: FontSubstitution[];
@@ -273,12 +289,19 @@ export function buildPlan(doc: CaptureDocument, availableFonts: readonly FontNam
             ? 'image not captured'
             : 'image assets not rendered yet (R4)';
       if (n.type === 'SVG' || n.assetId !== null) unsupported.add(`${n.type} rendering`);
-      return {
-        ...base(n, parent),
-        kind: 'placeholder',
-        reason,
-        ...(n.type === 'IMAGE' && n.radii ? { radii: n.radii } : {}),
-      };
+      const radii = n.type === 'IMAGE' && n.radii ? { radii: n.radii } : {};
+      if (n.type === 'SVG')
+        return { ...base(n, parent), kind: 'svg', reason, svg: n.svg, ...radii };
+      if (n.assetId !== null && doc.assets.images[n.assetId])
+        return {
+          ...base(n, parent),
+          kind: 'image',
+          reason,
+          assetId: n.assetId,
+          scaleMode: n.scaleMode,
+          ...radii,
+        };
+      return { ...base(n, parent), kind: 'placeholder', reason, ...radii };
     }
     counts.boxes++;
     const children = n.children.map((c) => visit(c, n.rect));
@@ -298,6 +321,7 @@ export function buildPlan(doc: CaptureDocument, availableFonts: readonly FontNam
   root.kind = 'frame';
   return {
     root,
+    images: doc.assets.images,
     fonts: [...fonts.values()],
     substitutions: [...subs.values()],
     counts,
