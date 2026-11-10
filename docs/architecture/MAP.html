@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HTML to Figma (H2F) Architecture</title>
+<style>
+  :root { --bg:#ffffff; --fg:#1f2328; --panel:#f6f8fa; --border:#d0d7de; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0d1117; --fg:#e6edf3; --panel:#161b22; --border:#30363d; } }
+  html, body { margin:0; padding:0; width:100vw; height:100vh; overflow:hidden; background:var(--bg); color:var(--fg);
+               font:14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  #stage { position:fixed; inset:0; width:100vw; height:100vh; }
+  #stage pre.mermaid { margin:0; width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
+  #stage svg { width:100% !important; height:100% !important; max-width:none !important; }
+  #title { position:fixed; top:12px; left:16px; z-index:10; padding:6px 10px; border-radius:6px;
+           background:var(--panel); border:1px solid var(--border); font-weight:600; }
+  #controls { position:fixed; right:16px; bottom:16px; z-index:10; display:flex; gap:6px; }
+  #controls button { min-width:40px; height:36px; padding:0 12px; border-radius:6px; cursor:pointer;
+                     background:var(--panel); color:var(--fg); border:1px solid var(--border); font-size:16px; }
+  #controls button:hover { border-color:var(--fg); }
+  #err { position:fixed; inset:auto 16px 64px 16px; z-index:10; color:#c0392b; white-space:pre-wrap; }
+</style>
+</head>
+<body>
+<div id="title">HTML to Figma (H2F) · Architecture</div>
+<div id="stage">
+<pre class="mermaid">
+%%{init: {'flowchart': {'useMaxWidth': false}}}%%
+flowchart TD
+  USER(["User clicks H2F toolbar icon"])
+  subgraph EXT["Chrome MV3 extension · packages/extension"]
+    POPUP["popup.ts capture() #124; download() #124; copyToClipboard()"]
+    SW["service-worker.ts onMessage: ping"]
+    FETCH["h2f:fetch-asset (stub, R4)"]
+    CONTENT["content/index.ts __h2fCapture()"]
+    COLLECT["collect.ts collectPageSnapshot: DOM, computed styles, shadow DOM, text rects, line ranges"]
+    LIMITS[("config/constants.ts LIMITS, RESTRICTED_URL_PATTERNS")]
+    FAILBYTES["refuse #gt; 200 MB · clipboard ≤ 5 MB"]
+  end
+  subgraph CORE["Engine · packages/core (pure)"]
+    RAW[("RawPageSnapshot (internal, unversioned)")]
+    BUILD["document.ts buildCaptureDocument"]
+    CONVERT["convert.ts convertTree / convertElement: pruned hierarchy, paint order, placeholders"]
+    TEXT["text.ts: whitespace, align, groupLines (OQ-11)"]
+    CSS["css.ts / color.ts parsers"]
+    MAXN["countNode: throw above 10,000 nodes"]
+    WARN[("Ctx warnings + stats")]
+  end
+  subgraph SCHEMA["Contract · packages/schema"]
+    DOC[("CaptureDocument v1 JSON")]
+    VALID["validateCapture: Ajv standalone, major = 1 only"]
+    FROZEN[("contract/capture-1.0.0.schema.json frozen")]
+    GEN["scripts/generate.ts → validators + capture.schema.json"]
+  end
+  subgraph PLUGIN["Figma plugin · packages/figma-plugin"]
+    UI["ui.ts load(): file / drop / paste ≤ 5 MB"]
+    MAIN["main/code.ts render()"]
+    PLAN["plan/plan.ts buildPlan (pure): fonts, RLM/LRM, placeholders"]
+    FONTS["plan/fonts.ts FontResolver + config/fonts.ts (Arabic rules)"]
+    ADAPT["adapter/render.ts executePlan: load fonts, create nodes, isolate failures"]
+    FIGMA[("Figma document: editable layers")]
+  end
+  subgraph PREV["Preview · packages/preview (Fedora, no Figma)"]
+    PVIEW["main.ts + render.ts renderPlanHtml"]
+  end
+  subgraph QA["Quality gates"]
+    VERIFY["pnpm run verify (CI)"]
+    UNIV["check-universal.mjs: no site-specific code"]
+    PKG["package-extension.mjs: permission policy, ZIP + sha256"]
+    E2E["e2e vertical slice: DOM text ±0.5 px, page unchanged"]
+  end
+  subgraph SPIKES["Spikes (isolated, not shipped)"]
+    ROUTEB["figma-official: official Figma MCP capture"]
+    ROUTEA["figma-clipboard: fig-kiwi (ToS risk, stopped)"]
+  end
+  subgraph GAPS["Known gaps / roadmap"]
+    G1["Images, SVG, backgrounds, gradients (R4)"]
+    G2["::before/::after, icon fonts, ellipsis"]
+    G3["Element picker, scroll-area expansion"]
+    G4["Rich text runs, auto layout"]
+    G5["Real Figma validation (needs macOS/Windows)"]
+    G6["Direct paste into Figma (needs Figma permission)"]
+  end
+
+  USER --&gt; POPUP
+  POPUP --&gt;|"chrome.scripting.executeScript"| CONTENT
+  POPUP -.-&gt; SW
+  SW -.-&gt; FETCH
+  CONTENT --&gt; COLLECT
+  COLLECT --&gt; RAW
+  RAW --&gt; BUILD
+  BUILD --&gt; CONVERT
+  CONVERT --&gt; TEXT
+  CONVERT --&gt; CSS
+  CONVERT --&gt; MAXN
+  CONVERT --&gt; WARN
+  BUILD --&gt; DOC
+  CONTENT --&gt;|"validate before return"| VALID
+  VALID --&gt; DOC
+  POPUP --&gt; FAILBYTES
+  LIMITS -.-&gt; POPUP
+  GEN -.-&gt; VALID
+  FROZEN -.-&gt; GEN
+  DOC --&gt;|"download / clipboard"| UI
+  UI --&gt;|"validateCapture"| VALID
+  UI --&gt;|"postMessage render"| MAIN
+  MAIN --&gt; PLAN
+  PLAN --&gt; FONTS
+  MAIN --&gt; ADAPT
+  ADAPT --&gt; FIGMA
+  DOC --&gt; PVIEW
+  PVIEW -.-&gt;|"imports buildPlan"| PLAN
+  ROUTEB -.-&gt;|"imports by path"| PLAN
+  ROUTEA -.-&gt; PLAN
+  VERIFY --&gt; UNIV
+  VERIFY --&gt; PKG
+  VERIFY --&gt; E2E
+  E2E -.-&gt; CONTENT
+  E2E -.-&gt; ADAPT
+  G1 -.-&gt; FETCH
+  G1 -.-&gt; CONVERT
+  G2 -.-&gt; COLLECT
+  G3 -.-&gt; POPUP
+  G4 -.-&gt; PLAN
+  G5 -.-&gt; ADAPT
+  G6 -.-&gt; ROUTEB
+
+  classDef failclosed fill:#fde2e1,stroke:#c0392b,color:#7b1d14
+  classDef hazard fill:#fff4d6,stroke:#d68910,color:#6e4a00
+  classDef state fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+  classDef dead fill:#f3f4f6,stroke:#9ca3af,color:#6b7280,stroke-dasharray:4 3
+  class VALID,MAXN,FAILBYTES,PKG,UNIV failclosed
+  class G1,G2,G3,G4,G5,G6,ROUTEA hazard
+  class RAW,DOC,WARN,LIMITS,FROZEN,FIGMA state
+  class FETCH dead
+</pre>
+</div>
+<div id="controls">
+  <button id="zin" title="Zoom in" aria-label="Zoom in">+</button>
+  <button id="zout" title="Zoom out" aria-label="Zoom out">−</button>
+  <button id="zreset" title="Reset view">Reset</button>
+</div>
+<div id="err"></div>
+<script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs";
+  const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  mermaid.initialize({ startOnLoad: false, theme: dark ? "dark" : "default",
+                       maxTextSize: 500000, maxEdges: 2000, flowchart: { useMaxWidth: false } });
+  try {
+    await mermaid.run({ querySelector: "pre.mermaid" });
+    const svg = document.querySelector("#stage svg");
+    svg.removeAttribute("style");
+    const pz = svgPanZoom(svg, { zoomEnabled: true, panEnabled: true, controlIconsEnabled: false,
+                                 mouseWheelZoomEnabled: true, dblClickZoomEnabled: true,
+                                 fit: true, center: true, minZoom: 0.05, maxZoom: 40, zoomScaleSensitivity: 0.3 });
+    document.getElementById("zin").onclick = () => pz.zoomIn();
+    document.getElementById("zout").onclick = () => pz.zoomOut();
+    document.getElementById("zreset").onclick = () => { pz.resetZoom(); pz.fit(); pz.center(); };
+    window.addEventListener("resize", () => { pz.resize(); pz.fit(); pz.center(); });
+  } catch (e) {
+    document.getElementById("err").textContent = "Mermaid render failed: " + e.message;
+  }
+</script>
+</body>
+</html>

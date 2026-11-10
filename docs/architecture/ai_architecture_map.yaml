@@ -1,0 +1,225 @@
+# AI architecture map: the source of truth for agents working on this repo.
+# Maintained by the AI workflow (docs/AI_WORKFLOW.md). Every path:line was verified at `commit`.
+schema_version: 1
+generated: "2026-11-10"
+commit: bfc1bb2
+
+project:
+  name: "HTML to Figma (H2F)"
+  goal: >-
+    An html.to.design-style tool: capture the design of any website (public or behind a login, LTR or Arabic/RTL)
+    and recreate it in Figma as native, editable layers (frames, text, images, SVG) that designers can edit.
+  stacks: ["TypeScript 6 strict (erasableSyntaxOnly), Node 22 native TS", "pnpm 10 workspace (packages/*)", "Chrome MV3 extension", "Figma plugin (Plugin API 1.0.0)", "Vite 8, Vitest 4, Playwright 1.64, Ajv standalone, TypeBox"]
+  build: "pnpm build   (each package: vite build; plugin and preview are single-file via build/vite-inline-html.ts)"
+  tests: "pnpm run verify   (schema:check, check:universal, typecheck, lint, format:check, build, package:extension, vitest, playwright). Must stay green; CI runs the same (.github/workflows/ci.yml)."
+  data_flow: "page DOM → collector (extension content script) → RawPageSnapshot → @h2f/core buildCaptureDocument → CaptureDocument v1 JSON (download/clipboard) → plugin UI validateCapture → plugin main buildPlan (pure) → executePlan (figma.*) → editable layers"
+  registration_rules:
+    - "New computed style needed by the engine: add the property to RAW_STYLE_KEYS (packages/core/src/raw-snapshot.ts:9); the collector copies every key automatically (collect.ts:62)."
+    - "Schema change: edit packages/schema/src/schema.ts, run `pnpm schema:generate` (writes capture.schema.json + src/generated/validators.*). `schema:check` fails on drift. v1.0.0 is frozen by packages/schema/test/contract.test.ts:31: an additive change needs a minor bump (version.ts:2), a new baseline under contract/, and contract-test updates."
+    - "New warning code: add it to WARNING_CODES (packages/schema/src/warnings.ts:5); emit with warn(ctx, CODE, ...) (core/src/convert.ts:113); aggregated codes also need AGGREGATED + AGGREGATED_MESSAGE (convert.ts:46-66)."
+    - "Extension version bump: packages/extension/package.json, public/manifest.json, src/config/version.ts, e2e/extension.spec.ts VERSION, INSTALL.md. package-extension.mjs:76 fails if manifest ≠ package.json."
+    - "New extension permission: also add it to ALLOWED_PERMISSIONS (scripts/package-extension.mjs:35), REQUIREMENTS EXT-P-3a, INSTALL.md permission table; packaging fails otherwise."
+    - "New exported core helper: re-export from packages/core/src/index.ts (the extension imports only '@h2f/core')."
+    - "New fixture page: add to fixtures/pages/index.html (R0 invariant e2e enumerates it, e2e/extension.spec.ts:194) and document expectations in the page's header comment + fixtures/README.md."
+    - "Plan modules consumed outside the plugin must be listed in packages/figma-plugin/package.json exports (./plan, ./fonts, ./known-figma-fonts)."
+
+entry_points:
+  - {id: popup-capture, symbol: "capture()", location: "packages/extension/src/popup/popup.ts:36", kind: "user action (toolbar popup)", does: "Injects content.js on demand via chrome.scripting.executeScript (popup.ts:42), calls globalThis.__h2fCapture, enforces failBytes (popup.ts:55), shows stats"}
+  - {id: popup-download, symbol: "download()", location: "packages/extension/src/popup/popup.ts:100", kind: "user action", does: "Saves figma-capture_<site>_<time>.json via chrome.downloads"}
+  - {id: popup-clipboard, symbol: "copyToClipboard()", location: "packages/extension/src/popup/popup.ts:129", kind: "user action", does: "Copies the JSON (≤ 5 MB, popup-model.ts:68)"}
+  - {id: content-capture, symbol: "capture()", location: "packages/extension/src/content/index.ts:36", kind: "injected IIFE, exposed as globalThis.__h2fCapture (index.ts:67)", does: "fonts.ready → collectPageSnapshot → buildCaptureDocument → validateCapture → bytes"}
+  - {id: service-worker, symbol: "chrome.runtime.onMessage", location: "packages/extension/src/background/service-worker.ts:9", kind: "MV3 message router", does: "h2f:ping; h2f:fetch-asset is a stub returning not-implemented (service-worker.ts:15)"}
+  - {id: plugin-ui, symbol: "load()", location: "packages/figma-plugin/src/ui/ui.ts:27", kind: "plugin UI iframe (file / drop / paste ≤ 5 MB)", does: "parse + validateCapture (ui.ts:31), preview, posts {type:'render'} to main (ui.ts:106)"}
+  - {id: plugin-main, symbol: "figma.ui.onmessage / render()", location: "packages/figma-plugin/src/main/code.ts:52", kind: "Figma sandbox main thread", does: "listAvailableFontsAsync → buildPlan → executePlan → select + report (code.ts:14)"}
+  - {id: preview-app, symbol: "loadFile()", location: "packages/preview/src/main.ts:169", kind: "local web app (Fedora, no Figma)", does: "validateCapture (main.ts:106) + buildPlan with KNOWN_FIGMA_FONTS (main.ts:114), drawn with HTML/CSS"}
+  - {id: schema-generate, symbol: "scripts/generate.ts", location: "packages/schema/scripts/generate.ts:1", kind: "build script", does: "TypeBox → capture.schema.json + CSP-safe Ajv standalone validators; --check guards drift"}
+  - {id: check-universal, symbol: "check-universal.mjs", location: "scripts/check-universal.mjs:13", kind: "CI guard", does: "Fails on site-specific tokens/selectors in packages/{core,extension,figma-plugin}/src (config/ exempt)"}
+  - {id: package-extension, symbol: "package-extension.mjs", location: "scripts/package-extension.mjs:35", kind: "release script", does: "Builds release/html-to-figma-extension-<version>/.zip/.sha256 + BUILD-INFO.json; enforces manifest policy"}
+
+global_state:
+  - {name: "Conversion context Ctx (ids, counters, warnings)", location: "packages/core/src/convert.ts:99", writers: ["convertElement", "convertText", "textNode", "warn"], readers: ["buildCaptureDocument (stats, warnings)"], blast_radius: "medium: per-capture only; node ids are deterministic traversal order (NFR-2)"}
+  - {name: "globalThis.__h2fCapture", location: "packages/extension/src/content/index.ts:67", writers: ["content.js injection"], readers: ["popup.ts:43 executeScript func"], blast_radius: "high: renaming breaks popup ↔ content contract (CAPTURE_GLOBAL in config/constants.ts)"}
+  - {name: "Loaded font map + pending node", location: "packages/figma-plugin/src/adapter/render.ts:84", writers: ["executePlan"], readers: ["createText", "build"], blast_radius: "medium: per-render"}
+
+domains:
+  - id: collector
+    trace_depth: deep
+    entry_points: ["collectPageSnapshot packages/extension/src/content/collect.ts:283"]
+    core_logic_files: ["packages/extension/src/content/collect.ts", "packages/core/src/raw-snapshot.ts"]
+    hidden_hooks_or_events:
+      - "Shadow DOM: open roots + closed roots of custom elements only via chrome.dom.openOrClosedShadowRoot (collect.ts:79); slots flattened (collect.ts:95)"
+      - "Wrapped text: per-line character ranges by binary search on char rects → RawText.lines (collect.ts:181)"
+      - "Form controls read values, passwords masked at the source (collect.ts:104)"
+    critical_invariants:
+      - "Read-only: never mutate the page DOM (AC-EXT-8; e2e compares outerHTML before/after capture). Touching UA shadow roots mutated pages, hence the custom-element-only rule."
+      - "Browser reads only; all interpretation belongs in @h2f/core (unit-testable without a browser)."
+      - "Password values never leave readControl unmasked (EXT-X-7; e2e asserts 'secret-password-123' absent)."
+      - "Universal: no site-specific selectors/tokens (check-universal)."
+    blast_radius: high
+    blast_notes: "Every capture flows through it; RawPageSnapshot is internal/unversioned, so collector and core must change together."
+
+  - id: engine
+    trace_depth: deep
+    entry_points: ["buildCaptureDocument packages/core/src/document.ts:44", "convertTree packages/core/src/convert.ts:453"]
+    core_logic_files: ["packages/core/src/convert.ts", "packages/core/src/document.ts", "packages/core/src/text.ts", "packages/core/src/css.ts", "packages/core/src/color.ts"]
+    hidden_hooks_or_events:
+      - "Pruned hierarchy: elements without paint/clip/stacking become no FRAME; children hoisted with their order keys (convert.ts:427-430)"
+      - "Paint order: OrderKey layer/z/path sort (convert.ts:173); text fragments use path [...path, i]"
+      - "RTL document x normalization from scrollX ≤ 0 (document.ts:50)"
+      - "OQ-11 line split: groupLines (text.ts:125) used by convertText (convert.ts:230)"
+    critical_invariants:
+      - "Fail-closed size limit: countNode throws CaptureTooLargeError above MAX_NODES = 10,000 (convert.ts:142)."
+      - "Pure and deterministic: no DOM, no Date/random; capturedAt injected (document.ts:33)."
+      - "Replaced content (img/svg/canvas/video/iframe) → IMAGE placeholder with assetId null + warning, never silently dropped (convert.ts:342-373)."
+      - "Everything not reproduced emits a warning code (convert.ts:384-408); users see the 'Not captured yet' list."
+      - "Arabic letter-spacing forced to 0 with warning (text.ts:62, EXT-RTL-5)."
+    blast_radius: critical
+    blast_notes: "Output is the cross-component contract; geometry changes ripple into plugin, preview, e2e text matching (e2e/vertical-slice.spec.ts step 4)."
+
+  - id: schema-contract
+    trace_depth: deep
+    entry_points: ["validateCapture packages/schema/src/validate.ts:95"]
+    core_logic_files: ["packages/schema/src/schema.ts", "packages/schema/src/validate.ts", "packages/schema/src/version.ts", "packages/schema/src/warnings.ts", "packages/schema/scripts/generate.ts"]
+    hidden_hooks_or_events:
+      - "Generated validators committed (src/generated/validators.js): Ajv standalone, no eval → MV3 CSP-safe"
+      - "Frozen baseline packages/schema/contract/capture-1.0.0.schema.json checked byte-for-byte (contract.test.ts:31)"
+    critical_invariants:
+      - "Fail-closed: producer validates before returning (content/index.ts:49); consumers (plugin UI, preview) validate before rendering."
+      - "Unsupported major version is rejected with an update message (validate.ts:106); any 1.x.y is accepted (version.ts:5)."
+      - "CaptureDocument is the ONLY cross-component contract; do not replace it or add a second one."
+      - "Schema already models gradients (schema.ts:116), image assets (schema.ts:100, png/jpeg/gif ≤ 4096 px), SVG nodes: R4 work needs no schema change for these."
+    blast_radius: critical
+    blast_notes: "Breaking it orphans every saved capture and both consumers."
+
+  - id: extension-shell
+    trace_depth: deep
+    entry_points: ["capture packages/extension/src/popup/popup.ts:36", "onMessage packages/extension/src/background/service-worker.ts:9"]
+    core_logic_files: ["packages/extension/src/popup/popup.ts", "packages/extension/src/shared/popup-model.ts", "packages/extension/src/config/constants.ts", "packages/extension/public/manifest.json"]
+    hidden_hooks_or_events:
+      - "On-demand injection only; no declared content_scripts (package-extension.mjs:86)"
+      - "Restricted URLs disable capture (constants.ts RESTRICTED_URL_PATTERNS, popup-model.ts:5)"
+    critical_invariants:
+      - "Permissions limited to activeTab, scripting, downloads, clipboardWrite + approved host allow-list; packaging fails otherwise (package-extension.mjs:79-84)."
+      - "Local only: nothing is sent anywhere (OQ-10, SEC). No remote code (MV3)."
+      - "Fail-closed size: > 200 MB capture refused (popup.ts:55); clipboard ≤ 5 MB."
+    blast_radius: high
+    blast_notes: "Permission or manifest changes alter the install prompt and release package."
+
+  - id: plugin-planner
+    trace_depth: deep
+    entry_points: ["buildPlan packages/figma-plugin/src/plan/plan.ts:201"]
+    core_logic_files: ["packages/figma-plugin/src/plan/plan.ts", "packages/figma-plugin/src/plan/fonts.ts", "packages/figma-plugin/src/config/fonts.ts", "packages/figma-plugin/src/config/known-figma-fonts.ts"]
+    hidden_hooks_or_events:
+      - "Font resolution: FontResolver (fonts.ts:45) with Arabic rules (config/fonts.ts ARABIC_CAPABLE, Tajawal/Cairo, fallback Noto Sans Arabic)"
+      - "Direction marks RLM/LRM prepended when first strong char disagrees with direction (plan.ts:130) — provisional, PLG-RTL-2"
+      - "Consumed by preview (@h2f/figma-plugin/plan) and spikes (by path)"
+    critical_invariants:
+      - "Pure (no figma.*): parent-relative coordinates, the single layout source for adapter, preview and spikes. Never add a second layout engine."
+      - "Single-line text → WIDTH_AND_HEIGHT anchored by aligned edge; multi-line → fixed width HEIGHT (plan.ts:259-260)."
+      - "IMAGE/SVG → placeholder until R4 (plan.ts:267)."
+    blast_radius: high
+    blast_notes: "Changes show up in Figma, the preview and the spike outputs at once."
+
+  - id: plugin-adapter
+    trace_depth: deep
+    entry_points: ["executePlan packages/figma-plugin/src/adapter/render.ts:73", "render packages/figma-plugin/src/main/code.ts:14"]
+    core_logic_files: ["packages/figma-plugin/src/adapter/render.ts", "packages/figma-plugin/src/main/code.ts", "packages/figma-plugin/src/ui/ui.ts", "packages/figma-plugin/manifest.json"]
+    hidden_hooks_or_events:
+      - "Yields every 200 nodes so Figma stays responsive (render.ts:98-104)"
+      - "Plugin manifest: networkAccess none, documentAccess dynamic-page"
+    critical_invariants:
+      - "Fonts loaded once before any text; unloadable → Inter Regular fallback, reported (render.ts:84-94)."
+      - "Per-node failure isolation: failed node removed (no orphans), recorded in layersFailed, children re-parented to nearest ancestor (render.ts:172-185)."
+      - "Text anchored by aligned edge so wider substitute fonts grow away from it (render.ts:131-139, PLG-R-9a)."
+    blast_radius: high
+    blast_notes: "Only verified against the strict Figma mock (packages/figma-plugin/test/figma-mock.ts); real Figma unverified (B-1)."
+
+  - id: preview
+    trace_depth: entry_only
+    entry_points: ["loadFile packages/preview/src/main.ts:169", "renderPlanHtml packages/preview/src/render.ts:145"]
+    core_logic_files: ["packages/preview/src/main.ts", "packages/preview/src/render.ts"]
+    hidden_hooks_or_events: ["Fonts from Google Fonts at view time (render.ts:152)"]
+    critical_invariants: ["Draws the plugin's own plan; never modifies the loaded file (e2e/preview.spec.ts:142). Not a Figma rendering."]
+    blast_radius: low
+    blast_notes: "Fedora-only inspection tool; also used by docs evidence."
+
+  - id: quality-gates
+    trace_depth: deep
+    entry_points: ["pnpm run verify package.json", "CI .github/workflows/ci.yml"]
+    core_logic_files: ["scripts/check-universal.mjs", "scripts/package-extension.mjs", "e2e/vertical-slice.spec.ts", "e2e/extension.spec.ts", "e2e/production-artifact.spec.ts", "fixtures/serve.mjs"]
+    hidden_hooks_or_events:
+      - "e2e runs two variants: rebuilt dist and recovery/2026-11-08 reference bundles (e2e/helpers.ts:11)"
+      - "Vertical slice: every visible DOM text node must match a TEXT (or line-split run) within ±0.5 px (vertical-slice.spec.ts step 4)"
+      - "Fixture fonts fetched at CI time (fixtures/scripts/fetch-assets.mjs), not committed"
+    critical_invariants: ["verify must stay green before merge; ESLint ignores spikes/** and release/**"]
+    blast_radius: medium
+    blast_notes: "Frappe pages run only with the local bench (skipped otherwise)."
+
+  - id: spikes
+    trace_depth: entry_only
+    entry_points: ["spikes/figma-official/make-html.ts", "spikes/figma-clipboard/serve.mjs", "spikes/s4-rtl/"]
+    core_logic_files: ["docs/spikes/FIGMA_CLIPBOARD.md"]
+    hidden_hooks_or_events: ["Import plan.ts/render.ts by relative path (not via workspace)"]
+    critical_invariants:
+      - "Isolated: not in the workspace, CI, lint or packages. Route A (fig-kiwi clipboard) is reverse-engineered, Figma ToS §2.2(i) risk: DO NOT SHIP without legal review."
+    blast_radius: low
+    blast_notes: "Evidence lives in docs/spikes/."
+
+hidden_dependencies:
+  - {id: raw-snapshot-lockstep, what: "RawPageSnapshot is unversioned and shared by collector (extension) and engine (core)", why_it_matters: "Changing a raw field needs both sides in the same commit; old recovered bundles are only compared on meta/root (R0 invariant test)."}
+  - {id: plan-shared-by-preview-and-spikes, what: "buildPlan is used by plugin main, preview app and spikes", why_it_matters: "A planner change alters Figma output, the Fedora preview and spike evidence together."}
+  - {id: duplicated-limits, what: "MAX_NODES (core/convert.ts:35) vs LIMITS.maxNodes (extension/config/constants.ts); PASTE_MAX_BYTES (plugin ui.ts:10) vs LIMITS.clipboardMaxBytes", why_it_matters: "Changing one copy does not change the other; LIMITS.maxNodes/maxImageSide/maxSvgBytes/maxPseudoElements are not referenced anywhere yet."}
+  - {id: e2e-text-matching, what: "vertical-slice step 4 re-measures DOM text independently", why_it_matters: "Any change to text rects, whitespace or splitting must keep that measurement in sync."}
+  - {id: version-in-five-places, what: "Extension version in package.json, manifest.json, config/version.ts, e2e/extension.spec.ts, INSTALL.md", why_it_matters: "Mismatch fails packaging or e2e."}
+  - {id: real-figma-gap, what: "Plugin dev mode needs the Figma desktop app (macOS/Windows); the user is on Fedora", why_it_matters: "Real Figma verification (R5) needs a Mac/Windows machine or an Org plan; use the preview + Figma mock locally, the official Figma MCP (generate_figma_design) to sanity-check HTML in real Figma Web."}
+
+critical_invariants:
+  fail_closed:
+    - "Capture validated before it leaves the page (content/index.ts:49); consumers validate before render (ui.ts:31, preview main.ts:106)."
+    - "> 10,000 nodes throws (convert.ts:142); > 200 MB refused (popup.ts:55); unsupported schema major rejected (validate.ts:106)."
+    - "Packaging fails on unapproved permissions, declared content_scripts, unreferenced or unexpected files (package-extension.mjs:79-111)."
+  locks_concurrency:
+    - "No locks. Capture is one synchronous traversal after document.fonts.ready; plugin render is sequential with cooperative yields (render.ts:98)."
+  permissions:
+    - "Minimal MV3 permissions + approved host allow-list; no remote code; plugin networkAccess none."
+    - "Local only: captures never leave the machine unless the user shares the file."
+  idempotency:
+    - "Deterministic output for a given snapshot (ids by traversal order, injected capturedAt)."
+  ordering:
+    - "Paint order via OrderKey (convert.ts:173); fonts loaded before text creation (render.ts:84)."
+  universality:
+    - "No site-specific code in engine/extension/plugin src (check-universal.mjs); Frappe/ERPNext is a benchmark only (SC-1)."
+  rtl:
+    - "Arabic/RTL is MVP-blocking: physical alignment resolved from start/end (text.ts:31), RTL x normalization, Arabic font rules, no letter-spacing on Arabic."
+  read_only_page:
+    - "Capture never modifies the page DOM (AC-EXT-8)."
+
+known_gaps:
+  - "Images, inline SVG, canvas, video, CSS background images are placeholders (R4): collector does not read pixels, service-worker fetch-asset is a stub (service-worker.ts:15), assets.images always {} (document.ts:78)."
+  - "Gradients not captured although the schema supports them (convert.ts:385 warns GRADIENT_NOT_CAPTURED)."
+  - "::before/::after not captured (OQ-7 decided B, not implemented); text-overflow ellipsis not applied; icon fonts (OQ-16) not rasterized."
+  - "Element picker (OQ-4, MVP) and inner scroll-area expansion (OQ-5) not implemented; captureMode is always 'page' (document.ts:61)."
+  - "Rich text: one style per TEXT; a word split across inline elements (e.g. <mark>) doesn't join Arabic letters across layers (OQ-11 option B, v1.1)."
+  - "No auto-layout inference: output is absolute-positioned frames (html.to.design offers auto layout)."
+  - "Real Figma never exercised by the plugin (B-1/B-2); plugin verified only against the mock."
+  - "Direct Copy → Ctrl+V into Figma without the plugin is blocked: only Figma's capture.js/h2d path works and needs Figma's written permission (OPEN_QUESTIONS CB-2); fig-kiwi route stopped (CB-3)."
+  - "LIMITS.maxNodes/maxImageSide/maxSvgBytes/maxPseudoElements defined but unused (extension/src/config/constants.ts)."
+  - "Doc drift: README 'Status (2026-11-08)' predates 0.2.1, the preview and the clipboard spike."
+
+roadmap_to_goal:   # what still separates H2F from an html.to.design-class tool, in suggested order
+  - {step: "R4 images: Tier 1 canvas/same-origin read in collector → ImageAsset (png/jpeg/gif ≤ 4096 px) → plugin figma.createImage fills", touch: ["collect.ts", "convert.ts", "plan.ts", "render.ts", "service-worker.ts (Tier 2 fetch)", "manifest optional_host_permissions (needs approval)"], blast_radius: high}
+  - {step: "R4 SVG: sanitized outerHTML → SvgNode → figma.createNodeFromSvg", touch: ["collect.ts", "convert.ts", "plan.ts", "render.ts"], blast_radius: high}
+  - {step: "Gradients + background images", touch: ["convert.ts (parse)", "plan.ts mapFills", "render.ts"], blast_radius: medium}
+  - {step: "Pseudo-elements (temporary materialization, OQ-7) and icon fonts (OQ-16)", touch: ["collect.ts", "convert.ts"], blast_radius: high}
+  - {step: "Element picker (OQ-4) + scroll-area expansion (OQ-5)", touch: ["popup.ts", "content/index.ts", "collect.ts", "schema captureMode"], blast_radius: medium}
+  - {step: "Rich text runs (OQ-11 B) and auto-layout inference", touch: ["schema (minor bump)", "convert.ts", "plan.ts", "render.ts"], blast_radius: critical}
+  - {step: "Extension-only Copy → Ctrl+V into Figma Web (no plugin, no desktop app): see docs/architecture notes in OPEN_QUESTIONS CB-1..CB-4; options are Figma's own capture.js clipboard path (works, needs Figma's permission), an SVG clipboard serializer from the RenderPlan (documented import, fidelity unproven), or our own fig-kiwi encoder (ToS risk, text needs glyph layout)", touch: ["new serializer next to buildPlan output (no second layout engine)", "popup.ts Copy button (clipboardWrite already granted)", "spikes first"], blast_radius: high}
+  - {step: "Real Figma validation (R5) on macOS/Windows or Org plan; then distribution (R6)", touch: ["docs/verification"], blast_radius: low}
+
+change_playbook:
+  - {change: "Capture a new CSS property", touch: ["core/src/raw-snapshot.ts RAW_STYLE_KEYS", "core/src/css.ts parser + test", "core/src/convert.ts", "schema only if a new field is needed"], blast_radius: medium}
+  - {change: "Change text conversion", touch: ["core/src/text.ts", "core/src/convert.ts convertText", "extension collect.ts if raw data needed", "core/test/*", "e2e/vertical-slice.spec.ts domTextSamples"], blast_radius: high}
+  - {change: "Change how Figma layers are created", touch: ["figma-plugin/src/plan/plan.ts", "figma-plugin/src/adapter/render.ts", "figma-plugin/test/figma-mock.ts if new API", "preview/src/render.ts to mirror"], blast_radius: high}
+  - {change: "Add a schema field", touch: ["schema/src/schema.ts", "pnpm schema:generate", "version.ts minor bump", "contract/ new baseline + contract.test.ts"], blast_radius: critical}
+  - {change: "Add a warning", touch: ["schema/src/warnings.ts", "core/src/convert.ts warn()", "extension popup-model warningSummary if user-facing"], blast_radius: low}
+  - {change: "Release the extension", touch: ["version in 5 places", "pnpm run verify", "release/ ZIP + sha256", "INSTALL.md changes section"], blast_radius: medium}

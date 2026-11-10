@@ -14,3 +14,6 @@ packages/schema/contract/
 test-results/
 playwright-report/
 docs/verification/r2-evidence/
+
+# AI architecture map (docs/AI_WORKFLOW.md): generated layout kept as-is
+docs/architecture/
