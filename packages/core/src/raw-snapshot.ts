@@ -16,6 +16,10 @@ export const RAW_STYLE_KEYS = [
   'overflow-y',
   'background-color',
   'background-image',
+  'background-size',
+  'background-position',
+  'background-repeat',
+  'background-clip',
   'border-top-width',
   'border-right-width',
   'border-bottom-width',
@@ -107,6 +111,8 @@ export interface RawElement {
   assetId?: string;
   svg?: string;
   assetFailed?: boolean;
+  /** Pre-composited CSS background images (EXT-I-8): asset id per url() layer, in CSS order (null = failed). */
+  bgAssets?: (string | null)[];
 }
 
 /** Encoded image from the collector (CaptureDocument ImageAsset shape). */

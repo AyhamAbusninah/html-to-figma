@@ -40,7 +40,11 @@ describe('renderPlanHtml', () => {
 
   it('box styles: fills, per-side borders, radii, shadows back in CSS order, blur, opacity, blend, clipping', () => {
     const card = /data-id="n1"[^>]*style="([^"]*)"/.exec(html)![1]!;
-    expect(card).toContain('background:rgba(26,51,77,0.4);');
+    // Fills bottom → top become CSS layers top first: image, radial, linear, then the solid color.
+    expect(card).toContain(
+      'background:url(data:image/png;base64,iVBORw0KGgo=) 0 0/100% 100% no-repeat,radial-gradient(50% 25% at 50% 120%,',
+    );
+    expect(card).toContain('linear-gradient(rgba(26,51,77,0.4),rgba(26,51,77,0.4));');
     expect(card).toContain('border-radius:8px 8px 0px 100px;');
     // Strokes are an overlay (no layout effect), not a CSS border on the box itself.
     expect(card).not.toContain('border-width');

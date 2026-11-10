@@ -11,6 +11,7 @@ import type {
   FrameNode,
   ImageNode,
   Paint,
+  RGBA,
   SvgNode,
   TextNode,
 } from '@h2f/schema';
@@ -24,6 +25,8 @@ import {
   px,
   solidOrNull,
 } from './css.ts';
+import { isTransparent, parseCssColor } from './color.ts';
+import { gradientTextColor, parseBackgroundLayers } from './gradient.ts';
 import type { RawElement, RawImageAsset, RawRect, RawText, RawTextLine } from './raw-snapshot.ts';
 import {
   countLines,
@@ -56,6 +59,7 @@ const AGGREGATED = new Set([
   'TRANSFORM_UNSUPPORTED',
   'TEXT_ELLIPSIS_NOT_APPLIED',
   'IMAGE_FETCH_FAILED',
+  'GRADIENT_UNSUPPORTED',
 ]);
 
 /** Serialized SVGs above this become raster-only / placeholders (EXT-S-6). */
@@ -72,6 +76,8 @@ const AGGREGATED_MESSAGE: Record<string, string> = {
   CLIP_MASK_UNSUPPORTED: 'clip-path / mask ignored (element rendered unclipped).',
   ARABIC_LETTER_SPACING_IGNORED: 'letter-spacing set to 0 on Arabic text (EXT-RTL-5).',
   TRANSFORM_UNSUPPORTED: 'Rotated/scaled/skewed elements captured as their bounding box.',
+  GRADIENT_UNSUPPORTED:
+    'Repeating and conic gradients are replaced by their first color (EXT-V-3).',
   IMAGE_FETCH_FAILED:
     'Some images could not be read (cross-origin without CORS, or not loaded); placeholders instead (EXT-I-5).',
   TEXT_ELLIPSIS_NOT_APPLIED:
@@ -93,6 +99,8 @@ interface Ctx {
   /** Encoded images from the collector, and the ids actually referenced by emitted nodes (only those are kept). */
   assets?: Record<string, RawImageAsset>;
   usedAssets: Set<string>;
+  /** Set while converting the content of a `background-clip: text` element: color for its transparent text. */
+  clipTextColor?: RGBA | null;
 }
 
 interface OrderKey {
@@ -248,6 +256,12 @@ function usableLines(raw: RawText): RawTextLine[] | undefined {
 
 function convertText(raw: RawText, parent: RawElement, ctx: Ctx, path: number[]): Emitted[] {
   if (parent.style.visibility !== 'visible' || raw.rects.length === 0) return [];
+  // Transparent text inside a background-clip:text element takes the gradient's color.
+  const clip = ctx.clipTextColor;
+  const override =
+    clip && isTransparent(parseCssColor(parent.style.color))
+      ? `rgba(${Math.round(clip.r * 255)}, ${Math.round(clip.g * 255)}, ${Math.round(clip.b * 255)}, ${clip.a})`
+      : undefined;
   const whiteSpace = parent.style['white-space'];
   const characters = normalizeWhitespace(raw.text, whiteSpace);
   if (!characters) return [];
@@ -278,6 +292,7 @@ function convertText(raw: RawText, parent: RawElement, ctx: Ctx, path: number[])
         toDoc(ctx, unionRect(visible)),
         last - first + 1,
         parent.style,
+        override,
       );
       if (last > first) ctx.textLines.set(node.id, lines.slice(first, last + 1).map(lineText));
       out.push({ node, key: { layer: 1, z: 0, path: [...path, i] } });
@@ -290,6 +305,7 @@ function convertText(raw: RawText, parent: RawElement, ctx: Ctx, path: number[])
     toDoc(ctx, unionRect(raw.rects)),
     countLines(raw.rects),
     parent.style,
+    override,
   );
   if (lines) ctx.textLines.set(node.id, lines.map(lineText));
   return [{ node, key: { layer: 1, z: 0, path } }];
@@ -442,11 +458,35 @@ export function convertElement(el: RawElement, ctx: Ctx, path: number[]): Emitte
   const bg = solidOrNull(s['background-color']);
   if (bg && !hidden && !rootish && !zeroArea) fills.push({ type: 'SOLID', color: bg });
 
+  // Background layers (EXT-V-3, EXT-I-8): CSS lists them top first; Figma fills go bottom → top, above the color.
   const bgImage = s['background-image'] ?? 'none';
-  const hasBgUrl = !hidden && !zeroArea && /url\(/.test(bgImage);
-  const hasGradient = !hidden && !zeroArea && /gradient\(/.test(bgImage);
+  const painted = !hidden && !zeroArea;
+  // background-clip: text paints the background through the glyphs: approximated by giving the (transparent) text
+  // the gradient's first color, with no background fill (GRADIENT_UNSUPPORTED).
+  const clipText = /\btext\b/.test(s['background-clip'] ?? '');
+  const textColor = clipText ? gradientTextColor(bgImage, rect.width, rect.height) : null;
+  if (clipText && bgImage !== 'none') warn(ctx, 'GRADIENT_UNSUPPORTED', id, '');
+  const layers =
+    painted && !rootish && !clipText ? parseBackgroundLayers(bgImage, rect.width, rect.height) : [];
+  let hasBgUrl = painted && rootish && /url\(/.test(bgImage); // page backgrounds: color only (root frame)
+  let unsupportedGradient = false;
+  for (const layer of [...layers].reverse()) {
+    if (layer.kind === 'paint') fills.push(layer.paint);
+    else if (layer.kind === 'url') {
+      const assetId = el.bgAssets?.[layer.urlIndex];
+      if (assetId && ctx.assets?.[assetId]) {
+        fills.push({ type: 'IMAGE', assetId, scaleMode: 'FILL' });
+        ctx.usedAssets.add(assetId);
+      } else hasBgUrl = true;
+    } else {
+      unsupportedGradient = true;
+      if (layer.fallback && !isTransparent(layer.fallback))
+        fills.push({ type: 'SOLID', color: layer.fallback });
+    }
+  }
+  const hasGradient = false;
   if (hasBgUrl) warn(ctx, 'BACKGROUND_IMAGE_NOT_CAPTURED', id, '');
-  if (hasGradient) warn(ctx, 'GRADIENT_NOT_CAPTURED', id, '');
+  if (unsupportedGradient) warn(ctx, 'GRADIENT_UNSUPPORTED', id, '');
 
   const { border, degraded } = hidden || zeroArea ? { border: null, degraded: [] } : parseBorder(s);
   if (degraded.length) warn(ctx, 'BORDER_STYLE_DEGRADED', id, '');
@@ -482,11 +522,14 @@ export function convertElement(el: RawElement, ctx: Ctx, path: number[]): Emitte
     const t = controlText(el, ctx);
     if (t) children.push({ node: t, key: { layer: 1, z: 0, path: [...path, 0] } });
   }
+  const outerClipText = ctx.clipTextColor;
+  if (textColor) ctx.clipTextColor = textColor;
   el.children.forEach((child, i) => {
     const childPath = [...path, i + 1];
     if (child.kind === 'text') children.push(...convertText(child, el, ctx, childPath));
     else children.push(...convertElement(child, ctx, childPath));
   });
+  ctx.clipTextColor = outerClipText;
 
   const paints = fills.length > 0 || border !== null || effects.length > 0;
   const needsFrame =

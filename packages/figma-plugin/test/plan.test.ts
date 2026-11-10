@@ -97,10 +97,19 @@ describe('buildPlan (PLG-R-*)', () => {
     expect(leaf.root.children[0]!.kind).toBe('rect');
   });
 
-  it('only SOLID fills rendered; other paints listed as unsupported', () => {
-    expect(card.fills).toEqual([
-      { type: 'SOLID', color: { r: 0.1, g: 0.2, b: 0.3 }, opacity: 0.4 },
+  it('fills keep solids, gradients and image paints bottom → top; non-solid ones are unsupported in the plugin', () => {
+    expect(card.fills.map((f) => f.type)).toEqual([
+      'SOLID',
+      'GRADIENT_LINEAR',
+      'GRADIENT_RADIAL',
+      'IMAGE',
     ]);
+    expect(card.fills[0]).toEqual({
+      type: 'SOLID',
+      color: { r: 0.1, g: 0.2, b: 0.3 },
+      opacity: 0.4,
+    });
+    expect(card.fills[3]).toEqual({ type: 'IMAGE', assetId: 'a1' });
     expect(plan.unsupported).toEqual(
       expect.arrayContaining(['GRADIENT_LINEAR paint', 'GRADIENT_RADIAL paint', 'IMAGE paint']),
     );

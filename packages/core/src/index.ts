@@ -30,6 +30,12 @@ export {
 } from './css.ts';
 export { parseCssColor, isTransparent } from './color.ts';
 export {
+  parseBackgroundLayers,
+  backgroundUrls,
+  gradientTextColor,
+  type BgLayer,
+} from './gradient.ts';
+export {
   buildCapture,
   buildCaptureDocument,
   resolvePageBackground,

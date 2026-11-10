@@ -11,6 +11,7 @@ import type {
   PlanSvg,
   PlanText,
   RenderPlan,
+  SolidPaintSpec,
 } from '../plan/plan.ts';
 
 export interface RenderOutcome {
@@ -58,7 +59,8 @@ function applyRadii(
 function applyBox(node: BoxNode, n: PlanBox) {
   node.resize(Math.max(n.width, 0.01), Math.max(n.height, 0.01));
   applyCommon(node, n);
-  node.fills = n.fills;
+  // Gradients/images: drawn by Copy to Figma; the plugin keeps solid fills for now (reported as unsupported).
+  node.fills = n.fills.filter((f): f is SolidPaintSpec => f.type === 'SOLID');
   if (n.strokes) {
     node.strokes = [n.strokes.paint];
     node.strokeAlign = 'INSIDE';

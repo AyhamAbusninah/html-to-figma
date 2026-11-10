@@ -15,7 +15,7 @@ import type {
   PlanSvg,
   PlanText,
   RenderPlan,
-  SolidPaintSpec,
+  PaintSpec,
 } from '@h2f/figma-plugin/plan';
 import { parseStyleName } from '@h2f/figma-plugin/fonts';
 
@@ -33,10 +33,29 @@ export function rgba(
 }
 
 /** Fills are bottom → top (Figma order); CSS backgrounds are top → bottom. */
-function backgroundCss(fills: SolidPaintSpec[]): string {
+const stopsCss = (
+  stops: { position: number; color: { r: number; g: number; b: number; a: number } }[],
+) =>
+  stops
+    .map(
+      (s) =>
+        `rgba(${Math.round(s.color.r * 255)},${Math.round(s.color.g * 255)},${Math.round(s.color.b * 255)},${num(s.color.a)}) ${num(s.position * 100)}%`,
+    )
+    .join(',');
+
+/** Fills (bottom → top) as CSS background layers (top first). */
+function backgroundCss(fills: PaintSpec[], images: RenderPlan['images']): string {
   if (fills.length === 0) return '';
-  if (fills.length === 1) return `background:${rgba(fills[0]!)};`;
-  const layers = [...fills].reverse().map((f) => `linear-gradient(${rgba(f)},${rgba(f)})`);
+  if (fills.length === 1 && fills[0]!.type === 'SOLID') return `background:${rgba(fills[0]!)};`;
+  const layers = [...fills].reverse().map((f) => {
+    if (f.type === 'SOLID') return `linear-gradient(${rgba(f)},${rgba(f)})`;
+    if (f.type === 'GRADIENT_LINEAR')
+      return `linear-gradient(${num(f.angleDeg)}deg,${stopsCss(f.stops)})`;
+    if (f.type === 'GRADIENT_RADIAL')
+      return `radial-gradient(${num(f.radius.x * 100)}% ${num(f.radius.y * 100)}% at ${num(f.center.x * 100)}% ${num(f.center.y * 100)}%,${stopsCss(f.stops)})`;
+    const a = images[f.assetId];
+    return a ? `url(data:${a.mime};base64,${a.data}) 0 0/100% 100% no-repeat` : 'none';
+  });
   return `background:${layers.join(',')};`;
 }
 
@@ -103,7 +122,7 @@ function strokeOverlay(n: PlanBox): string {
 }
 
 function box(n: PlanBox, images: RenderPlan['images']): string {
-  let css = common(n) + backgroundCss(n.fills) + radiiCss(n.radii) + effectsCss(n.effects);
+  let css = common(n) + backgroundCss(n.fills, images) + radiiCss(n.radii) + effectsCss(n.effects);
   if (n.clipsContent) css += 'overflow:hidden;';
   const kids = n.children.map((c) => node(c, images)).join('');
   return `<div class="n box" data-kind="${n.kind}" data-id="${esc(n.sourceId)}" title="${esc(n.name)}" style="${css}">${strokeOverlay(n)}${kids}</div>`;
@@ -160,7 +179,7 @@ function node(n: PlanNode, images: RenderPlan['images']): string {
 /** HTML for the whole plan. The root is positioned at (0, 0) at its natural size; zoom/pan are applied outside. */
 export function renderPlanHtml(plan: RenderPlan): string {
   const r = plan.root;
-  const css = `left:0;top:0;width:${px(r.width)};height:${px(r.height)};${backgroundCss(r.fills.length ? r.fills : [{ type: 'SOLID', color: { r: 1, g: 1, b: 1 }, opacity: 1 }])}overflow:hidden;`;
+  const css = `left:0;top:0;width:${px(r.width)};height:${px(r.height)};${backgroundCss(r.fills.length ? r.fills : [{ type: 'SOLID', color: { r: 1, g: 1, b: 1 }, opacity: 1 }], plan.images)}overflow:hidden;`;
   return `<div class="n box root" data-kind="frame" data-id="${esc(r.sourceId)}" title="${esc(r.name)}" style="${css}">${r.children.map((c) => node(c, plan.images)).join('')}</div>`;
 }
 

@@ -20,6 +20,7 @@ import {
   type PlanNode,
   type PlanPlaceholder,
   type PlanSvg,
+  type PaintSpec,
   type PlanText,
   type RenderPlan,
 } from '../plan/plan.ts';
@@ -308,6 +309,79 @@ export function planToSvg(plan: RenderPlan, options: SvgOptions = {}): SvgResult
     return n.opacity < 1 ? `<g opacity="${num(n.opacity)}">${svg}</g>` : svg;
   };
 
+  /** SVG fill attribute for a solid or gradient paint (gradients as defs in the box's own coordinates). */
+  const fillAttr = (f: PaintSpec | undefined, n: PlanBox, ax: number, ay: number): string => {
+    if (!f || f.type === 'IMAGE') return ' fill="none"';
+    if (f.type === 'SOLID') return paintAttr(f);
+    const gid = `grad${++defId}`;
+    const stops = f.stops
+      .map(
+        (s) =>
+          `<stop offset="${num(s.position)}" stop-color="${rgb(s.color)}"${s.color.a < 1 ? ` stop-opacity="${num(s.color.a)}"` : ''}/>`,
+      )
+      .join('');
+    if (f.type === 'GRADIENT_LINEAR') {
+      // CSS gradient line: through the box center at the angle, length |w·sin θ| + |h·cos θ|.
+      const t = (f.angleDeg * Math.PI) / 180;
+      const dx = Math.sin(t);
+      const dy = -Math.cos(t);
+      const half = (Math.abs(n.width * dx) + Math.abs(n.height * dy)) / 2;
+      const cx = ax + n.width / 2;
+      const cy = ay + n.height / 2;
+      defs.push(
+        `<linearGradient id="${gid}" gradientUnits="userSpaceOnUse" x1="${num(cx - dx * half)}" y1="${num(cy - dy * half)}" x2="${num(cx + dx * half)}" y2="${num(cy + dy * half)}">${stops}</linearGradient>`,
+      );
+    } else {
+      const cx = ax + f.center.x * n.width;
+      const cy = ay + f.center.y * n.height;
+      const rx = Math.max(0.01, f.radius.x * n.width);
+      const ry = Math.max(0.01, f.radius.y * n.height);
+      const squash =
+        Math.abs(rx - ry) > 0.01
+          ? ` gradientTransform="translate(${num(cx)} ${num(cy)}) scale(1 ${num(ry / rx)}) translate(${num(-cx)} ${num(-cy)})"`
+          : '';
+      defs.push(
+        `<radialGradient id="${gid}" gradientUnits="userSpaceOnUse" cx="${num(cx)}" cy="${num(cy)}" r="${num(rx)}"${squash}>${stops}</radialGradient>`,
+      );
+    }
+    return ` fill="url(#${gid})"`;
+  };
+
+  /** One background layer: a shape with a solid/gradient fill, or the composited image clipped to the corners. */
+  const background = (
+    f: PaintSpec | undefined,
+    n: PlanBox,
+    ax: number,
+    ay: number,
+    extra: string,
+  ): string => {
+    const kind = !f
+      ? 'background'
+      : f.type === 'IMAGE'
+        ? 'background image'
+        : f.type === 'SOLID'
+          ? 'background'
+          : 'gradient';
+    if (f?.type === 'IMAGE') {
+      const a = plan.images[f.assetId];
+      if (!a) return '';
+      stats.images++;
+      return (
+        `<image id="${esc(id(`${n.name} ${kind}`))}" x="${num(ax)}" y="${num(ay)}" width="${num(n.width)}" height="${num(n.height)}"` +
+        ` preserveAspectRatio="none"${roundClip(n, ax, ay)} href="data:${a.mime};base64,${a.data}"/>`
+      );
+    }
+    return shape(
+      id(`${n.name} ${kind}`),
+      ax,
+      ay,
+      n.width,
+      n.height,
+      n.radii,
+      fillAttr(f, n, ax, ay) + extra,
+    );
+  };
+
   const visit = (n: PlanNode, ox: number, oy: number): string => {
     const ax = ox + n.x;
     const ay = oy + n.y;
@@ -317,18 +391,28 @@ export function planToSvg(plan: RenderPlan, options: SvgOptions = {}): SvgResult
     if (n.kind === 'image') return image(n, ax, ay);
     if (n.kind === 'svg') return nestedSvg(n, ax, ay);
     stats.boxes++;
-    const fill = n.fills[0];
-    if (n.fills.length > 1) skipped.add('multiple fills (first kept)');
-    const paint = paintAttr(fill) + filterFor(n.effects);
     const op = n.opacity < 1 ? ` opacity="${num(n.opacity)}"` : '';
     const name = id(n.name);
     const kids = n.children.map((c) => visit(c, ax, ay)).join('');
-    // Leaf box: one shape named after the layer (no wrapper group).
-    if (!kids && !n.strokes) return shape(name, ax, ay, n.width, n.height, n.radii, paint + op);
-    // An unpainted box only exists for its border or children: no empty background layer.
+    const filter = filterFor(n.effects);
+    // Leaf box with at most one solid/gradient fill: one shape named after the layer (no wrapper group).
+    const single = n.fills.length <= 1 && n.fills[0]?.type !== 'IMAGE';
+    if (!kids && !n.strokes && single)
+      return shape(
+        name,
+        ax,
+        ay,
+        n.width,
+        n.height,
+        n.radii,
+        fillAttr(n.fills[0], n, ax, ay) + filter + op,
+      );
+    // Background layers bottom → top; an unpainted box only exists for its border or children (no empty layer).
     const bg =
-      fill || n.effects.length
-        ? shape(id(`${n.name} background`), ax, ay, n.width, n.height, n.radii, paint)
+      n.fills.length || n.effects.length
+        ? (n.fills.length ? n.fills : [undefined])
+            .map((f, i) => background(f, n, ax, ay, i === 0 ? filter : ''))
+            .join('')
         : '';
     let inner = kids;
     if (n.clipsContent && kids && overflows(n)) {
@@ -352,7 +436,7 @@ export function planToSvg(plan: RenderPlan, options: SvgOptions = {}): SvgResult
       root.width,
       root.height,
       null,
-      root.fills[0] ? paintAttr(root.fills[0]) : ' fill="rgb(255,255,255)"',
+      root.fills[0]?.type === 'SOLID' ? paintAttr(root.fills[0]) : ' fill="rgb(255,255,255)"',
     ) + root.children.map((c) => visit(c, 0, 0)).join('');
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" width="${num(root.width)}" height="${num(root.height)}" viewBox="0 0 ${num(root.width)} ${num(root.height)}">` +

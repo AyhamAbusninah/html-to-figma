@@ -203,6 +203,77 @@ describe('planToSvg', () => {
     expect(stats.svgs).toBe(1);
   });
 
+  it('background layers: color, image, gradient overlay stacked bottom → top; gradient line follows the CSS angle', () => {
+    const hero: FrameNode = {
+      id: 'n11',
+      name: 'section.hero',
+      type: 'FRAME',
+      rect: { x: 0, y: 0, width: 200, height: 100 },
+      opacity: 1,
+      clipsContent: false,
+      children: [],
+      fills: [
+        { type: 'SOLID', color: { r: 0, g: 0, b: 0, a: 1 } },
+        { type: 'IMAGE', assetId: 'a1', scaleMode: 'FILL' },
+        {
+          type: 'GRADIENT_LINEAR',
+          angleDeg: 90,
+          stops: [
+            { position: 0, color: { r: 0, g: 0, b: 0, a: 0.5 } },
+            { position: 1, color: { r: 1, g: 1, b: 1, a: 1 } },
+          ],
+        },
+      ],
+    };
+    const d = doc([hero]);
+    d.assets.images = {
+      a1: { mime: 'image/png', data: 'iVBORw0KGgo=', width: 1, height: 1, source: 'fetch' },
+    };
+    const { svg, stats } = planToSvg(buildPlan(d, MOCK_FONTS));
+    const order = [
+      'section.hero_background"',
+      'section.hero_background_image"',
+      'section.hero_gradient"',
+    ].map((x) => svg.indexOf(x));
+    expect(order.every((i) => i > 0)).toBe(true);
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+    // 90deg = to right: the line runs across the box width through its center.
+    expect(svg).toContain(
+      '<linearGradient id="grad1" gradientUnits="userSpaceOnUse" x1="0" y1="50" x2="200" y2="50"><stop offset="0" stop-color="rgb(0,0,0)" stop-opacity="0.5"/><stop offset="1" stop-color="rgb(255,255,255)"/></linearGradient>',
+    );
+    expect(stats.images).toBe(1);
+  });
+
+  it('radial gradient: center and radii from the box; ellipses squashed with a transform', () => {
+    const blob: FrameNode = {
+      id: 'n12',
+      name: 'div.glow',
+      type: 'FRAME',
+      rect: { x: 10, y: 10, width: 200, height: 100 },
+      opacity: 1,
+      clipsContent: false,
+      children: [],
+      fills: [
+        {
+          type: 'GRADIENT_RADIAL',
+          center: { x: 0.5, y: 0.5 },
+          radius: { x: 0.5, y: 0.5 },
+          stops: [
+            { position: 0, color: { r: 1, g: 1, b: 1, a: 1 } },
+            { position: 1, color: { r: 0, g: 0, b: 1, a: 1 } },
+          ],
+        },
+      ],
+    };
+    const { svg } = planToSvg(buildPlan(doc([blob]), MOCK_FONTS));
+    expect(svg).toContain(
+      '<radialGradient id="grad1" gradientUnits="userSpaceOnUse" cx="110" cy="60" r="100" gradientTransform="translate(110 60) scale(1 0.5) translate(-110 -60)">',
+    );
+    expect(svg).toContain(
+      '<rect id="div.glow" x="10" y="10" width="200" height="100" fill="url(#grad1)"/>',
+    );
+  });
+
   it('style names map to CSS weights; PostScript names drop spaces', () => {
     expect(styleToCss('Semi Bold Italic')).toEqual({ weight: 600, italic: true });
     expect(styleToCss('ExtraBold')).toEqual({ weight: 800, italic: false });

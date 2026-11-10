@@ -20,7 +20,9 @@ export type AssetJob =
   | { kind: 'canvas'; raw: RawElement; el: HTMLCanvasElement }
   | { kind: 'video'; raw: RawElement; el: HTMLVideoElement }
   /** <iframe>/<object>/<embed>: content not readable; Tier 3 screenshot only. */
-  | { kind: 'frame'; raw: RawElement; el: HTMLElement };
+  | { kind: 'frame'; raw: RawElement; el: HTMLElement }
+  /** CSS background images of a (non-replaced) element: one composite per url() layer (EXT-I-8). */
+  | { kind: 'bg'; raw: RawElement; el: Element; layers: { url: string; layer: number }[] };
 
 const MAX_SIDE = 4096; // Figma's image limit (EXT-I-7)
 const CONCURRENCY = 6;
@@ -392,6 +394,10 @@ async function encodeVideo(el: HTMLVideoElement): Promise<Encoded | null> {
 
 async function resolveJob(job: AssetJob, assets: Record<string, RawImageAsset>): Promise<void> {
   if (job.kind === 'frame') return; // Tier 3 only
+  if (job.kind === 'bg') {
+    job.raw.bgAssets = await compositeBackgrounds(job.el, job.layers, assets);
+    return;
+  }
   try {
     if (job.kind === 'svg') {
       job.raw.svg = await serializeSvg(job.el);
@@ -442,7 +448,7 @@ export async function resolveAssets(
   };
   await Promise.all(Array.from({ length: Math.min(CONCURRENCY, jobs.length) }, worker));
   await screenshotCrops(
-    jobs.filter((j) => j.kind === 'frame' || (j.raw.assetFailed && !j.raw.svg)),
+    jobs.filter((j) => j.kind === 'frame' || (j.kind !== 'bg' && j.raw.assetFailed && !j.raw.svg)),
     assets,
   );
   snapshot.assets = assets;
@@ -529,4 +535,210 @@ async function screenshotCrops(
   } finally {
     scrollTo({ left: sx, top: sy, behavior: 'instant' });
   }
+}
+
+// ── CSS backgrounds (EXT-I-8) ───────────────────────────────────────────────────────────────────────────────
+
+/** The k-th comma-separated value of a per-layer property (values cycle when there are fewer than layers). */
+function layerValue(value: string, k: number): string {
+  const parts = value.split(/,(?![^(]*\))/).map((p) => p.trim());
+  return parts[k % parts.length] ?? '';
+}
+
+/** Decoded image for drawing: data: directly; anything else fetched (CORS, then service worker) into a blob URL. */
+async function loadImage(url: string): Promise<HTMLImageElement | null> {
+  let objectUrl: string | null = null;
+  try {
+    let src = url;
+    if (!url.startsWith('data:')) {
+      const blob = await fetchBlob(url);
+      if (!blob) return null;
+      src = objectUrl = URL.createObjectURL(blob);
+    }
+    const img = new Image();
+    img.src = src;
+    await img.decode();
+    return img.naturalWidth > 0 && img.naturalHeight > 0 ? img : null;
+  } catch {
+    return null;
+  } finally {
+    if (objectUrl) {
+      const u = objectUrl;
+      setTimeout(() => URL.revokeObjectURL(u), 0);
+    }
+  }
+}
+
+const POS_KEYWORDS: Record<string, number> = {
+  left: 0,
+  top: 0,
+  center: 50,
+  right: 100,
+  bottom: 100,
+};
+
+/** A length, percentage or `calc(P% ± Npx)` (Chrome's computed form of edge offsets) → px; % of `free`. */
+function lengthOf(t: string, free: number): number {
+  const calc = /^calc\((.*)\)$/.exec(t.trim());
+  if (calc) {
+    let sum = 0;
+    const expr = calc[1]!.replace(/\s*-\s*/g, ' -').replace(/\s*\+\s*/g, ' +');
+    for (const m of expr.matchAll(/([+-]?[\d.]+)(%|px)?/g))
+      sum += m[2] === '%' ? (parseFloat(m[1]!) / 100) * free : parseFloat(m[1]!);
+    return sum;
+  }
+  return t.endsWith('%') ? (parseFloat(t) / 100) * free : parseFloat(t) || 0;
+}
+
+/** Splits on whitespace outside parentheses (calc() keeps its spaces). */
+function tokens(value: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let cur = '';
+  for (const ch of value.trim()) {
+    if (ch === '(') depth++;
+    if (ch === ')') depth--;
+    if (/\s/.test(ch) && depth === 0) {
+      if (cur) out.push(cur);
+      cur = '';
+    } else cur += ch;
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+
+/** One axis of background-position → offset of the tile in the positioning area (px). */
+function posAxis(t: string[], free: number): number {
+  // [keyword], [length|%|calc], or [keyword, offset] (offset from that edge).
+  if (t.length === 2 && t[0]! in POS_KEYWORDS) {
+    const off = lengthOf(t[1]!, free);
+    return POS_KEYWORDS[t[0]!] === 100 ? free - off : off;
+  }
+  const v = t[0] ?? '50%';
+  return v in POS_KEYWORDS ? (POS_KEYWORDS[v]! / 100) * free : lengthOf(v, free);
+}
+
+function parsePosition(value: string, freeX: number, freeY: number): [number, number] {
+  const t = tokens(value);
+  if (t.length === 4) return [posAxis(t.slice(0, 2), freeX), posAxis(t.slice(2), freeY)];
+  if (t.length === 3)
+    return t[1]! in POS_KEYWORDS
+      ? [posAxis([t[0]!], freeX), posAxis(t.slice(1), freeY)]
+      : [posAxis(t.slice(0, 2), freeX), posAxis([t[2]!], freeY)];
+  return [posAxis([t[0] ?? '50%'], freeX), posAxis([t[1] ?? '50%'], freeY)];
+}
+
+/** background-size → tile size (px) for an image of natural size iw×ih in a W×H positioning area. */
+function tileSize(value: string, iw: number, ih: number, W: number, H: number): [number, number] {
+  const v = value.trim();
+  if (v === 'cover' || v === 'contain') {
+    const s = v === 'cover' ? Math.max(W / iw, H / ih) : Math.min(W / iw, H / ih);
+    return [iw * s, ih * s];
+  }
+  const [a = 'auto', b = 'auto'] = v.split(/\s+/);
+  const len = (t: string, of: number) =>
+    t === 'auto' ? null : t.endsWith('%') ? (parseFloat(t) / 100) * of : parseFloat(t);
+  const w = len(a, W);
+  const h = len(b, H);
+  if (w !== null && h !== null) return [w, h];
+  if (w !== null) return [w, (w * ih) / iw];
+  if (h !== null) return [(h * iw) / ih, h];
+  return [iw, ih];
+}
+
+/**
+ * Each url() layer of the element's background drawn into a canvas the size of its border box, honoring
+ * background-size, -position (padding box) and -repeat; returns the asset id per layer (null = not readable).
+ */
+async function compositeBackgrounds(
+  el: Element,
+  layers: { url: string; layer: number }[],
+  assets: Record<string, RawImageAsset>,
+): Promise<(string | null)[]> {
+  const cs = getComputedStyle(el);
+  const r = el.getBoundingClientRect();
+  const n = (v: string) => parseFloat(v) || 0;
+  /** Positioning area per background-origin (default padding-box): [left, top, width, height] in the border box. */
+  const area = (origin: string): [number, number, number, number] => {
+    const [bl, bt, br, bb] = [
+      cs.borderLeftWidth,
+      cs.borderTopWidth,
+      cs.borderRightWidth,
+      cs.borderBottomWidth,
+    ].map(n) as [number, number, number, number];
+    if (origin === 'border-box') return [0, 0, r.width, r.height];
+    const [pl, pt, pr, pb] =
+      origin === 'content-box'
+        ? ([cs.paddingLeft, cs.paddingTop, cs.paddingRight, cs.paddingBottom].map(n) as [
+            number,
+            number,
+            number,
+            number,
+          ])
+        : [0, 0, 0, 0];
+    return [
+      bl + pl,
+      bt + pt,
+      Math.max(1, r.width - bl - br - pl - pr),
+      Math.max(1, r.height - bt - bb - pt - pb),
+    ];
+  };
+  const scale = Math.min(
+    2,
+    Math.max(1, globalThis.devicePixelRatio || 1),
+    MAX_SIDE / r.width,
+    MAX_SIDE / r.height,
+  );
+  const ids: (string | null)[] = [];
+  // Per-layer properties are indexed by the CSS layer (gradient layers included), not by the url count.
+  for (const { url, layer: k } of layers) {
+    try {
+      const img = await withTimeout(loadImage(new URL(url, document.baseURI).href));
+      if (!img) {
+        ids.push(null);
+        continue;
+      }
+      const [ox, oy, W, H] = area(layerValue(cs.backgroundOrigin, k));
+      const [tw, th] = tileSize(
+        layerValue(cs.backgroundSize, k),
+        img.naturalWidth,
+        img.naturalHeight,
+        W,
+        H,
+      );
+      const [px, py] = parsePosition(layerValue(cs.backgroundPosition, k), W - tw, H - th);
+      const rep = layerValue(cs.backgroundRepeat, k).split(/\s+/);
+      const repX = /^(repeat|space|round|repeat-x)$/.test(rep[0]!) && rep[0] !== 'repeat-y';
+      const repY =
+        rep.length > 1
+          ? /^(repeat|space|round)$/.test(rep[1]!)
+          : /^(repeat|space|round|repeat-y)$/.test(rep[0]!) && rep[0] !== 'repeat-x';
+      const cw = Math.max(1, Math.round(r.width * scale));
+      const ch = Math.max(1, Math.round(r.height * scale));
+      const canvas = new OffscreenCanvas(cw, ch);
+      const g = canvas.getContext('2d')!;
+      g.scale(scale, scale);
+      if (tw > 0.5 && th > 0.5) {
+        const x0 = ox + px;
+        const y0 = oy + py;
+        const xs = repX ? Math.floor(-x0 / tw) : 0;
+        const ys = repY ? Math.floor(-y0 / th) : 0;
+        const xe = repX ? Math.ceil((r.width - x0) / tw) : 1;
+        const ye = repY ? Math.ceil((r.height - y0) / th) : 1;
+        let tiles = 0;
+        for (let i = xs; i < xe && tiles < 4000; i++)
+          for (let j = ys; j < ye && tiles < 4000; j++, tiles++)
+            g.drawImage(img, x0 + i * tw, y0 + j * th, tw, th);
+      }
+      const enc = await encode(canvas, cw, ch, r.width, r.height, {
+        source: url.startsWith('data:') ? 'canvas' : 'fetch',
+        ...(url.startsWith('data:') ? {} : { originalUrl: url }),
+      });
+      assets[enc.id] = enc.asset;
+      ids.push(enc.id);
+    } catch {
+      ids.push(null);
+    }
+  }
+  return ids;
 }

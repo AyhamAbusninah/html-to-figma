@@ -445,25 +445,60 @@ describe('replaced content, controls, warnings', () => {
   it('aggregated warnings count occurrences (gradients, bg images, pseudo, ellipsis)', () => {
     const doc = build(
       page([
-        el('div', rect(0, 0, 10, 10), { 'background-image': 'linear-gradient(red, blue)' }),
+        el('div', rect(0, 0, 10, 10), {
+          'background-image': 'conic-gradient(rgb(255, 0, 0), rgb(0, 0, 255))',
+        }),
         el('div', rect(0, 0, 10, 10), { 'background-image': 'url("a.png")' }, [], {
           pseudo: { before: true, after: true },
         }),
-        el('div', rect(0, 0, 10, 10), { 'background-image': 'linear-gradient(red, blue)' }, [], {
-          ellipsisTruncated: true,
-        }),
+        el(
+          'div',
+          rect(0, 0, 10, 10),
+          { 'background-image': 'repeating-linear-gradient(rgb(255, 0, 0), rgb(0, 0, 255) 2px)' },
+          [],
+          {
+            ellipsisTruncated: true,
+          },
+        ),
       ]),
     );
     const byCode = Object.fromEntries(doc.meta.warnings.map((w) => [w.code, w.message]));
-    expect(byCode.GRADIENT_NOT_CAPTURED).toMatch(/\(2×\)$/);
+    expect(byCode.GRADIENT_UNSUPPORTED).toMatch(/\(2×\)$/);
     expect(byCode.BACKGROUND_IMAGE_NOT_CAPTURED).toMatch(/\(1×\)$/);
     expect(byCode.PSEUDO_ELEMENT_NOT_CAPTURED).toMatch(/\(2×\)$/);
     expect(byCode.TEXT_ELLIPSIS_NOT_APPLIED).toMatch(/\(1×\)$/);
-    expect(doc.root.children.map((n) => n.name)).toEqual([
-      'div ⚠ gradient',
-      'div ⚠ bg-image',
-      'div ⚠ gradient',
+    expect(doc.root.children.map((n) => n.name)).toEqual(['div', 'div ⚠ bg-image', 'div']);
+    // Unsupported gradients fall back to their first color.
+    expect((doc.root.children[0] as FrameNode).fills).toEqual([
+      { type: 'SOLID', color: { r: 1, g: 0, b: 0, a: 1 } },
     ]);
+  });
+
+  it('background layers → fills bottom to top: color, image (pre-composited asset), gradient overlay', () => {
+    const raw = page([
+      el(
+        'section',
+        rect(0, 0, 200, 100),
+        {
+          'background-color': 'rgb(0, 0, 0)',
+          'background-image':
+            'linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url("https://cdn.example/hero.jpg")',
+        },
+        [],
+        { bgAssets: ['img_hero'] },
+      ),
+    ]);
+    raw.assets = {
+      img_hero: { mime: 'image/jpeg', data: '/9j/', width: 200, height: 100, source: 'fetch' },
+    };
+    const doc = build(raw);
+    expect(validateCapture(doc).ok).toBe(true);
+    const f = doc.root.children[0] as FrameNode;
+    expect(f.fills.map((p) => p.type)).toEqual(['SOLID', 'IMAGE', 'GRADIENT_LINEAR']);
+    expect(f.fills[1]).toEqual({ type: 'IMAGE', assetId: 'img_hero', scaleMode: 'FILL' });
+    expect(f.name).toBe('section');
+    expect(Object.keys(doc.assets.images)).toEqual(['img_hero']);
+    expect(doc.meta.warnings).toEqual([]);
   });
 });
 

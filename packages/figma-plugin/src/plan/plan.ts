@@ -23,6 +23,20 @@ export type SolidPaintSpec = {
   color: { r: number; g: number; b: number };
   opacity: number;
 };
+/** Gradient stop; color with alpha (CSS rgba). Positions 0–1 along the gradient line / radius. */
+export type GradientStopSpec = { position: number; color: RGBA };
+export type GradientPaintSpec =
+  | { type: 'GRADIENT_LINEAR'; angleDeg: number; stops: GradientStopSpec[] }
+  | {
+      type: 'GRADIENT_RADIAL';
+      center: { x: number; y: number };
+      radius: { x: number; y: number };
+      stops: GradientStopSpec[];
+    };
+/** Pre-composited CSS background image covering the whole box (`RenderPlan.images[assetId]`). */
+export type ImagePaintSpec = { type: 'IMAGE'; assetId: string };
+export type PaintSpec = SolidPaintSpec | GradientPaintSpec | ImagePaintSpec;
+
 export type EffectSpec =
   | {
       type: 'DROP_SHADOW' | 'INNER_SHADOW';
@@ -49,7 +63,8 @@ interface PlanBase {
 export interface PlanBox extends PlanBase {
   /** frame: has children or clips; rect: a leaf box. */
   kind: 'frame' | 'rect';
-  fills: SolidPaintSpec[];
+  /** Bottom → top. Gradients/images are drawn by Copy to Figma and the preview; the plugin adapter keeps solids. */
+  fills: PaintSpec[];
   strokes?: {
     paint: SolidPaintSpec;
     top: number;
@@ -157,11 +172,25 @@ const solid = (c: RGBA): SolidPaintSpec => ({
   opacity: r4(c.a),
 });
 
-function mapFills(fills: Paint[], unsupported: Set<string>): SolidPaintSpec[] {
-  const out: SolidPaintSpec[] = [];
+function mapFills(
+  fills: Paint[],
+  images: CaptureDocument['assets']['images'],
+  unsupported: Set<string>,
+): PaintSpec[] {
+  const out: PaintSpec[] = [];
   for (const p of fills) {
     if (p.type === 'SOLID') out.push(solid(p.color));
-    else unsupported.add(`${p.type} paint`); // gradients/images: R2+/R4
+    else if (p.type === 'IMAGE') {
+      if (images[p.assetId]) out.push({ type: 'IMAGE', assetId: p.assetId });
+      unsupported.add('IMAGE paint'); // plugin adapter: solids only for now (Copy to Figma draws it)
+    } else {
+      out.push(
+        p.type === 'GRADIENT_LINEAR'
+          ? { type: p.type, angleDeg: p.angleDeg, stops: p.stops }
+          : { type: p.type, center: p.center, radius: p.radius, stops: p.stops },
+      );
+      unsupported.add(`${p.type} paint`);
+    }
   }
   return out;
 }
@@ -308,7 +337,7 @@ export function buildPlan(doc: CaptureDocument, availableFonts: readonly FontNam
     return {
       ...base(n, parent),
       kind: children.length > 0 || n.clipsContent ? 'frame' : 'rect',
-      fills: mapFills(n.fills, unsupported),
+      fills: mapFills(n.fills, doc.assets.images, unsupported),
       ...(n.strokes ? { strokes: mapStrokes(n) } : {}),
       ...(n.radii ? { radii: n.radii } : {}),
       effects: mapEffects(n.effects),

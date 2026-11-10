@@ -214,8 +214,8 @@ critical_invariants:
     - "Capture never modifies the page DOM (AC-EXT-8)."
 
 known_gaps:
-  - "Images (R4, in progress on feat/images-icons): inline SVG, <img src=*.svg>, same-origin/data/blob/CORS images, canvas and video are captured (content/assets.ts). Still placeholders: cross-origin images without CORS (Tier 2 fetch needs a host permission, Tier 3 screenshot crop not built), iframes, CSS background images. The Figma plugin still draws images/SVG as placeholders (Copy to Figma and the preview draw them)."
-  - "Gradients not captured although the schema supports them (convert.ts:385 warns GRADIENT_NOT_CAPTURED)."
+  - "Images (R4, in progress on feat/images-icons): inline SVG, <img src=*.svg>, same-origin/data/blob/CORS images, canvas and video are captured (content/assets.ts). Cross-origin images: Tier 2 service-worker fetch, Tier 3 screenshot crops (also iframes). CSS gradients and background images are fills. Still missing: page-level (html/body) background images, repeating/conic gradients and background-clip:text (first color), image borders, object-position. The Figma plugin still draws images/SVG as placeholders (Copy to Figma and the preview draw them)."
+  - "Gradients: linear/radial supported (core/src/gradient.ts); repeating/conic fall back to the first color."
   - "::before/::after not captured (OQ-7 decided B, not implemented); text-overflow ellipsis not applied; icon fonts (OQ-16) not rasterized."
   - "Element picker (OQ-4, MVP) and inner scroll-area expansion (OQ-5) not implemented; captureMode is always 'page' (document.ts:61)."
   - "Rich text: one style per TEXT; a word split across inline elements (e.g. <mark>) doesn't join Arabic letters across layers (OQ-11 option B, v1.1)."

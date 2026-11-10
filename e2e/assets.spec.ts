@@ -93,3 +93,35 @@ test('cross-origin images without CORS stay placeholders with IMAGE_FETCH_FAILED
   expect(images.every((n) => n.assetId === null)).toBe(true);
   expect(document.meta.warnings.map((w) => w.code)).toContain('IMAGE_FETCH_FAILED');
 });
+
+test('CSS backgrounds: url() layers composited to image fills, gradients as gradient fills (EXT-I-8, EXT-V-3)', async ({
+  page,
+}) => {
+  const { nodes, document, textLines } = await capture(page, 'backgrounds.html');
+  const frames = nodes.filter((n) => n.type === 'FRAME');
+  const fills = frames.flatMap((f) => f.fills);
+  expect(fills.filter((p) => p.type === 'IMAGE').length).toBeGreaterThanOrEqual(15);
+  expect(fills.some((p) => p.type === 'GRADIENT_LINEAR')).toBe(true);
+  expect(fills.some((p) => p.type === 'GRADIENT_RADIAL')).toBe(true);
+  // background-clip: text → the transparent text gets the gradient's first color, no background fill.
+  const clip = nodes.find((n) => n.type === 'TEXT' && n.characters === 'Clip text');
+  expect(clip && clip.type === 'TEXT' && clip.style.color.a).toBe(1);
+  const out = figmaSvg(document, textLines);
+  expect(out.svg).toMatch(/<linearGradient id="grad\d+" gradientUnits="userSpaceOnUse"/);
+  expect(out.stats.images).toBeGreaterThanOrEqual(15);
+});
+
+test('hero background: color, photo and gradient overlay stack in CSS order (landing page)', async ({
+  page,
+}) => {
+  const { nodes } = await capture(page, 'landing-page.html');
+  const hero = nodes.find(
+    (n) =>
+      n.type === 'FRAME' &&
+      n.fills.some((p) => p.type === 'IMAGE') &&
+      n.fills.some((p) => p.type === 'GRADIENT_LINEAR'),
+  );
+  expect(hero, 'hero frame with image + gradient fills').toBeTruthy();
+  const types = hero!.type === 'FRAME' ? hero!.fills.map((p) => p.type) : [];
+  expect(types.indexOf('IMAGE')).toBeLessThan(types.indexOf('GRADIENT_LINEAR')); // overlay above the photo
+});

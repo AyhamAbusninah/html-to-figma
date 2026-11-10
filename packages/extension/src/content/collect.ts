@@ -1,4 +1,5 @@
 import {
+  backgroundUrls,
   lineTops,
   RAW_STYLE_KEYS,
   type RawControl,
@@ -268,6 +269,23 @@ function collectElement(el: Element): RawElement | null {
       else jobs.push({ kind: 'frame', raw, el: el as HTMLElement }); // iframe, object, embed: Tier 3
     }
     return raw; // content not traversed (svg internals, iframe document…)
+  }
+  // CSS background images: composited in the asset phase (EXT-I-8). Page backgrounds (html/body) excluded.
+  if (
+    cs.visibility === 'visible' &&
+    tag !== 'html' &&
+    tag !== 'body' &&
+    cs.backgroundImage.includes('url(')
+  ) {
+    // background-clip:text paints through the glyphs: no background image layer (engine approximates the color).
+    const layers = backgroundUrls(cs.backgroundImage);
+    if (
+      layers.length &&
+      raw.rect.width > 0 &&
+      raw.rect.height > 0 &&
+      !/\btext\b/.test(cs.backgroundClip)
+    )
+      jobs.push({ kind: 'bg', raw, el, layers });
   }
   const ctrl = readControl(el, tag);
   if (ctrl) raw.control = ctrl;
