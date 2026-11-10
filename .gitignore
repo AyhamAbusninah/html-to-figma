@@ -15,3 +15,4 @@ playwright-report/
 release/
 # Spike outputs (generated)
 spikes/figma-official/out/
+spikes/figma-svg/out/

@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>H2F spike: SVG → Figma</title>
+<style>
+  body { font: 14px/1.5 system-ui, sans-serif; margin: 24px; max-width: 1000px; color: #111; }
+  .row { border: 1px solid #d0d7de; border-radius: 8px; padding: 12px 16px; margin: 12px 0; }
+  .row h2 { font-size: 16px; margin: 0 0 6px; }
+  .meta { color: #555; font-size: 12px; }
+  button { margin: 6px 6px 0 0; padding: 6px 10px; border-radius: 6px; border: 1px solid #888; background: #f6f8fa; cursor: pointer; }
+  button.primary { background: #2563eb; color: #fff; border-color: #2563eb; }
+  .status { margin-top: 6px; font-weight: 600; }
+  .ok { color: #15803d; } .err { color: #b91c1c; }
+  img.thumb { display: block; margin-top: 8px; max-width: 100%; max-height: 220px; border: 1px solid #eee; background: #fff; }
+</style>
+</head>
+<body>
+<h1>Route C: paste an SVG into Figma Web</h1>
+<p>Each row is a render plan turned into one SVG. Click a <b>Copy</b> button, switch to the Figma tab, click the
+canvas, press <b>Esc</b>, then <b>Ctrl+V</b>. Try <b>Copy (SVG text)</b> first; if Figma pastes nothing or plain
+text, try the other buttons. <b>Download .svg</b> lets you drag the file onto the canvas instead.</p>
+<p><b>Arabic/RTL encoding:</b>
+  <label><input type="radio" name="rtl" value="direction" checked> A: SVG <code>direction="rtl"</code></label>
+  <label><input type="radio" name="rtl" value="marks"> B: right-to-left marks</label>
+  <span class="meta">(only matters for Arabic text; test V2 with both)</span></p>
+<div id="rows">Loading…</div>
+<script type="module">
+  import { planToSvg } from './svg.mjs';
+  import { browserMeasure, loadFonts } from './measure.mjs';
+  import { styleToCss } from './svg.mjs';
+
+  const index = await (await fetch('out/index.json')).json();
+  const rows = document.getElementById('rows');
+  rows.textContent = '';
+  for (const href of new Set(index.flatMap((v) => v.fonts))) {
+    const l = document.createElement('link');
+    l.rel = 'stylesheet';
+    l.href = href;
+    document.head.appendChild(l);
+  }
+  await new Promise((r) => setTimeout(r, 300));
+  const measure = browserMeasure();
+  const built = {};
+
+  for (const v of index) {
+    const plan = await (await fetch(`out/${v.id}.plan.json`)).json();
+    await loadFonts(plan.fonts.map((f) => ({ family: f.family, ...styleToCss(f.style), size: 16 })));
+    const r = planToSvg(plan, measure, { rtl: 'direction' });
+    built[v.id] = { direction: r.svg, marks: planToSvg(plan, measure, { rtl: 'marks' }).svg };
+    window.__svg = built; // for automated checks
+    const div = document.createElement('div');
+    div.className = 'row';
+    const kb = (new Blob([r.svg]).size / 1024).toFixed(1);
+    div.innerHTML = `<h2>${v.label}</h2>
+      <div class="meta">${v.width}×${v.height} · ${v.nodes} plan nodes → ${r.stats.boxes} boxes, ${r.stats.texts} texts (${r.stats.lines} lines), ${r.stats.placeholders} placeholders · ${kb} KB
+      ${r.skipped.length ? `<br>Not in SVG: ${r.skipped.join(', ')}` : ''}</div>
+      <button class="primary" data-m="text">Copy (SVG text)</button>
+      <button data-m="html">Copy (as HTML)</button>
+      <button data-m="mime">Copy (image/svg+xml)</button>
+      <button data-m="file">Download .svg</button>
+      <div class="status"></div>`;
+    const img = document.createElement('img');
+    img.className = 'thumb';
+    img.src = URL.createObjectURL(new Blob([r.svg], { type: 'image/svg+xml' }));
+    div.appendChild(img);
+    rows.appendChild(div);
+    const status = div.querySelector('.status');
+    const say = (ok, msg) => { status.className = `status ${ok ? 'ok' : 'err'}`; status.textContent = msg; };
+    div.querySelectorAll('button').forEach((b) =>
+      b.addEventListener('click', async () => {
+        const mode = document.querySelector('input[name=rtl]:checked').value;
+        const svg = built[v.id][mode];
+        try {
+          if (b.dataset.m === 'file') {
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+            a.download = `h2f-${v.id}.svg`;
+            a.click();
+            return say(true, `Downloaded (RTL ${mode}). Drag the file onto the Figma canvas.`);
+          }
+          if (b.dataset.m === 'mime') {
+            await navigator.clipboard.write([new ClipboardItem({ 'image/svg+xml': new Blob([svg], { type: 'image/svg+xml' }) })]);
+            return say(true, `Copied as image/svg+xml (RTL ${mode}). Paste in Figma (Esc, then Ctrl+V).`);
+          }
+          const onCopy = (e) => {
+            e.preventDefault();
+            e.clipboardData.setData('text/plain', svg);
+            if (b.dataset.m === 'html') e.clipboardData.setData('text/html', svg);
+          };
+          document.addEventListener('copy', onCopy, { once: true });
+          if (!document.execCommand('copy')) throw new Error('copy command refused');
+          say(true, `Copied (${b.dataset.m === 'html' ? 'text/html + text/plain' : 'text/plain'}, RTL ${mode}). Paste in Figma (Esc, then Ctrl+V).`);
+        } catch (e) {
+          say(false, `Failed: ${e.message}`);
+        }
+      }),
+    );
+  }
+</script>
+</body>
+</html>
