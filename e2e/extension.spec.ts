@@ -2,10 +2,14 @@
  * Extension skeleton in real Chromium, for BOTH the rebuilt build and the recovered reference build.
  * Verification level: BROWSER INTEGRATION.
  */
-import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
-import { validateCapture, type CaptureDocument } from '../packages/schema/src/index.ts';
+import {
+  validateCapture,
+  type CaptureDocument,
+  type CaptureNode,
+} from '../packages/schema/src/index.ts';
 import {
   launchWithExtension,
   repo,
@@ -53,19 +57,90 @@ for (const variant of Object.keys(VARIANTS) as Variant[]) {
       await h?.close();
     });
 
-    test('service worker answers ping and reports Tier-2 fetch as not implemented', async () => {
+    test('service worker answers ping; Tier-2 fetch reads allow-listed cross-origin images (EXT-I-3)', async () => {
       const page = await h.context.newPage();
       await page.goto(`chrome-extension://${h.extensionId}/popup.html`);
-      const [pong, fetchAsset] = await page.evaluate(async () => [
-        await chrome.runtime.sendMessage({ type: 'h2f:ping' }),
-        await chrome.runtime.sendMessage({ type: 'h2f:fetch-asset', url: 'https://x/y.png' }),
-      ]);
+      const allowListed = `${fixtures.origins.second}/assets/img/photo-160x100.png`; // no CORS headers
+      const [pong, fetched, bad] = await page.evaluate(
+        async (url) => [
+          await chrome.runtime.sendMessage({ type: 'h2f:ping' }),
+          await chrome.runtime.sendMessage({ type: 'h2f:fetch-asset', url }),
+          await chrome.runtime.sendMessage({ type: 'h2f:fetch-asset', url: 'javascript:alert(1)' }),
+        ],
+        allowListed,
+      );
       expect(pong).toEqual({ ok: true, type: 'h2f:pong', version: VERSION[variant] });
-      expect(fetchAsset).toEqual({
-        ok: false,
-        error: 'Tier-2 asset fetch is not implemented yet (P4)',
-      });
+      if (variant === 'reference') {
+        expect(fetched).toEqual({
+          ok: false,
+          error: 'Tier-2 asset fetch is not implemented yet (P4)',
+        });
+      } else {
+        expect(fetched).toMatchObject({ ok: true, type: 'h2f:asset', mime: 'image/png' });
+        expect((fetched as { data: string }).data.startsWith('iVBORw0KGgo')).toBe(true); // PNG signature
+        expect(bad).toEqual({ ok: false, error: 'only http(s) URLs' });
+      }
       await page.close();
+    });
+
+    test('cross-origin images: Tier 2 fetch for allow-listed hosts, Tier 3 crops, page and scroll untouched (EXT-I-3/4)', async () => {
+      test.skip(variant === 'reference', 'assets arrive in 0.4.0');
+      const target = await h.context.newPage();
+      await target.setViewportSize({ width: 1280, height: 800 });
+      await target.goto(`${fixtures.origins.main}/pages/images-cross-origin.html`, {
+        waitUntil: 'networkidle',
+      });
+      const domBefore = await target.evaluate(() => document.documentElement.outerHTML);
+      const scrollBefore = await target.evaluate(() => [scrollX, scrollY]);
+      const popup = await openPopupFor(h, target);
+      await popup.locator('#capture').click();
+      await expect(popup.locator('#done')).toBeVisible({ timeout: 60_000 });
+      // Read the capture through Copy JSON with the clipboard stubbed.
+      await popup.evaluate(() => {
+        const w = window as unknown as { __copied: string[] };
+        w.__copied = [];
+        navigator.clipboard.writeText = async (t: string) => void w.__copied.push(t);
+      });
+      await popup.locator('#copy').click();
+      await expect
+        .poll(() =>
+          popup.evaluate(() => (window as unknown as { __copied: string[] }).__copied.length),
+        )
+        .toBe(1);
+      const doc = JSON.parse(
+        await popup.evaluate(() => (window as unknown as { __copied: string[] }).__copied[0]!),
+      ) as CaptureDocument;
+      expect(validateCapture(doc).ok).toBe(true);
+      const sources = Object.values(doc.assets.images).map((a) => a.source);
+      const flat: CaptureNode[] = [];
+      const walk = (n: CaptureNode) => {
+        flat.push(n);
+        if (n.type === 'FRAME') n.children.forEach(walk);
+      };
+      walk(doc.root);
+      // 127.0.0.1 (second origin) is on the install allow-list: the service worker fetches it without CORS
+      // (two <img> of the same file → one asset), and the cross-origin <img src=logo.svg> becomes vectors.
+      expect(sources).toContain('fetch');
+      const fetched = flat.filter(
+        (n) => n.type === 'IMAGE' && n.assetId && doc.assets.images[n.assetId]!.source === 'fetch',
+      );
+      expect(fetched.length).toBeGreaterThanOrEqual(2);
+      expect(flat.some((n) => n.type === 'SVG')).toBe(true);
+      expect(
+        Object.values(doc.assets.images).some((a) =>
+          a.originalUrl?.startsWith(fixtures.origins.second),
+        ),
+      ).toBe(true);
+      // Tier 3 needs activeTab (granted by a real toolbar click) or the all-sites permission; the popup opened as a
+      // tab in this test has neither, so whatever is left stays a placeholder and the popup offers the permission.
+      await expect(popup.locator('#imagesNote')).toBeVisible();
+      expect(
+        await target.evaluate(() => document.documentElement.outerHTML),
+        'page DOM changed',
+      ).toBe(domBefore);
+      expect(await target.evaluate(() => [scrollX, scrollY])).toEqual(scrollBefore);
+      await popup.close();
+      await target.close();
     });
 
     test('popup on a restricted page disables capture (EXT-P-6, E-1)', async () => {
@@ -283,4 +358,81 @@ test('R0 invariants preserved: rebuilt metadata and root frame match the referen
     JSON.stringify(summary, null, 2),
   );
   await page.close();
+});
+
+test.describe('Tier 3 screenshot crops (test build with all-sites access granted at install)', () => {
+  let h: ExtensionHarness;
+  let dir: string;
+  test.beforeAll(async () => {
+    // Same bundle; only the manifest differs: <all_urls> granted at install, which (like the activeTab grant of
+    // a real toolbar click) lets the service worker call captureVisibleTab.
+    dir = join(repo, 'test-results/ext-all-sites');
+    rmSync(dir, { recursive: true, force: true });
+    cpSync(VARIANTS.rebuilt.extension, dir, { recursive: true });
+    const manifest = JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf8'));
+    manifest.host_permissions = ['<all_urls>'];
+    writeFileSync(join(dir, 'manifest.json'), JSON.stringify(manifest));
+    h = await launchWithExtension(dir);
+  });
+  test.afterAll(async () => {
+    await h?.close();
+  });
+
+  test('tainted canvas is cropped from a screenshot; other-site images are fetched; scroll restored', async () => {
+    const target = await h.context.newPage();
+    await target.setViewportSize({ width: 1280, height: 800 });
+    await target.goto(`${fixtures.origins.main}/pages/images-cross-origin.html`, {
+      waitUntil: 'networkidle',
+    });
+    await target.evaluate(() => scrollTo(0, 40));
+    const domBefore = await target.evaluate(() => document.documentElement.outerHTML);
+    const popup = await openPopupFor(h, target);
+    await popup.locator('#capture').click();
+    await expect(popup.locator('#done')).toBeVisible({ timeout: 60_000 });
+    await popup.evaluate(() => {
+      const w = window as unknown as { __copied: string[] };
+      w.__copied = [];
+      navigator.clipboard.writeText = async (t: string) => void w.__copied.push(t);
+    });
+    await popup.locator('#copy').click();
+    await expect
+      .poll(() =>
+        popup.evaluate(() => (window as unknown as { __copied: string[] }).__copied.length),
+      )
+      .toBe(1);
+    const doc = JSON.parse(
+      await popup.evaluate(() => (window as unknown as { __copied: string[] }).__copied[0]!),
+    ) as CaptureDocument;
+    expect(validateCapture(doc).ok).toBe(true);
+    const flat: CaptureNode[] = [];
+    const walk = (n: CaptureNode) => {
+      flat.push(n);
+      if (n.type === 'FRAME') n.children.forEach(walk);
+    };
+    walk(doc.root);
+    const source = (name: RegExp) => {
+      const n = flat.find((x) => x.type === 'IMAGE' && name.test(x.name)) as
+        { assetId: string | null } | undefined;
+      return n?.assetId ? doc.assets.images[n.assetId]!.source : null;
+    };
+    expect(source(/canvas#tainted/)).toBe('screenshot');
+    const crop = flat.find((x) => x.type === 'IMAGE' && /canvas#tainted/.test(x.name)) as {
+      assetId: string;
+    };
+    writeFileSync(
+      join(repo, 'test-results/tier3-tainted-canvas.png'),
+      Buffer.from(doc.assets.images[crop.assetId]!.data, 'base64'),
+    );
+    const sources = Object.values(doc.assets.images).map((a) => a.source);
+    expect(sources.filter((s) => s === 'fetch').length).toBeGreaterThanOrEqual(1);
+    await expect(popup.locator('#imagesNote')).toBeHidden(); // all-sites access already granted
+    expect(await target.evaluate(() => document.documentElement.outerHTML)).toBe(domBefore);
+    expect(await target.evaluate(() => [scrollX, scrollY])).toEqual([0, 40]);
+    // Evidence for review (Playwright scrolls the element into view, so after the scroll check).
+    await target
+      .locator('#tainted')
+      .screenshot({ path: join(repo, 'test-results/tier3-tainted-canvas.page.png') });
+    await popup.close();
+    await target.close();
+  });
 });

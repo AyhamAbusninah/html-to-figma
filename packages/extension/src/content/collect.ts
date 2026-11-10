@@ -265,6 +265,7 @@ function collectElement(el: Element): RawElement | null {
       else if (replaced === 'canvas')
         jobs.push({ kind: 'canvas', raw, el: el as HTMLCanvasElement });
       else if (replaced === 'video') jobs.push({ kind: 'video', raw, el: el as HTMLVideoElement });
+      else jobs.push({ kind: 'frame', raw, el: el as HTMLElement }); // iframe, object, embed: Tier 3
     }
     return raw; // content not traversed (svg internals, iframe document…)
   }

@@ -5,9 +5,11 @@ import { figmaCopyNote, figmaSvg } from '../shared/figma-copy.ts';
 import type { CaptureResult } from '../shared/messages.ts';
 import {
   captureFilename,
+  ALL_SITES,
   copyState,
   formatBytes,
   friendlyError,
+  imagesNote,
   isRestrictedUrl,
   restrictedMessage,
   statsRows,
@@ -91,6 +93,7 @@ function showDone(doc: CaptureDocument, bytes: number, durationMs: number) {
     }),
   );
   $('notCaptured').hidden = summary.length === 0;
+  void showImagesNote(doc);
   $('downloadNote').textContent = '';
   $('figmaNote').textContent = '';
   const copy = copyState(bytes);
@@ -145,6 +148,27 @@ async function copyToClipboard() {
   }
 }
 
+async function showImagesNote(doc: CaptureDocument) {
+  const screenshots = Object.values(doc.assets.images).filter(
+    (a) => a.source === 'screenshot',
+  ).length;
+  const failed = doc.meta.warnings.find((w) => w.code === 'IMAGE_FETCH_FAILED');
+  const missing = failed ? Number(/\((\d+)×\)$/.exec(failed.message)?.[1] ?? 1) : 0;
+  const granted = await chrome.permissions.contains(ALL_SITES).catch(() => false);
+  const text = imagesNote(screenshots, missing, granted);
+  $('imagesNoteText').textContent = text;
+  $('imagesNote').hidden = !text;
+}
+
+/** Asks once for all-sites access (user gesture), then captures again with full-quality images. */
+async function allowImages() {
+  const granted = await chrome.permissions.request(ALL_SITES).catch(() => false);
+  if (granted) await capture();
+  else
+    $('imagesNoteText').textContent =
+      'Not allowed. Screenshots are used for images from other sites.';
+}
+
 /** Copy to Figma (EXT-O-7): SVG as text/plain, which Figma Web imports as editable layers on Ctrl+V. */
 async function copyToFigma() {
   if (!captured) return;
@@ -164,6 +188,7 @@ async function copyToFigma() {
 
 $('capture').addEventListener('click', () => void capture());
 $('copyFigma').addEventListener('click', () => void copyToFigma());
+$('allowImages').addEventListener('click', () => void allowImages());
 $('retry').addEventListener('click', () => show('idle'));
 $('download').addEventListener('click', () => void download());
 $('copy').addEventListener('click', () => void copyToClipboard());

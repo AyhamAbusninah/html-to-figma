@@ -32,8 +32,8 @@ describe('manifest.json', () => {
       '*://127.0.0.1/*',
       '*://*.localhost/*',
     ]);
-    // OQ-2's optional runtime grant returns with the Tier-2 image fetch (R4); unused until then.
-    expect(manifest).not.toHaveProperty('optional_host_permissions');
+    // OQ-2 / EXT-P-4b: optional runtime grant for Tier-2 image fetches, asked once from the popup.
+    expect(manifest.optional_host_permissions).toEqual(['<all_urls>']);
   });
 
   it('declares icons and every icon file exists', () => {

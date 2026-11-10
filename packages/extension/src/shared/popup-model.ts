@@ -137,3 +137,21 @@ export function warningSummary(warnings: readonly { code: string; message: strin
     .sort((a, b) => b[1] - a[1])
     .map(([code, n]) => `${n} × ${NOT_CAPTURED_LABELS[code] ?? code}`);
 }
+
+/** All-sites host access for full-quality images (EXT-P-4b). */
+export const ALL_SITES: chrome.permissions.Permissions = { origins: ['<all_urls>'] };
+
+/**
+ * Done-screen offer to allow images from other sites (EXT-P-4b): only when some images came from screenshots
+ * (lower quality) or are missing, and the permission isn't granted yet. '' = don't show.
+ */
+export function imagesNote(screenshots: number, missing: number, granted: boolean): string {
+  if (granted || (screenshots === 0 && missing === 0)) return '';
+  const parts = [
+    screenshots
+      ? `${screenshots} image${screenshots === 1 ? '' : 's'} came from screenshots (lower quality)`
+      : '',
+    missing ? `${missing} image${missing === 1 ? ' is' : 's are'} missing` : '',
+  ].filter(Boolean);
+  return `${parts.join(' and ')}. Allow the extension to read images on all sites for full quality (Chrome asks once); it then captures again.`;
+}

@@ -29,5 +29,6 @@
     "*://localhost/*",
     "*://127.0.0.1/*",
     "*://*.localhost/*"
-  ]
+  ],
+  "optional_host_permissions": ["<all_urls>"]
 }

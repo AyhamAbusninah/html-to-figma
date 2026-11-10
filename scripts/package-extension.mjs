@@ -80,8 +80,9 @@ const extra = (manifest.permissions ?? []).filter((p) => !ALLOWED_PERMISSIONS.in
 if (extra.length) fail(`unapproved permissions: ${extra.join(', ')}`);
 if (JSON.stringify(manifest.host_permissions ?? []) !== JSON.stringify(ALLOWED_HOSTS))
   fail(`host_permissions differ from the approved list`);
-if (manifest.optional_host_permissions)
-  fail('optional_host_permissions not approved for this release (Tier-2 fetch is R4)');
+// EXT-P-4b: one optional grant for every site (asked once from the popup, for Tier-2 image fetches).
+if (JSON.stringify(manifest.optional_host_permissions ?? []) !== JSON.stringify(['<all_urls>']))
+  fail('optional_host_permissions must be exactly ["<all_urls>"] (EXT-P-4b)');
 if (manifest.content_scripts)
   fail('content_scripts must not be declared (inject on demand only, EXT-P-5)');
 

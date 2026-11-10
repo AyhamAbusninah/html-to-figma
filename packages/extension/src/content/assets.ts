@@ -3,19 +3,24 @@
  * engine can emit. Browser reads only; the live page is never modified (clones and detached canvases only).
  *
  * - Inline <svg> → a cloned, self-contained, sanitized SVG string (EXT-S-1..3, S-6 size cap in the engine).
- * - <img>/<canvas>/<video> → encoded PNG/JPEG pixels (EXT-I-2 Tier 1: draw the loaded element; otherwise a CORS
- *   fetch, which works for public CDNs that send Access-Control-Allow-Origin). Tier 2 (privileged fetch, needs a
- *   host permission) and Tier 3 (screenshot crop) are not implemented yet: failures stay placeholders with
- *   IMAGE_FETCH_FAILED (EXT-I-5).
+ * - <img>/<canvas>/<video> → encoded PNG/JPEG pixels, in tiers:
+ *   Tier 1 (EXT-I-2): draw the loaded element; else a CORS fetch (works for CDNs that allow cross-site reads).
+ *   Tier 2 (EXT-I-3): the service worker fetches it (host access: install allow-list, or all sites once the user
+ *   granted the optional permission).
+ *   Tier 3 (EXT-I-4): crop it from screenshots of the visible tab; the page is scrolled to each image and the
+ *   scroll position restored. Also used for <iframe>/<object>/<embed>. Still failing → placeholder (EXT-I-5).
  * - <img src=*.svg> → the SVG text, so logos stay editable vectors (EXT-S-5).
  */
 import type { RawElement, RawImageAsset, RawPageSnapshot } from '@h2f/core';
+import type { WorkerRequest, WorkerResponse } from '../shared/messages.ts';
 
 export type AssetJob =
   | { kind: 'svg'; raw: RawElement; el: SVGSVGElement }
   | { kind: 'img'; raw: RawElement; el: HTMLImageElement }
   | { kind: 'canvas'; raw: RawElement; el: HTMLCanvasElement }
-  | { kind: 'video'; raw: RawElement; el: HTMLVideoElement };
+  | { kind: 'video'; raw: RawElement; el: HTMLVideoElement }
+  /** <iframe>/<object>/<embed>: content not readable; Tier 3 screenshot only. */
+  | { kind: 'frame'; raw: RawElement; el: HTMLElement };
 
 const MAX_SIDE = 4096; // Figma's image limit (EXT-I-7)
 const CONCURRENCY = 6;
@@ -206,9 +211,9 @@ async function serializeSvg(el: SVGSVGElement): Promise<string> {
 /** <img src=*.svg>: fetch the text and make a standalone, sanitized SVG at the rendered size (EXT-S-5). */
 async function fetchSvgImage(el: HTMLImageElement): Promise<string | null> {
   const url = el.currentSrc || el.src;
-  const res = await withTimeout(fetch(url, { mode: 'cors', credentials: 'same-origin' }));
-  if (!res?.ok) return null;
-  const text = await res.text();
+  const blob = await withTimeout(fetchBlob(url));
+  if (!blob) return null;
+  const text = await blob.text();
   const doc = new DOMParser().parseFromString(text, 'image/svg+xml');
   const svg = doc.documentElement;
   if (svg.tagName.toLowerCase() !== 'svg' || doc.querySelector('parsererror')) return null;
@@ -298,16 +303,48 @@ async function encode(
 
 const urlCache = new Map<string, Promise<Encoded | null>>();
 
-/** CORS fetch → decode → encode. Works for same-origin and CORS-enabled hosts without any extra permission. */
+type Worker = typeof chrome.runtime.sendMessage;
+/** chrome.runtime in the extension's content script; absent when the script runs in the page (tests). */
+const runtime = (): { sendMessage: Worker } | undefined =>
+  (globalThis as { chrome?: { runtime?: { id?: string; sendMessage?: Worker } } }).chrome?.runtime
+    ?.id
+    ? (globalThis as unknown as { chrome: { runtime: { sendMessage: Worker } } }).chrome.runtime
+    : undefined;
+
+async function ask(msg: WorkerRequest): Promise<WorkerResponse | null> {
+  const rt = runtime();
+  if (!rt) return null;
+  try {
+    return (await rt.sendMessage(msg)) as WorkerResponse;
+  } catch {
+    return null;
+  }
+}
+
+/** Image bytes: a CORS fetch (Tier 1), else the service worker's fetch (Tier 2). */
+async function fetchBlob(url: string): Promise<Blob | null> {
+  try {
+    const res = await fetch(url, { mode: 'cors', credentials: 'same-origin' });
+    if (res.ok) return await res.blob();
+  } catch {
+    // CORS refused or network error: Tier 2.
+  }
+  const r = await ask({ type: 'h2f:fetch-asset', url });
+  if (!r?.ok || r.type !== 'h2f:asset') return null;
+  const bytes = Uint8Array.from(atob(r.data), (c) => c.charCodeAt(0));
+  return new Blob([bytes], { type: r.mime });
+}
+
+/** CORS fetch or service-worker fetch → decode → encode. */
 function encodeUrl(url: string, renW: number, renH: number): Promise<Encoded | null> {
   const key = `${url}|${Math.round(renW)}x${Math.round(renH)}`;
   let p = urlCache.get(key);
   if (!p) {
     p = withTimeout(
       (async () => {
-        const res = await fetch(url, { mode: 'cors', credentials: 'same-origin' });
-        if (!res.ok) return null;
-        const bmp = await createImageBitmap(await res.blob());
+        const blob = await fetchBlob(url);
+        if (!blob) return null;
+        const bmp = await createImageBitmap(blob);
         try {
           return await encode(bmp, bmp.width, bmp.height, renW, renH, {
             source: 'fetch',
@@ -354,6 +391,7 @@ async function encodeVideo(el: HTMLVideoElement): Promise<Encoded | null> {
 }
 
 async function resolveJob(job: AssetJob, assets: Record<string, RawImageAsset>): Promise<void> {
+  if (job.kind === 'frame') return; // Tier 3 only
   try {
     if (job.kind === 'svg') {
       job.raw.svg = await serializeSvg(job.el);
@@ -372,9 +410,16 @@ async function resolveJob(job: AssetJob, assets: Record<string, RawImageAsset>):
         ? await encodeImg(job.el)
         : job.kind === 'video'
           ? await encodeVideo(job.el)
-          : await encode(job.el, job.el.width, job.el.height, r.width, r.height, {
-              source: 'canvas',
-            }).catch(() => null);
+          : await encode(
+              job.el as HTMLCanvasElement,
+              (job.el as HTMLCanvasElement).width,
+              (job.el as HTMLCanvasElement).height,
+              r.width,
+              r.height,
+              {
+                source: 'canvas',
+              },
+            ).catch(() => null);
     if (enc) {
       assets[enc.id] = enc.asset;
       job.raw.assetId = enc.id;
@@ -396,5 +441,92 @@ export async function resolveAssets(
     while (next < jobs.length) await resolveJob(jobs[next++]!, assets);
   };
   await Promise.all(Array.from({ length: Math.min(CONCURRENCY, jobs.length) }, worker));
+  await screenshotCrops(
+    jobs.filter((j) => j.kind === 'frame' || (j.raw.assetFailed && !j.raw.svg)),
+    assets,
+  );
   snapshot.assets = assets;
+}
+
+// ── Tier 3: screenshot crops ────────────────────────────────────────────────────────────────────────────────
+
+const MAX_SHOTS = 24;
+const nextFrame = () => new Promise((r) => requestAnimationFrame(() => r(null)));
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Crops each remaining element out of screenshots of the visible tab (EXT-I-4). Elements are visited top to bottom;
+ * each screenshot is centered on the next element and every element fully inside it is cropped. Elements taller
+ * or wider than the viewport stay placeholders. The scroll position is restored afterwards.
+ */
+async function screenshotCrops(
+  jobs: readonly AssetJob[],
+  assets: Record<string, RawImageAsset>,
+): Promise<void> {
+  if (!jobs.length || !runtime()) return;
+  const sx = scrollX;
+  const sy = scrollY;
+  const vw = document.documentElement.clientWidth;
+  const items = jobs
+    .map((job) => {
+      const r = job.el.getBoundingClientRect();
+      return { job, x: r.x + sx, y: r.y + sy, w: r.width, h: r.height };
+    })
+    .filter(
+      (i) =>
+        i.w >= 2 && i.h >= 2 && i.h <= innerHeight && i.x - sx >= 0 && i.x - sx + i.w <= vw + 0.5,
+    )
+    .sort((a, b) => a.y - b.y);
+  const maxTop = Math.max(
+    0,
+    (document.scrollingElement ?? document.documentElement).scrollHeight - innerHeight,
+  );
+  let shots = 0;
+  try {
+    while (items.length && shots < MAX_SHOTS) {
+      const first = items[0]!;
+      const top = Math.min(maxTop, Math.max(0, first.y - (innerHeight - first.h) / 2));
+      scrollTo({ left: sx, top, behavior: 'instant' });
+      await nextFrame();
+      await nextFrame();
+      await sleep(100);
+      const shot = await ask({ type: 'h2f:capture-visible' });
+      shots++;
+      if (!shot?.ok || shot.type !== 'h2f:screenshot') break;
+      const bmp = await createImageBitmap(await (await fetch(shot.dataUrl)).blob());
+      const scale = bmp.width / innerWidth;
+      const nowTop = scrollY;
+      for (let k = 0; k < items.length;) {
+        const it = items[k]!;
+        const vy = it.y - nowTop;
+        if (vy < -0.5 || vy + it.h > innerHeight + 0.5) {
+          k++;
+          continue;
+        }
+        items.splice(k, 1);
+        try {
+          const crop = await createImageBitmap(
+            bmp,
+            Math.round((it.x - sx) * scale),
+            Math.round(vy * scale),
+            Math.max(1, Math.round(it.w * scale)),
+            Math.max(1, Math.round(it.h * scale)),
+          );
+          const enc = await encode(crop, crop.width, crop.height, it.w, it.h, {
+            source: 'screenshot',
+          });
+          crop.close();
+          assets[enc.id] = enc.asset;
+          it.job.raw.assetId = enc.id;
+          delete it.job.raw.assetFailed;
+        } catch {
+          /* stays a placeholder */
+        }
+      }
+      bmp.close();
+      if (items[0] === first) items.shift(); // could not be brought fully into view
+    }
+  } finally {
+    scrollTo({ left: sx, top: sy, behavior: 'instant' });
+  }
 }

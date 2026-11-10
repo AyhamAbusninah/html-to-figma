@@ -43,6 +43,7 @@ contents and click the ↻ reload button on the extension's card.
 | `downloads` | Save the JSON file |
 | `clipboardWrite` | "Copy to clipboard" |
 | Host access: `*.arkantechjo.com`, `localhost`, `127.0.0.1`, `*.localhost` | Company and local development sites (approved allow-list). Not needed for capturing other sites; `activeTab` covers those. |
+| *Optional:* read images on all sites | Asked only if you click **Allow images from other sites** after a capture. Lets the extension download images that other websites don't share with the page, at full quality. Without it, those images are cropped from screenshots. You can remove it any time on the extension's card (Details → Site access). |
 
 The extension sends nothing anywhere. The file stays on your machine.
 

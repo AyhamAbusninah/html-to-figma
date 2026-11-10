@@ -127,3 +127,17 @@ describe('restrictedMessage / friendlyError / warningSummary (popup UX)', async 
     ]);
   });
 });
+
+describe('imagesNote (EXT-P-4b)', () => {
+  it('offers all-sites access only when images came from screenshots or are missing', async () => {
+    const { imagesNote } = await import('../src/shared/popup-model.ts');
+    expect(imagesNote(0, 0, false)).toBe('');
+    expect(imagesNote(3, 1, true)).toBe('');
+    expect(imagesNote(1, 0, false)).toBe(
+      '1 image came from screenshots (lower quality). Allow the extension to read images on all sites for full quality (Chrome asks once); it then captures again.',
+    );
+    expect(imagesNote(2, 3, false)).toMatch(
+      /^2 images came from screenshots \(lower quality\) and 3 images are missing\. /,
+    );
+  });
+});
