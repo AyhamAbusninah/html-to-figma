@@ -104,6 +104,26 @@ That is a **second layout engine**, which the spike constraints forbid. It would
 
 Payload size: about 47 KB of clipboard HTML for 3 nodes, of which about 35 KB is the embedded schema (fixed cost).
 
+## 4b. Route C: SVG on the clipboard (documented import, follow-up spike 2026-11-10)
+
+Isolated in `spikes/figma-svg/` (details and measured rules in its README; evidence in `docs/spikes/figma-svg/`).
+The unchanged RenderPlan is serialized to one SVG and written to the clipboard as `text/plain`; Ctrl+V in Figma Web
+uses Figma's documented SVG import. No Figma code, no reverse-engineered format, no plugin, no backend.
+
+| Check (REAL FIGMA WEB, user's Ctrl+V + read-back through the official Figma MCP) | Result |
+|---|---|
+| Paste creates native layers | ✅ FRAME with groups, vectors and **editable TEXT** |
+| Arabic shaping, bidi order, right alignment | ✅ after fix 1 (physical `text-anchor`; Figma ignores `direction`) |
+| Text position | ✅ edges within 0.5 px, box tops exact after fix 2 (`y = top + font-size`) |
+| Fonts and weights (Tajawal, Cairo, Noto Sans Arabic, Inter) | ✅ after fix 3 (PostScript-style family names) |
+| Paste = `createNodeFromSvg` | ✅ identical numbers |
+| Items can be selected and removed | ✅ after fix 4 (flat structure, no wrapper group or masks); confirmed by the user |
+
+Limits of this route: boxes are vector shapes in groups (no real frames, corner-radius property or auto layout);
+a wrapped paragraph is a group of single-line text layers; justified text is start-aligned; inner shadows and
+per-side borders are approximated; it inherits the engine's gaps (images, CSS backgrounds). **Goal B relevance:**
+this is the only route found that an extension can ship alone with documented behavior and no legal blocker.
+
 ## 5. Goal B: what extra integration would be needed
 
 | Option | What our extension would have to do | Blockers / risks |
