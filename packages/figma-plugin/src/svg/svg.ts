@@ -267,7 +267,16 @@ export function planToSvg(plan: RenderPlan, options: SvgOptions = {}): SvgResult
     const lh = n.lineHeight.unit === 'PIXELS' ? n.lineHeight.value : null;
     const L = lines.length;
     const pitch = L > 1 ? (lh ?? n.height / L) : 0;
-    const x = n.anchor === 'right' ? ax + n.width : n.anchor === 'center' ? ax + n.width / 2 : ax;
+    // Figma's SVG import drops letter-spacing in every form (spikes/figma-svg spacing boards), so spaced text comes in
+    // tighter. Its centre (or right edge) stays put; Chrome's box also holds the spacing after the last letter, so
+    // the anchor moves back by that half (or whole) gap. The value goes into the layer name instead.
+    const ls = n.letterSpacing.value;
+    const x =
+      n.anchor === 'right'
+        ? ax + n.width - ls
+        : n.anchor === 'center'
+          ? ax + (n.width - ls) / 2
+          : ax;
     const anchor = n.anchor === 'right' ? 'end' : n.anchor === 'center' ? 'middle' : 'start';
     const deco =
       n.decoration === 'UNDERLINE'
@@ -289,7 +298,17 @@ export function planToSvg(plan: RenderPlan, options: SvgOptions = {}): SvgResult
       )
       .join('');
     // Single line: no id, so Figma names the layer after its text. Several lines become a group named by line 1.
-    return `<text${L > 1 ? ` id="${esc(id(lines[0]!.slice(0, 40)))}"` : ''}${attrs}>${body}</text>`;
+    // Spaced text is named "<text> · tracking 6px" so the designer can type the value into Figma's field.
+    if (ls) skipped.add('letter spacing (value in the layer name)');
+    const tracking = ls ? ` · tracking ${num(ls)}px` : '';
+    const name =
+      L > 1 || ls
+        ? `${lines[0]!
+            .replace(/[\u200e\u200f]/g, '')
+            .trim()
+            .slice(0, 40)}${tracking}`
+        : '';
+    return `<text${name ? ` id="${esc(id(name))}"` : ''}${attrs}>${body}</text>`;
   };
 
   /** True when some descendant is painted outside n's box (a clip elsewhere would only add a mask layer). */

@@ -348,3 +348,33 @@ describe('solid rings (box-shadow with spread only)', () => {
     expect(skipped).not.toContain('shadow spread');
   });
 });
+
+describe('letter spacing (Figma SVG import drops it)', () => {
+  it('names spaced text with its tracking and keeps centred and right-aligned glyphs in place', () => {
+    const spaced = (id: string, textAlign: 'left' | 'center' | 'right', x: number) =>
+      text(
+        id,
+        { x, y: 10, width: 200, height: 40 },
+        'THE NEW SEASON',
+        1,
+        style({ fontSize: 32, letterSpacing: 6, textAlign }),
+      );
+    const { svg, skipped } = planToSvg(
+      buildPlan(
+        doc([spaced('a', 'left', 0), spaced('b', 'center', 0), spaced('c', 'right', 0)]),
+        MOCK_FONTS,
+      ),
+    );
+    expect(svg.match(/<text id="THE NEW SEASON · tracking 6px[^"]*"/g)).toHaveLength(3);
+    expect(svg).toMatch(/text-anchor="start"[^>]*><tspan x="0"/);
+    expect(svg).toMatch(/text-anchor="middle"[^>]*><tspan x="97"/); // (200 - 6) / 2: Chrome's box holds a trailing gap
+    expect(svg).toMatch(/text-anchor="end"[^>]*><tspan x="194"/);
+    expect(skipped).toContain('letter spacing (value in the layer name)');
+  });
+
+  it('text without spacing keeps no id (Figma names it after its characters)', () => {
+    const { svg, skipped } = planToSvg(buildPlan(doc([card]), MOCK_FONTS));
+    expect(svg).not.toMatch(/<text id=/);
+    expect(skipped.join()).not.toContain('letter spacing');
+  });
+});

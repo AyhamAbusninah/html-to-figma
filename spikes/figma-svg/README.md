@@ -98,3 +98,20 @@ Measuring without the MCP quota: a read-only personal access token (File content
 `GET https://api.figma.com/v1/files/<key>/nodes?ids=<id>` return every pasted layer (type, characters, box,
 line height); the token lives in a local file, never in the repo or the conversation.
 
+
+## Letter-spacing (2026-11-11, user's Ctrl+V in Figma Web, read back in view mode)
+
+Boards `media.html?board=spacing` and `?board=spacing2` (`spacing.mjs`). "THE NEW SEASON", Inter 32 px, 6 px
+tracking: on the page it is 362 px wide, without tracking 284 px.
+
+| Case | SVG technique | Figma result |
+|---|---|---|
+| S0–S8 | `letter-spacing` attribute (unitless, px, em), inline `style`, per-character `dx` | ❌ ignored: 284 px, tracking 0 |
+| T1 | `textLength` + `lengthAdjust="spacing"` | ❌ ignored |
+| T2 | `<style>.ls6{letter-spacing:6px}</style>` + `class` | ❌ ignored (but the paste works: a `<style>` element does not break import) |
+| T3 | three U+200A hair spaces between letters | ✅ wider (~400 px; one hair space ≈ 3 px in Inter), but the text then holds invisible characters |
+
+**Conclusion (user's decision: clean text):** Figma's SVG import has no letter-spacing. Copy to Figma keeps clean,
+editable text: spaced text comes in a little tighter, centred and right-aligned lines keep their centre and right
+edge, and the layer is named "<text> · tracking 6px" so the designer can type the value into Figma's field. Hair
+spaces were rejected because retyping loses the spacing and the cursor steps over hidden characters.

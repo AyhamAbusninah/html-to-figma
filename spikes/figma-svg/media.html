@@ -21,7 +21,9 @@ Boards: <a href="?board=media">media</a> (Phase 1: images, icons, gradients, siz
 <a href="?board=editing">editing</a> (Phase 2: paragraphs and layer names) ·
 <a href="?board=forms">forms</a> (Phase 2: text inside form fields) ·
 <a href="?board=dashboard">dashboard</a> (Phase 2: "…" truncation) ·
-<a href="?board=styles">styles</a> (Phase 2: styles boards).</p>
+<a href="?board=styles">styles</a> (Phase 2: styles boards) ·
+<a href="?board=spacing">spacing</a> (letter spacing) ·
+<a href="?board=spacing2">spacing2</a> (one technique per paste).</p>
 <div id="rows">Loading…</div>
 <script type="module">
   const board = new URLSearchParams(location.search).get('board') ?? 'media';
@@ -32,7 +34,9 @@ Boards: <a href="?board=media">media</a> (Phase 1: images, icons, gradients, siz
     const div = document.createElement('div');
     div.className = 'row';
     const mb = (new Blob([c.svg]).size / 1024 / 1024).toFixed(2);
-    div.innerHTML = `<h2>${c.label}</h2><div class="meta">${mb} MB of SVG</div><button>Copy</button><div class="status"></div>`;
+    const kb = (new Blob([c.svg]).size / 1024).toFixed(1);
+    div.innerHTML = `<h2></h2><div class="meta">${mb >= 0.1 ? `${mb} MB` : `${kb} KB`} of SVG</div><button>Copy</button><div class="status"></div>`;
+    div.querySelector('h2').textContent = c.label; // labels may contain markup-like text ("<style>")
     if (c.id.endsWith('-board')) {
       const img = document.createElement('img');
       img.className = 'thumb';

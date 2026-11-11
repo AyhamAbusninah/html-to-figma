@@ -169,7 +169,7 @@ function textStyles(uses: TextStyleUse[], y: number): [string, number] {
     const t = u.text;
     const lh = t.lineHeight.unit === 'PIXELS' ? `/${num(t.lineHeight.value)}` : '';
     const name = `${t.font.family} ${t.font.style} ${num(t.fontSize)}${lh}`;
-    const spacing = t.letterSpacing.value ? ` · tracking ${num(t.letterSpacing.value)}` : '';
+    const spacing = t.letterSpacing.value ? ` · tracking ${num(t.letterSpacing.value)}px` : '';
     const textCase = t.textCase !== 'ORIGINAL' ? ` · ${t.textCase.toLowerCase()} case` : '';
     const more = u.variants > 1 ? ` (+${u.variants - 1} variant${u.variants > 2 ? 's' : ''})` : '';
     parts.push(label(PAD, y, `${name}${spacing}${textCase} · ${u.count}×${more}`, 11));
