@@ -113,6 +113,11 @@ export interface RawElement {
   assetFailed?: boolean;
   /** Pre-composited CSS background images (EXT-I-8): asset id per url() layer, in CSS order (null = failed). */
   bgAssets?: (string | null)[];
+  /**
+   * The element's look can't be rebuilt from layers (mix-blend-mode): the collector took a screenshot of its border
+   * box, so `assetId` is a picture of the element as composited on the page, children included (EXT-V-10).
+   */
+  raster?: boolean;
 }
 
 /** Encoded image from the collector (CaptureDocument ImageAsset shape). */

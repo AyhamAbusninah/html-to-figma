@@ -1,8 +1,8 @@
 # AI architecture map: the source of truth for agents working on this repo.
 # Maintained by the AI workflow (docs/AI_WORKFLOW.md). Every path:line was verified at `commit`.
 schema_version: 1
-generated: "2026-11-10"
-commit: copy-to-figma (feat/copy-to-figma)
+generated: "2026-11-11"
+commit: images-icons part 5 (feat/images-icons)
 
 project:
   name: "HTML to Figma (H2F)"
@@ -53,8 +53,11 @@ domains:
       - "Shadow DOM: open roots + closed roots of custom elements only via chrome.dom.openOrClosedShadowRoot (collect.ts:79); slots flattened (collect.ts:95)"
       - "Wrapped text: per-line character ranges by binary search on char rects → RawText.lines (collect.ts:181)"
       - "Form controls read values, passwords masked at the source (collect.ts:104)"
+      - "Scroll-to-top before the read (content/index.ts scrollToTop + content/settle.ts): fixed/sticky elements read as at the top of the page; the user's scroll restored in finally (EXT-T-9, AC-EXT-7)"
+      - "Collector walk passes Inherited {flip, inRaster} down the flat tree: mirroring transforms (core flipOf) flip encoded pixels / wrap SVG content in the asset phase; mix-blend-mode elements get a `raster` job (Tier 3 screenshot → RawElement.raster)"
+      - "Tier 3 (assets.ts screenshotCrops): crops inside fixed/sticky elements first, then hides fixed/sticky elements (data-h2f-hide + adopted style sheet), settles after each scroll, crops live rects, stitches ≤ 4 viewports"
     critical_invariants:
-      - "Read-only except ::before/::after materialization (content/pseudo.ts, EXT-T-11): spans + data-h2f-pseudo + an adopted style sheet exist only during the synchronous DOM read and are removed in finally; e2e asserts outerHTML and adoptedStyleSheets unchanged (AC-EXT-8). Touching UA shadow roots mutated pages, hence the custom-element-only rule."
+      - "Read-only except two temporary, fully undone changes: ::before/::after materialization during the DOM read (content/pseudo.ts, EXT-T-11) and hiding fixed/sticky elements during Tier 3 screenshots (data-h2f-hide + adopted style sheet, assets.ts hideForScreenshots). Both restored in finally; e2e asserts outerHTML, adoptedStyleSheets and scroll position unchanged (AC-EXT-8, AC-EXT-7). Touching UA shadow roots mutated pages, hence the custom-element-only rule."
       - "Browser reads only; all interpretation belongs in @h2f/core (unit-testable without a browser)."
       - "Password values never leave readControl unmasked (EXT-X-7; e2e asserts 'secret-password-123' absent)."
       - "Universal: no site-specific selectors/tokens (check-universal)."
@@ -216,7 +219,9 @@ critical_invariants:
 known_gaps:
   - "Images (R4, in progress on feat/images-icons): inline SVG, <img src=*.svg>, same-origin/data/blob/CORS images, canvas and video are captured (content/assets.ts). Cross-origin images: Tier 2 service-worker fetch, Tier 3 screenshot crops (also iframes). CSS gradients and background images are fills. Still missing: page-level (html/body) background images, repeating/conic gradients and background-clip:text (first color), image borders, object-position. The Figma plugin still draws images/SVG as placeholders (Copy to Figma and the preview draw them)."
   - "Gradients: linear/radial supported (core/src/gradient.ts); repeating/conic fall back to the first color."
-  - "::before/::after (materialized) and icon fonts (rasterized) are captured; still missing: pseudo-elements on shadow hosts, ::marker list bullets, text-overflow ellipsis, rotations (bounding box only)."
+  - "::before/::after (materialized) and icon fonts (rasterized) are captured; still missing: pseudo-elements on shadow hosts, ::marker list bullets, text-overflow ellipsis, rotations (bounding box only; mirroring flips are reproduced on images/SVGs, not on text)."
+  - "Scroll-linked and time-based effects (parallax, auto-rotating carousels) are read at the top-of-page state; a Tier 3 screenshot may show a later state. Tier 3 crops assume the screenshot matches the viewport (true in a real window; Playwright viewport emulation larger than the window breaks it)."
+  - "clip-path shapes other than inset() and CSS masks are still ignored (CLIP_MASK_UNSUPPORTED); mix-blend-mode elements become pictures (not editable) when Tier 3 works."
   - "Element picker (OQ-4, MVP) and inner scroll-area expansion (OQ-5) not implemented; captureMode is always 'page' (document.ts:61)."
   - "Rich text: one style per TEXT; a word split across inline elements (e.g. <mark>) doesn't join Arabic letters across layers (OQ-11 option B, v1.1)."
   - "No auto-layout inference: output is absolute-positioned frames (html.to.design offers auto layout)."

@@ -435,4 +435,105 @@ test.describe('Tier 3 screenshot crops (test build with all-sites access granted
     await popup.close();
     await target.close();
   });
+
+  test('mid-scroll capture: tall canvas stitched under the hidden fixed header, blended block as a picture, page untouched (EXT-T-9, AC-EXT-7, EXT-I-4, EXT-V-10)', async () => {
+    const target = await h.context.newPage();
+    await target.setViewportSize({ width: 1280, height: 800 });
+    await target.goto(`${fixtures.origins.main}/pages/page-effects.html`, {
+      waitUntil: 'networkidle',
+    });
+    await target.waitForFunction(
+      () => (document.getElementById('tall') as HTMLCanvasElement).dataset.tainted,
+    );
+    await target.evaluate(() => scrollTo(0, 1500));
+    await target.waitForFunction(() => document.body.classList.contains('scrolled'));
+    const domBefore = await target.evaluate(() => document.documentElement.outerHTML);
+    const popup = await openPopupFor(h, target);
+    await popup.locator('#capture').click();
+    await expect(popup.locator('#done')).toBeVisible({ timeout: 90_000 });
+    await popup.evaluate(() => {
+      const w = window as unknown as { __copied: string[] };
+      w.__copied = [];
+      navigator.clipboard.writeText = async (t: string) => void w.__copied.push(t);
+    });
+    await popup.locator('#copy').click();
+    await expect
+      .poll(() =>
+        popup.evaluate(() => (window as unknown as { __copied: string[] }).__copied.length),
+      )
+      .toBe(1);
+    const doc = JSON.parse(
+      await popup.evaluate(() => (window as unknown as { __copied: string[] }).__copied[0]!),
+    ) as CaptureDocument;
+    expect(validateCapture(doc).ok).toBe(true);
+    const flat: CaptureNode[] = [];
+    const walk = (n: CaptureNode) => {
+      flat.push(n);
+      if (n.type === 'FRAME') n.children.forEach(walk);
+    };
+    walk(doc.root);
+    const image = (re: RegExp) => {
+      const n = flat.find((x) => x.type === 'IMAGE' && re.test(x.name)) as
+        { assetId: string | null; rect: { width: number; height: number } } | undefined;
+      return n?.assetId ? { node: n, asset: doc.assets.images[n.assetId]! } : null;
+    };
+    /** RGB at fractional positions of an encoded asset, read in the browser. */
+    const pixels = (a: { mime: string; data: string }, points: [number, number][]) =>
+      target.evaluate(
+        async ([src, pts]) => {
+          const i = new Image();
+          i.src = src;
+          await i.decode();
+          const c = new OffscreenCanvas(i.width, i.height);
+          const g = c.getContext('2d')!;
+          g.drawImage(i, 0, 0);
+          return pts.map(([fx, fy]) =>
+            Array.from(
+              g.getImageData(Math.floor(fx * (i.width - 1)), Math.floor(fy * (i.height - 1)), 1, 1)
+                .data,
+            ).slice(0, 3),
+          );
+        },
+        [`data:${a.mime};base64,${a.data}`, points] as const,
+      );
+    const near = (rgb: number[], want: number[]) =>
+      rgb.every((v, k) => Math.abs(v - want[k]!) <= 24);
+
+    // Header at the top of the capture although the user had scrolled to 1500.
+    expect(flat.find((n) => /header#top-header/.test(n.name))!.rect.y).toBe(0);
+
+    // 1200 px canvas (taller than the 800 px window): stitched from two screenshots, nothing covering it.
+    const tall = image(/canvas#tall/);
+    expect(tall?.asset.source).toBe('screenshot');
+    const ratio = tall!.asset.height / tall!.asset.width;
+    expect(ratio).toBeGreaterThan(1.95);
+    expect(ratio).toBeLessThan(2.05);
+    const [top, upper, lower, bottom] = await pixels(tall!.asset, [
+      [0.5, 0.01], // where the fixed header and the scroll bar would have been
+      [0.5, 0.45],
+      [0.5, 0.55],
+      [0.5, 0.99],
+    ]);
+    for (const p of [top!, upper!]) expect(near(p, [0, 200, 0]), `green, got ${p}`).toBe(true);
+    for (const p of [lower!, bottom!]) expect(near(p, [0, 0, 220]), `blue, got ${p}`).toBe(true);
+    writeFileSync(
+      join(repo, 'test-results/tier3-stitched-canvas.png'),
+      Buffer.from(tall!.asset.data, 'base64'),
+    );
+
+    // mix-blend-mode block: one picture of what the page shows (white box, brown letters).
+    const blended = image(/· blended$/);
+    expect(blended?.asset.source).toBe('screenshot');
+    const [bg] = await pixels(blended!.asset, [[0.97, 0.5]]);
+    expect(near(bg!, [255, 255, 255]), `white, got ${bg}`).toBe(true);
+    expect(doc.meta.warnings.map((w) => w.code)).toContain('BLEND_MODE_RASTERIZED');
+
+    // Page untouched: scroll position, DOM (once the page's own scroll listener ran) and style sheets.
+    expect(await target.evaluate(() => [scrollX, scrollY])).toEqual([0, 1500]);
+    await target.waitForFunction(() => document.body.classList.contains('scrolled'));
+    expect(await target.evaluate(() => document.documentElement.outerHTML)).toBe(domBefore);
+    expect(await target.evaluate(() => document.adoptedStyleSheets.length)).toBe(0);
+    await popup.close();
+    await target.close();
+  });
 });

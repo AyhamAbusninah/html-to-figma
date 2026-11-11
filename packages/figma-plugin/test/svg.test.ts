@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { CaptureDocument, FrameNode, TextNode } from '@h2f/schema';
 import { minimal } from '../../schema/test/samples.ts';
 import { buildPlan } from '../src/plan/plan.ts';
-import { fontFamilyList, planToSvg, styleToCss } from '../src/svg/svg.ts';
+import { fontFamilyList, planToSvg, styleToCss, titleCase } from '../src/svg/svg.ts';
 import { MOCK_FONTS } from './figma-mock.ts';
 
 const ink = { r: 0.0667, g: 0.0667, b: 0.0667, a: 1 };
@@ -280,5 +280,16 @@ describe('planToSvg', () => {
     expect(fontFamilyList({ family: 'Noto Sans Arabic', style: 'Semi Bold' })).toBe(
       'NotoSansArabic-SemiBold, Noto Sans Arabic',
     );
+  });
+});
+
+describe('titleCase (text-transform: capitalize)', () => {
+  it('upper-cases the first letter of each word only', () => {
+    expect(titleCase('a selection of designer pieces, chosen with purpose')).toBe(
+      'A Selection Of Designer Pieces, Chosen With Purpose',
+    );
+    expect(titleCase("don't stop (new) e-mail")).toBe("Don't Stop (New) E-Mail");
+    expect(titleCase('iPhone USB')).toBe('IPhone USB'); // like CSS: the rest is left as written
+    expect(titleCase('\u200Fحقائب bags')).toBe('\u200Fحقائب Bags'); // scripts without case unchanged
   });
 });

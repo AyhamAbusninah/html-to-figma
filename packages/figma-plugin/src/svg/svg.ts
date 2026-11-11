@@ -88,6 +88,17 @@ export function styleToCss(style: string): { weight: number; italic: boolean } {
 }
 
 /** "<PostScript-style name>, <family>": Figma resolves the exact style from the first, browsers use the second. */
+/**
+ * CSS `text-transform: capitalize`: the first letter of each word upper-cased, the rest left as written. A word starts
+ * after a space or punctuation, not after an apostrophe ("don't" → "Don't"). Scripts without case are unchanged.
+ */
+export function titleCase(text: string): string {
+  return text.replace(
+    /(^|[^\p{L}\p{M}\p{N}'’])(\p{Ll})/gu,
+    (_, before: string, letter: string) => before + letter.toUpperCase(),
+  );
+}
+
 export function fontFamilyList(font: { family: string; style: string }): string {
   return `${font.family.replace(/\s+/g, '')}-${font.style.replace(/\s+/g, '')}, ${font.family}`;
 }
@@ -212,7 +223,7 @@ export function planToSvg(plan: RenderPlan, options: SvgOptions = {}): SvgResult
       skipped.add('some line breaks unknown (one long line)');
     if (n.textCase === 'UPPER') lines = lines.map((l) => l.toUpperCase());
     else if (n.textCase === 'LOWER') lines = lines.map((l) => l.toLowerCase());
-    else if (n.textCase === 'TITLE') skipped.add('title case');
+    else if (n.textCase === 'TITLE') lines = lines.map(titleCase);
     if (n.align === 'JUSTIFIED' && lines.length > 1) skipped.add('justified text (start-aligned)');
     stats.lines += lines.length;
     // The captured box spans the glyph content areas of its lines: the first line's content starts at its top,

@@ -566,3 +566,129 @@ describe('document level', () => {
     expect(() => build(page(many))).toThrow(CaptureTooLargeError);
   });
 });
+
+describe('page effects: clip-path inset, blended elements, mirroring (EXT-V-10, EXT-G-3)', () => {
+  const asset = {
+    mime: 'image/png' as const,
+    data: 'iVBORw0KGgo=',
+    width: 2,
+    height: 2,
+    source: 'screenshot' as const,
+  };
+
+  it('clip-path: inset(-9999px -9999px 0) clips overflowing content at the bottom edge only', () => {
+    const raw = page([
+      el(
+        'section',
+        rect(0, 600, 1280, 400),
+        { 'clip-path': 'inset(-9999px -9999px 0px)', 'background-color': 'rgb(60, 40, 40)' },
+        [
+          el('img', rect(-190, 520, 1120, 600), {}, [], {
+            replaced: { kind: 'img' },
+            assetId: 'img_a',
+          }),
+        ],
+      ),
+    ]);
+    raw.assets = { img_a: asset };
+    const doc = build(raw);
+    expect(validateCapture(doc).ok).toBe(true);
+    const [clip] = doc.root.children as FrameNode[];
+    // Left/top/right: the content's own extent, image ∪ section (nothing cut); bottom: the section's edge.
+    expect(clip).toMatchObject({
+      type: 'FRAME',
+      name: 'clip · section',
+      clipsContent: true,
+      fills: [],
+      rect: { x: -190, y: 520, width: 1470, height: 480 }, // image ∪ section
+    });
+    expect(clip!.children.map((c) => c.name)).toEqual(['section']);
+    expect(doc.meta.warnings.map((w) => w.code)).not.toContain('CLIP_MASK_UNSUPPORTED');
+  });
+
+  it('clip-path: inset(10px round 8px) → a rounded clipping frame the size of the inset box', () => {
+    const doc = build(
+      page([
+        el('div', rect(0, 0, 100, 100), {
+          'clip-path': 'inset(10px round 8px)',
+          'background-color': 'rgb(1, 2, 3)',
+        }),
+      ]),
+    );
+    expect(doc.root.children[0]).toMatchObject({
+      type: 'FRAME',
+      clipsContent: true,
+      rect: { x: 10, y: 10, width: 80, height: 80 },
+      radii: { tl: 8, tr: 8, br: 8, bl: 8 },
+    });
+  });
+
+  it('clip-path inset that cuts nothing adds no frame; other shapes still warn', () => {
+    const doc = build(
+      page([
+        el('div', rect(0, 0, 100, 100), {
+          'clip-path': 'inset(0px)',
+          'background-color': 'rgb(1, 2, 3)',
+        }),
+        el('div', rect(0, 200, 100, 100), {
+          'clip-path': 'circle(50% at 50% 50%)',
+          'background-color': 'rgb(1, 2, 3)',
+        }),
+      ]),
+    );
+    expect(doc.root.children.map((c) => c.name)).toEqual(['div', 'div']);
+    expect(doc.meta.warnings.map((w) => w.code)).toContain('CLIP_MASK_UNSUPPORTED');
+  });
+
+  it('a blended element with a screenshot becomes one IMAGE (children not repeated) + BLEND_MODE_RASTERIZED', () => {
+    const raw = page([
+      el('div', rect(0, 0, 480, 160), { 'background-color': 'rgb(255, 255, 255)' }, [
+        el('span', rect(24, 0, 200, 160), {}, [text('INK', rect(24, 0, 200, 160))]),
+        el(
+          'div',
+          rect(0, 0, 480, 160),
+          { 'mix-blend-mode': 'lighten', 'background-color': 'rgb(180, 120, 60)' },
+          [text('inside', rect(0, 0, 40, 20))],
+          { raster: true, assetId: 'img_shot' },
+        ),
+      ]),
+    ]);
+    raw.assets = { img_shot: asset };
+    const doc = build(raw);
+    const nodes = all(doc.root);
+    const shot = nodes.find((n) => n.type === 'IMAGE')!;
+    expect(shot).toMatchObject({
+      name: 'div · blended',
+      assetId: 'img_shot',
+      scaleMode: 'STRETCH',
+    });
+    expect(nodes.some((n) => n.type === 'TEXT' && n.characters === 'inside')).toBe(false);
+    expect(nodes.some((n) => n.type === 'TEXT' && n.characters === 'INK')).toBe(true);
+    expect(doc.meta.warnings.map((w) => w.code)).toContain('BLEND_MODE_RASTERIZED');
+    // Without the screenshot the layers stay (with the native blend mode).
+    const plain = build(
+      page([
+        el('div', rect(0, 0, 480, 160), {
+          'mix-blend-mode': 'lighten',
+          'background-color': 'rgb(180, 120, 60)',
+        }),
+      ]),
+    );
+    expect(plain.root.children[0]).toMatchObject({ type: 'FRAME', blendMode: 'LIGHTEN' });
+  });
+
+  it('a mirroring wrapper without text is not reported as an unsupported transform; with text it is', () => {
+    const icon = el('svg', rect(0, 0, 24, 24), {}, [], {
+      replaced: { kind: 'svg' },
+      svg: '<svg xmlns="http://www.w3.org/2000/svg"/>',
+    });
+    const flipped = { transform: 'matrix(-1, 0, 0, 1, 0, 0)' };
+    const codes = (body: RawNode[]) => build(page(body)).meta.warnings.map((w) => w.code);
+    expect(codes([el('span', rect(0, 0, 24, 24), flipped, [icon])])).not.toContain(
+      'TRANSFORM_UNSUPPORTED',
+    );
+    expect(
+      codes([el('span', rect(0, 0, 24, 24), flipped, [text('Back', rect(0, 0, 30, 20))])]),
+    ).toContain('TRANSFORM_UNSUPPORTED');
+  });
+});

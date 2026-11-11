@@ -1,5 +1,6 @@
 import {
   backgroundUrls,
+  flipOf,
   lineTops,
   RAW_STYLE_KEYS,
   type RawControl,
@@ -60,11 +61,29 @@ const TEXT_INPUTS = new Set([
 ]);
 
 import { ICON_FONT_FAMILIES } from '../config/constants.ts';
-import type { AssetJob } from './assets.ts';
+import type { AssetJob, Flip } from './assets.ts';
 import { MATERIALIZED_ATTR, materializePseudos } from './pseudo.ts';
 
 /** Replaced elements whose content the asset phase resolves (set per collectPageSnapshot call). */
 let jobs: AssetJob[] = [];
+/** position: fixed / sticky elements (headers, chat buttons…), hidden while Tier 3 screenshots are taken. */
+let pinned: Element[] = [];
+
+/** What an element passes down to its subtree during the walk. */
+interface Inherited {
+  /** Mirroring by this element's and its ancestors' transforms (scaleX(-1)…): applied to drawn pixels. */
+  flip: Flip | null;
+  /** Inside an element that is captured as a screenshot (mix-blend-mode): no further raster jobs. */
+  inRaster: boolean;
+}
+const ROOT: Inherited = { flip: null, inRaster: false };
+
+function combineFlip(parent: Flip | null, own: Flip | null): Flip | null {
+  if (!own) return parent;
+  const h = (parent?.h ?? false) !== own.h;
+  const v = (parent?.v ?? false) !== own.v;
+  return h || v ? { h, v } : null;
+}
 
 const rectOf = (r: DOMRect): RawRect => ({ x: r.x, y: r.y, width: r.width, height: r.height });
 
@@ -167,7 +186,7 @@ function isIconGlyph(text: string, fontFamily: string): boolean {
   return ICON_FONT_FAMILIES.some((re) => re.test(first));
 }
 
-function collectText(node: Text, cs: CSSStyleDeclaration): RawText | null {
+function collectText(node: Text, cs: CSSStyleDeclaration, flip: Flip | null): RawText | null {
   const whiteSpace = cs.whiteSpace;
   const text = node.nodeValue ?? '';
   const collapses = whiteSpace === 'normal' || whiteSpace === 'nowrap' || whiteSpace === 'pre-line';
@@ -203,6 +222,7 @@ function collectText(node: Text, cs: CSSStyleDeclaration): RawText | null {
       color: cs.color,
       width,
       height,
+      flip,
     });
     return raw;
   }
@@ -278,7 +298,7 @@ function collectLines(
   return lines;
 }
 
-function collectElement(el: Element): RawElement | null {
+function collectElement(el: Element, inherited: Inherited): RawElement | null {
   const tag = el.tagName.toLowerCase();
   if (NON_RENDERED.has(tag)) return null;
   if (tag === 'input' && (el as HTMLInputElement).type === 'hidden') return null;
@@ -296,19 +316,34 @@ function collectElement(el: Element): RawElement | null {
     style: pickStyle(cs),
     children: [],
   };
+  const flip = combineFlip(inherited.flip, flipOf(cs.transform));
+  if (cs.position === 'fixed' || cs.position === 'sticky') pinned.push(el);
+  // mix-blend-mode mixes the element with what is behind it: only a screenshot shows that (EXT-V-10). Children are
+  // still read, as the fallback when no screenshot can be taken. Very large blended areas are left as layers.
+  const area = raw.rect.width * raw.rect.height;
+  const blended =
+    !inherited.inRaster &&
+    cs.mixBlendMode !== 'normal' &&
+    cs.visibility === 'visible' &&
+    area > 0 &&
+    area <= 3 * innerWidth * innerHeight;
+  if (blended) jobs.push({ kind: 'raster', raw, el });
   const replaced = REPLACED[tag];
   if (replaced) {
     raw.replaced = { kind: replaced };
     if (cs.visibility === 'visible') {
-      if (replaced === 'svg') jobs.push({ kind: 'svg', raw, el: el as SVGSVGElement });
-      else if (replaced === 'img') jobs.push({ kind: 'img', raw, el: el as HTMLImageElement });
+      if (replaced === 'svg') jobs.push({ kind: 'svg', raw, el: el as SVGSVGElement, flip });
+      else if (replaced === 'img')
+        jobs.push({ kind: 'img', raw, el: el as HTMLImageElement, flip });
       else if (replaced === 'canvas')
-        jobs.push({ kind: 'canvas', raw, el: el as HTMLCanvasElement });
-      else if (replaced === 'video') jobs.push({ kind: 'video', raw, el: el as HTMLVideoElement });
-      else jobs.push({ kind: 'frame', raw, el: el as HTMLElement }); // iframe, object, embed: Tier 3
+        jobs.push({ kind: 'canvas', raw, el: el as HTMLCanvasElement, flip });
+      else if (replaced === 'video')
+        jobs.push({ kind: 'video', raw, el: el as HTMLVideoElement, flip });
+      else jobs.push({ kind: 'frame', raw, el }); // iframe, object, embed: Tier 3
     }
     return raw; // content not traversed (svg internals, iframe document…)
   }
+  const down: Inherited = { flip, inRaster: inherited.inRaster || blended };
   // CSS background images: composited in the asset phase (EXT-I-8). Page backgrounds (html/body) excluded.
   if (
     cs.visibility === 'visible' &&
@@ -329,6 +364,7 @@ function collectElement(el: Element): RawElement | null {
         raw,
         el,
         layers,
+        flip,
         box: {
           width: raw.rect.width,
           height: raw.rect.height,
@@ -361,10 +397,10 @@ function collectElement(el: Element): RawElement | null {
   const children: RawNode[] = [];
   for (const child of flatChildren(el)) {
     if (child.nodeType === Node.ELEMENT_NODE) {
-      const c = collectElement(child as Element);
+      const c = collectElement(child as Element, down);
       if (c) children.push(c);
     } else if (child.nodeType === Node.TEXT_NODE) {
-      const t = collectText(child as Text, cs);
+      const t = collectText(child as Text, cs, flip);
       if (t) children.push(t);
     }
   }
@@ -378,8 +414,9 @@ function collectElement(el: Element): RawElement | null {
  */
 export async function collectPage(
   win: Window,
-): Promise<{ snapshot: RawPageSnapshot; jobs: AssetJob[] }> {
+): Promise<{ snapshot: RawPageSnapshot; jobs: AssetJob[]; pinned: Element[] }> {
   jobs = [];
+  pinned = [];
   const m = await materializePseudos(win.document, (el) =>
     flatChildren(el).filter((n): n is Element => n.nodeType === Node.ELEMENT_NODE),
   );
@@ -389,9 +426,10 @@ export async function collectPage(
   } finally {
     m.cleanup();
   }
-  const out = jobs;
+  const out = { snapshot, jobs, pinned: pinned.filter((e) => e.isConnected) };
   jobs = [];
-  return { snapshot, jobs: out };
+  pinned = [];
+  return out;
 }
 
 export function collectPageSnapshot(win: Window): RawPageSnapshot {
@@ -412,6 +450,6 @@ export function collectPageSnapshot(win: Window): RawPageSnapshot {
     backgroundColors,
     scrollOffset: { x: win.scrollX, y: win.scrollY },
     clientWidth: scroller.clientWidth,
-    tree: collectElement(doc.documentElement) ?? undefined,
+    tree: collectElement(doc.documentElement, ROOT) ?? undefined,
   };
 }

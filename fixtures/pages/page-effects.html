@@ -1,0 +1,172 @@
+<!doctype html>
+<!--
+  Fixture: page-effects
+  Purpose: what a real page does to a capture taken mid-scroll: a fixed header and a bar that only shows
+           after scrolling, mirrored images and icons, a section clipped with clip-path: inset(), capitalized
+           headings, a block that relies on mix-blend-mode, and a canvas taller than the window that only a
+           screenshot can read.
+  Requirements: EXT-T-9, AC-EXT-7, EXT-I-4, EXT-G-3, EXT-V-10, EXT-X-3, AC-EXT-8
+  Expected capture behaviour (ids):
+    - #top-header (position: fixed): at the top of the capture (y = 0) even when the user had scrolled down.
+    - #scroll-bar (fixed, shown by a scroll listener once scrollY > 200): not visible in the capture.
+    - #flip-img (data: SVG drawn as pixels, transform: scaleX(-1)): the encoded pixels are mirrored
+      (left half blue, right half red, as on screen).
+    - #flip-icon (inline <svg> inside a scaleX(-1) wrapper): the SVG content is wrapped in matrix(-1 0 0 1 …).
+    - #clip-section (clip-path: inset(-9999px -9999px 0)): a "clip ·" FRAME that clips the overflowing
+      #clip-img at the section's bottom edge; nothing is clipped at the top.
+    - h2.cap (text-transform: capitalize): Copy to Figma writes "A Selection Of Designer Pieces".
+    - #blend (white box, black "INK", brown overlay with mix-blend-mode: lighten): with a screenshot
+      (extension) one IMAGE "· blended"; without one, the layers with BLEND_MODE warnings.
+    - #tall (tainted canvas, 600×1200: green top half, blue bottom half): Tier 3 only; stitched from two
+      screenshots with the fixed header and the scroll bar hidden, so the crop's top rows are green.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>H2F fixture: page effects</title>
+    <style>
+      body {
+        margin: 0;
+        font: 16px/1.5 system-ui, sans-serif;
+        color: #111;
+        background: #f4f4f4;
+      }
+      #top-header {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 64px;
+        background: rgb(20, 20, 20);
+        color: #fff;
+        z-index: 50;
+        display: flex;
+        align-items: center;
+        padding: 0 24px;
+        font-weight: 700;
+      }
+      #scroll-bar {
+        position: fixed;
+        top: 64px;
+        left: 0;
+        right: 0;
+        height: 48px;
+        background: rgb(200, 0, 0);
+        color: #fff;
+        z-index: 49;
+        transform: translateY(-200%);
+        padding: 0 24px;
+        line-height: 48px;
+      }
+      body.scrolled #scroll-bar {
+        transform: none;
+      }
+      main {
+        padding: 96px 24px 1200px;
+      }
+      section {
+        margin: 0 0 48px;
+      }
+      .cap {
+        text-transform: capitalize;
+        margin: 0 0 16px;
+      }
+      .mirror {
+        transform: scaleX(-1);
+      }
+      #flip-img {
+        display: block;
+        width: 160px;
+        height: 80px;
+      }
+      #clip-section {
+        position: relative;
+        height: 200px;
+        background: rgb(60, 40, 40);
+        clip-path: inset(-9999px -9999px 0);
+      }
+      #clip-img {
+        position: absolute;
+        left: 40px;
+        top: -40px;
+        width: 240px;
+        height: 320px;
+        display: block;
+      }
+      #blend {
+        position: relative;
+        isolation: isolate;
+        background: #fff;
+        height: 160px;
+        width: 480px;
+        overflow: hidden;
+      }
+      #blend span {
+        font: 900 120px/160px system-ui, sans-serif;
+        color: #000;
+        padding-left: 24px;
+      }
+      #blend .tex {
+        position: absolute;
+        inset: 0;
+        background: rgb(180, 120, 60);
+        mix-blend-mode: lighten;
+      }
+      #tall {
+        display: block;
+        width: 600px;
+        height: 1200px;
+      }
+    </style>
+  </head>
+  <body>
+    <header id="top-header">Brand</header>
+    <div id="scroll-bar">Shown after scrolling</div>
+    <main>
+      <section>
+        <h2 class="cap">a selection of designer pieces</h2>
+        <img
+          id="flip-img"
+          class="mirror"
+          alt="half red, half blue"
+          src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='80'%3E%3Crect width='80' height='80' fill='rgb(255,0,0)'/%3E%3Crect x='80' width='80' height='80' fill='rgb(0,0,255)'/%3E%3C/svg%3E"
+        />
+        <span class="mirror" style="display: inline-block">
+          <svg id="flip-icon" width="24" height="24" viewBox="0 0 24 24">
+            <path d="M9 6l6 6-6 6" fill="none" stroke="#111" stroke-width="2" />
+          </svg>
+        </span>
+      </section>
+      <section id="clip-section">
+        <img id="clip-img" alt="" src="../assets/img/portrait-400x600.png" />
+      </section>
+      <section>
+        <h2 class="cap">bags</h2>
+        <div id="blend"><span>INK</span><div class="tex"></div></div>
+      </section>
+      <section>
+        <canvas id="tall" width="600" height="1200"></canvas>
+      </section>
+    </main>
+    <script>
+      addEventListener(
+        'scroll',
+        () => document.body.classList.toggle('scrolled', scrollY > 200),
+        { passive: true },
+      );
+      const c = document.getElementById('tall');
+      const g = c.getContext('2d');
+      g.fillStyle = 'rgb(0, 200, 0)';
+      g.fillRect(0, 0, 600, 600);
+      g.fillStyle = 'rgb(0, 0, 220)';
+      g.fillRect(0, 600, 600, 600);
+      // Taint the canvas: an image from another origin without CORS (only a screenshot can read it).
+      const img = new Image();
+      img.onload = () => {
+        g.drawImage(img, 0, 0, 1, 1);
+        c.dataset.tainted = '1';
+      };
+      img.src = 'http://127.0.0.1:4174/assets/img/dot-24.png';
+    </script>
+  </body>
+</html>

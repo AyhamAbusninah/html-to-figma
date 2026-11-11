@@ -9,6 +9,7 @@ import {
   validateCapture,
   type CaptureDocument,
   type CaptureNode,
+  type FrameNode,
 } from '../packages/schema/src/index.ts';
 import { figmaSvg } from '../packages/extension/src/shared/figma-copy.ts';
 import { repo, startFixtures, type FixtureServer } from './helpers.ts';
@@ -177,4 +178,74 @@ test('icon fonts: Font Awesome, Material ligatures and PUA glyphs become images;
     .map((n) => (n.type === 'TEXT' ? n.characters : ''));
   expect(texts.some((t) => /[\uE000-\uF8FF]/.test(t))).toBe(false); // no icon codepoints left as text
   for (const label of ['Saved', 'Settings', 'Delete']) expect(texts).toContain(label);
+});
+
+test('captured as scrolled to the top: fixed header at y = 0, mirrored pixels and icons, inset clip, capitalized text (EXT-T-9, AC-EXT-7, EXT-G-3, EXT-V-10)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto(`${fixtures.origins.main}/pages/page-effects.html`, { waitUntil: 'networkidle' });
+  await page.waitForFunction(
+    () => (document.getElementById('tall') as HTMLCanvasElement).dataset.tainted,
+  );
+  await page.evaluate(() => scrollTo(0, 1500));
+  await page.waitForFunction(() => document.body.classList.contains('scrolled'));
+  const before = await dom(page);
+  await page.addScriptTag({ path: join(repo, 'packages/extension/dist/content.js') });
+  const r = (await page.evaluate(() =>
+    (globalThis as unknown as { __h2fCapture: () => Promise<unknown> }).__h2fCapture(),
+  )) as { ok: boolean; document: CaptureDocument; textLines: Record<string, string[]> };
+  expect(r.ok).toBe(true);
+  expect(validateCapture(r.document).ok).toBe(true);
+  // The user's scroll position and the page are back as they were (the scroll listener re-adds its class).
+  expect(await page.evaluate(() => scrollY)).toBe(1500);
+  await page.waitForFunction(() => document.body.classList.contains('scrolled'));
+  expect(await dom(page), 'capture must not modify the page').toBe(before);
+  expect(await page.evaluate(() => document.adoptedStyleSheets.length)).toBe(0);
+
+  const nodes: CaptureNode[] = [];
+  const walk = (n: CaptureNode) => {
+    nodes.push(n);
+    if (n.type === 'FRAME') n.children.forEach(walk);
+  };
+  walk(r.document.root);
+  const byName = (re: RegExp) => nodes.find((n) => re.test(n.name));
+
+  // 1. Fixed header where it is at the top of the page; the scroll-only bar is off screen (as at the top).
+  expect(byName(/header#top-header/)!.rect.y).toBe(0);
+  const bar = byName(/div#scroll-bar/)!;
+  expect(bar.rect.y + bar.rect.height).toBeLessThanOrEqual(64); // behind the header, not in the content
+
+  // 3a. Mirrored image: the encoded pixels are flipped (left blue, right red, as on screen).
+  const img = byName(/img#flip-img/) as { assetId: string };
+  const a = r.document.assets.images[img.assetId]!;
+  const [left, right] = await page.evaluate(async (src) => {
+    const i = new Image();
+    i.src = src;
+    await i.decode();
+    const c = new OffscreenCanvas(i.width, i.height);
+    const g = c.getContext('2d')!;
+    g.drawImage(i, 0, 0);
+    const at = (x: number) => Array.from(g.getImageData(x, i.height >> 1, 1, 1).data);
+    return [at(2), at(i.width - 3)];
+  }, `data:${a.mime};base64,${a.data}`);
+  expect(left!.slice(0, 3)).toEqual([0, 0, 255]);
+  expect(right!.slice(0, 3)).toEqual([255, 0, 0]);
+  // 3b. Mirrored inline icon: content wrapped in a mirroring group inside its viewBox.
+  expect((byName(/svg#flip-icon/) as { svg: string }).svg).toContain(
+    '<g transform="matrix(-1 0 0 1 24 0)">',
+  );
+  // 3c. clip-path: inset(-9999px -9999px 0): a clipping frame ending at the section's bottom edge.
+  const clip = byName(/^clip · section#clip-section/) as FrameNode;
+  const section = byName(/^section#clip-section/)!;
+  const clipImg = byName(/img#clip-img/)!;
+  expect(clip.clipsContent).toBe(true);
+  expect(clip.rect.y).toBe(clipImg.rect.y); // nothing cut at the top
+  expect(clip.rect.y + clip.rect.height).toBe(section.rect.y + section.rect.height);
+  expect(clipImg.rect.y + clipImg.rect.height).toBeGreaterThan(clip.rect.y + clip.rect.height);
+
+  // 4. Copy to Figma writes capitalized text as shown.
+  const { svg } = figmaSvg(r.document, r.textLines);
+  expect(svg).toContain('A Selection Of Designer Pieces');
+  expect(svg).toMatch(/>Bags</);
 });

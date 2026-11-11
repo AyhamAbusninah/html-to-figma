@@ -26,6 +26,8 @@ export const WARNING_CODES = {
   NATIVE_CONTROL_APPROXIMATED: 'Native checkbox/radio/range/etc. approximated by box styles',
   BORDER_STYLE_DEGRADED: 'double/groove/ridge/inset/outset borders rendered as solid',
   BLEND_MODE_UNSUPPORTED: 'Unmappable mix-blend-mode ignored',
+  BLEND_MODE_RASTERIZED:
+    'Element with mix-blend-mode captured as a picture of how it looks (EXT-V-10)',
   TEXT_ELLIPSIS_NOT_APPLIED:
     'text-overflow: ellipsis not reproduced; text clipped without "…" (EXT-X-8)',
 } as const;

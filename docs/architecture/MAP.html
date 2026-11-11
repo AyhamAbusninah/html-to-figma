@@ -31,9 +31,13 @@ flowchart TD
   subgraph EXT["Chrome MV3 extension · packages/extension"]
     POPUP["popup.ts capture() #124; download() #124; copyToClipboard()"]
     SW["service-worker.ts onMessage: ping"]
-    FETCH["h2f:fetch-asset (stub, R4)"]
+    FETCH["h2f:fetch-asset (Tier 2) · h2f:capture-visible (Tier 3)"]
     CONTENT["content/index.ts __h2fCapture()"]
-    COLLECT["collect.ts collectPageSnapshot: DOM, computed styles, shadow DOM, text rects, line ranges"]
+    SCROLLTOP["index.ts scrollToTop + settle.ts: read as at the top, scroll restored"]
+    PSEUDO["pseudo.ts: ::before/::after materialized for the read (undone)"]
+    COLLECT["collect.ts collectPageSnapshot: DOM, computed styles, shadow DOM, text rects, line ranges, flips, pinned"]
+    ASSETS["assets.ts resolveAssets: SVG, pixels (Tier 1-3), backgrounds, icon glyphs, blend screenshots"]
+    HIDE["screenshotCrops: hides fixed/sticky (data-h2f-hide, undone), stitches tall elements"]
     LIMITS[("config/constants.ts LIMITS, RESTRICTED_URL_PATTERNS")]
     FAILBYTES["refuse #gt; 200 MB · clipboard ≤ 5 MB"]
     COPYFIG["popup copyToFigma() → figma-copy.ts figmaSvg (EXT-O-7)"]
@@ -77,8 +81,8 @@ flowchart TD
     ROUTEA["figma-clipboard: fig-kiwi (ToS risk, stopped)"]
   end
   subgraph GAPS["Known gaps / roadmap"]
-    G1["Images, SVG, backgrounds, gradients (R4)"]
-    G2["::before/::after, icon fonts, ellipsis"]
+    G1["Page backgrounds, conic gradients, masks, plugin image rendering"]
+    G2["::marker, ellipsis, rotations, pseudo on shadow hosts"]
     G3["Element picker, scroll-area expansion"]
     G4["Rich text runs, auto layout"]
     G5["Real Figma validation (needs macOS/Windows)"]
@@ -95,8 +99,13 @@ flowchart TD
   POPUP --&gt;|"chrome.scripting.executeScript"| CONTENT
   POPUP -.-&gt; SW
   SW -.-&gt; FETCH
-  CONTENT --&gt; COLLECT
-  COLLECT --&gt; RAW
+  CONTENT --&gt; SCROLLTOP
+  SCROLLTOP --&gt; COLLECT
+  PSEUDO -.-&gt; COLLECT
+  COLLECT --&gt; ASSETS
+  ASSETS --&gt; HIDE
+  ASSETS -.-&gt; FETCH
+  ASSETS --&gt; RAW
   RAW --&gt; BUILD
   BUILD --&gt; CONVERT
   CONVERT --&gt; TEXT
@@ -139,7 +148,7 @@ flowchart TD
   classDef state fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
   classDef dead fill:#f3f4f6,stroke:#9ca3af,color:#6b7280,stroke-dasharray:4 3
   class VALID,MAXN,FAILBYTES,PKG,UNIV failclosed
-  class G1,G2,G3,G4,G5,G6,ROUTEA hazard
+  class G1,G2,G3,G4,G5,G6,ROUTEA,PSEUDO,HIDE hazard
   class RAW,DOC,WARN,LIMITS,FROZEN,FIGMA,LINES state
   class FETCH dead
 </pre>

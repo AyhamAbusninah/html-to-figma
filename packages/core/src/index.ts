@@ -27,6 +27,8 @@ export {
   parseBorder,
   parseRadii,
   isTranslationOnly,
+  flipOf,
+  parseInsetClip,
 } from './css.ts';
 export { parseCssColor, isTransparent } from './color.ts';
 export {

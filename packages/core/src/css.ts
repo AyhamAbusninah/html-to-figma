@@ -164,6 +164,72 @@ export function isTranslationOnly(transform: string): boolean {
   return a === 1 && b === 0 && c === 0 && d === 1;
 }
 
+/**
+ * Mirroring part of a computed `transform` (EXT-G-3): scaleX(-1), scaleY(-1), rotate(180deg), rotateY(180deg)…
+ * Returns the flipped axes when the transform has no rotation/skew (b = c = 0; any scale and translation are already
+ * in the bounding box), null otherwise (none, a plain scale, or a real rotation).
+ */
+export function flipOf(transform: string): { h: boolean; v: boolean } | null {
+  const t = (transform ?? '').trim();
+  let a: number, b: number, c: number, d: number;
+  const m2 = /^matrix\(([^)]+)\)$/.exec(t);
+  const m3 = /^matrix3d\(([^)]+)\)$/.exec(t);
+  if (m2)
+    [a, b, c, d] = m2[1]!.split(',').map((v) => parseFloat(v)) as [number, number, number, number];
+  else if (m3) {
+    const m = m3[1]!.split(',').map((v) => parseFloat(v));
+    if (m.length !== 16) return null;
+    // Only flat transforms: no perspective, no z coupling (rotateY(180deg) is matrix3d(-1,0,0,0, 0,1,0,0, 0,0,-1,0, …)).
+    if ([m[2], m[3], m[6], m[7], m[8], m[9], m[11]].some((v) => Math.abs(v!) > 1e-6)) return null;
+    [a, b, c, d] = [m[0]!, m[1]!, m[4]!, m[5]!];
+  } else return null;
+  if (![a, b, c, d].every(Number.isFinite)) return null;
+  if (Math.abs(b) > 1e-6 || Math.abs(c) > 1e-6) return null;
+  const h = a < 0;
+  const v = d < 0;
+  return h || v ? { h, v } : null;
+}
+
+/** One inset length: px, or % of `of` (Chrome serializes computed clip-path insets as px or %). */
+function insetLength(t: string, of: number): number | null {
+  const m = /^(-?[\d.]+(?:e[+-]?\d+)?)(px|%)?$/i.exec(t);
+  if (!m) return null;
+  const v = parseFloat(m[1]!);
+  if (m[2] === '%') return (v / 100) * of;
+  return m[2] === 'px' || v === 0 ? v : null;
+}
+
+/**
+ * Computed `clip-path: inset(t r b l [round radius])` → the inset per side in px (negative = the clip extends past
+ * the border box) and a uniform corner radius. null for any other clip-path (circle, polygon, url…), which stays
+ * CLIP_MASK_UNSUPPORTED. `w`/`h`: the border box.
+ */
+export function parseInsetClip(
+  value: string,
+  w: number,
+  h: number,
+): { top: number; right: number; bottom: number; left: number; radius: number } | null {
+  const m = /^inset\((.*)\)(?:\s+border-box)?$/i.exec((value ?? '').trim());
+  if (!m) return null;
+  const [box, round] = m[1]!.split(/\s+round\s+/i);
+  const t = box!.trim().split(/\s+/);
+  if (t.length < 1 || t.length > 4) return null;
+  const [st, sr = st, sb = st, sl = sr] = t as [string, string?, string?, string?];
+  const top = insetLength(st, h);
+  const right = insetLength(sr!, w);
+  const bottom = insetLength(sb!, h);
+  const left = insetLength(sl!, w);
+  if (top === null || right === null || bottom === null || left === null) return null;
+  let radius = 0;
+  if (round) {
+    const radii = round.trim().split(/\s+/);
+    const r = insetLength(radii[0]!, Math.min(w, h));
+    // Only a uniform radius (one value) is kept; elliptical/per-corner radii fall back to square corners.
+    if (r !== null && radii.every((x) => x === radii[0])) radius = Math.max(0, r);
+  }
+  return { top, right, bottom, left, radius };
+}
+
 export function solidOrNull(css: string): RGBA | null {
   const c = parseCssColor(css);
   return isTransparent(c) ? null : c;

@@ -9,7 +9,7 @@ import {
   parseFontFamilies,
   resolveTextAlign,
 } from '../src/index.ts';
-import { parseBlendMode, parseRadii, splitTopLevel } from '../src/css.ts';
+import { flipOf, parseBlendMode, parseInsetClip, parseRadii, splitTopLevel } from '../src/css.ts';
 import { textStyle } from '../src/text.ts';
 import type { RawStyle } from '../src/raw-snapshot.ts';
 
@@ -192,5 +192,49 @@ describe('isVisuallyHidden (screen-reader-only patterns)', () => {
     expect(isVisuallyHidden({ ...base, clip: 'rect(0px, 100px, 20px, 0px)' }, 120, 20)).toBe(false);
     expect(isVisuallyHidden({ ...base, 'clip-path': 'inset(10%)' }, 120, 20)).toBe(false);
     expect(isVisuallyHidden(base, 1, 1)).toBe(false);
+  });
+});
+
+describe('mirroring and clip-path insets (EXT-G-3, EXT-V-10)', () => {
+  it('flipOf: scaleX/scaleY(-1), rotate(180deg), rotateY(180deg); not plain scales or real rotations', () => {
+    expect(flipOf('matrix(-1, 0, 0, 1, 0, 0)')).toEqual({ h: true, v: false });
+    expect(flipOf('matrix(1, 0, 0, -1, 0, 12)')).toEqual({ h: false, v: true });
+    expect(flipOf('matrix(-1, 0, 0, -1, 0, 0)')).toEqual({ h: true, v: true }); // rotate(180deg)
+    expect(flipOf('matrix(-1.05, 0, 0, 1.05, 3, 0)')).toEqual({ h: true, v: false }); // flipped + hover zoom
+    expect(
+      flipOf('matrix3d(-1, 0, 0, 0, 0, 1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1)'), // rotateY(180deg)
+    ).toEqual({ h: true, v: false });
+    expect(flipOf('none')).toBeNull();
+    expect(flipOf('matrix(1.1, 0, 0, 1.1, 0, 0)')).toBeNull();
+    expect(flipOf('matrix(0.866, 0.5, -0.5, 0.866, 0, 0)')).toBeNull(); // rotate(30deg)
+    expect(flipOf('matrix3d(-1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, -0.001, 0, 0, 0, 1)')).toBeNull(); // perspective
+  });
+
+  it('parseInsetClip: 1–4 values, px and %, negative insets, uniform round; other shapes null', () => {
+    expect(parseInsetClip('inset(-9999px -9999px 0px)', 200, 100)).toEqual({
+      top: -9999,
+      right: -9999,
+      bottom: 0,
+      left: -9999,
+      radius: 0,
+    });
+    expect(parseInsetClip('inset(10%)', 200, 100)).toEqual({
+      top: 10,
+      right: 20,
+      bottom: 10,
+      left: 20,
+      radius: 0,
+    });
+    expect(parseInsetClip('inset(4px 8px round 12px)', 200, 100)).toMatchObject({
+      top: 4,
+      right: 8,
+      bottom: 4,
+      left: 8,
+      radius: 12,
+    });
+    expect(parseInsetClip('inset(0px round 10px 20px)', 200, 100)?.radius).toBe(0);
+    expect(parseInsetClip('circle(50% at 50% 50%)', 200, 100)).toBeNull();
+    expect(parseInsetClip('polygon(0px 0px, 10px 0px, 0px 10px)', 200, 100)).toBeNull();
+    expect(parseInsetClip('none', 200, 100)).toBeNull();
   });
 });

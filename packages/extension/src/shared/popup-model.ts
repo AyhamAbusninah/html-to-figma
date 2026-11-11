@@ -124,6 +124,8 @@ const NOT_CAPTURED_LABELS: Record<string, string> = {
   TEXT_ELLIPSIS_NOT_APPLIED: '"…" truncation',
   NATIVE_CONTROL_APPROXIMATED: 'native checkboxes/radios (approximated)',
   TRANSFORM_UNSUPPORTED: 'rotated/scaled elements (bounding box)',
+  BLEND_MODE_RASTERIZED: 'blend-mode effects (captured as pictures)',
+  CLIP_MASK_UNSUPPORTED: 'clip-path shapes (shown unclipped)',
 };
 
 /** Short "not captured yet" lines for the Done screen, most frequent first (EXT-O-5). */

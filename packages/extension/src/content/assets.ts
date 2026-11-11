@@ -10,17 +10,29 @@
  *   Tier 3 (EXT-I-4): crop it from screenshots of the visible tab; the page is scrolled to each image and the
  *   scroll position restored. Also used for <iframe>/<object>/<embed>. Still failing → placeholder (EXT-I-5).
  * - <img src=*.svg> → the SVG text, so logos stay editable vectors (EXT-S-5).
+ * - Mirrored content (transform scaleX(-1), rotate(180deg)… on the element or an ancestor, EXT-G-3): drawn pixels
+ *   and SVG markup are flipped the same way; screenshots already show it as rendered.
+ * - mix-blend-mode elements (EXT-V-10): a screenshot of the element as composited on the page.
  */
 import type { RawElement, RawImageAsset, RawPageSnapshot, RawText } from '@h2f/core';
 import type { WorkerRequest, WorkerResponse } from '../shared/messages.ts';
+import { settle } from './settle.ts';
+
+/** Axes mirrored by CSS transforms of the element and its ancestors. */
+export interface Flip {
+  h: boolean;
+  v: boolean;
+}
 
 export type AssetJob =
-  | { kind: 'svg'; raw: RawElement; el: SVGSVGElement }
-  | { kind: 'img'; raw: RawElement; el: HTMLImageElement }
-  | { kind: 'canvas'; raw: RawElement; el: HTMLCanvasElement }
-  | { kind: 'video'; raw: RawElement; el: HTMLVideoElement }
+  | { kind: 'svg'; raw: RawElement; el: SVGSVGElement; flip: Flip | null }
+  | { kind: 'img'; raw: RawElement; el: HTMLImageElement; flip: Flip | null }
+  | { kind: 'canvas'; raw: RawElement; el: HTMLCanvasElement; flip: Flip | null }
+  | { kind: 'video'; raw: RawElement; el: HTMLVideoElement; flip: Flip | null }
   /** <iframe>/<object>/<embed>: content not readable; Tier 3 screenshot only. */
-  | { kind: 'frame'; raw: RawElement; el: HTMLElement }
+  | { kind: 'frame'; raw: RawElement; el: Element }
+  /** An element with mix-blend-mode: Tier 3 screenshot of its border box; sets raw.raster on success. */
+  | { kind: 'raster'; raw: RawElement; el: Element }
   /** CSS background images of a (non-replaced) element: one composite per url() layer (EXT-I-8). */
   | {
       kind: 'bg';
@@ -28,6 +40,7 @@ export type AssetJob =
       el: Element;
       layers: { url: string; layer: number }[];
       box: BgBox;
+      flip: Flip | null;
     }
   /** An icon-font glyph (EXT-X-9): drawn with the page's font instead of a text layer. */
   | {
@@ -39,6 +52,7 @@ export type AssetJob =
       color: string;
       width: number;
       height: number;
+      flip: Flip | null;
     };
 
 /** What compositing a background needs, read during the DOM walk (the element may be gone later). */
@@ -206,8 +220,35 @@ function prefixIds(root: Element): void {
   }
 }
 
+const SVG_NON_PAINTED = new Set(['defs', 'style', 'title', 'desc', 'metadata']);
+
+/** Mirrors the drawing inside its viewBox (the element was flipped by a CSS transform). */
+function flipSvg(svg: Element, flip: Flip | null): void {
+  if (!flip) return;
+  const vb = (svg.getAttribute('viewBox') ?? '')
+    .trim()
+    .split(/[\s,]+/)
+    .map(Number);
+  if (vb.length !== 4 || vb.some((n) => !Number.isFinite(n))) return;
+  const [x, y, w, h] = vb as [number, number, number, number];
+  const g = svg.ownerDocument.createElementNS(SVG_NS, 'g');
+  g.setAttribute(
+    'transform',
+    `matrix(${flip.h ? -1 : 1} 0 0 ${flip.v ? -1 : 1} ${flip.h ? 2 * x + w : 0} ${flip.v ? 2 * y + h : 0})`,
+  );
+  for (const n of Array.from(svg.childNodes)) {
+    if (
+      n.nodeType === Node.ELEMENT_NODE &&
+      SVG_NON_PAINTED.has((n as Element).tagName.toLowerCase())
+    )
+      continue;
+    g.appendChild(n);
+  }
+  svg.appendChild(g);
+}
+
 /** Self-contained SVG string for an inline <svg> (EXT-S-2): clone, styles, uses, size, sanitize. */
-async function serializeSvg(el: SVGSVGElement): Promise<string> {
+async function serializeSvg(el: SVGSVGElement, flip: Flip | null): Promise<string> {
   const clone = el.cloneNode(true) as SVGSVGElement;
   inlineStyles(el, clone);
   inlineUses(clone, el);
@@ -235,6 +276,7 @@ async function serializeSvg(el: SVGSVGElement): Promise<string> {
       img.setAttribute('href', `data:${enc.asset.mime};base64,${enc.asset.data}`);
     } else img.remove();
   }
+  flipSvg(clone, flip);
   prefixIds(clone);
   return new XMLSerializer().serializeToString(clone);
 }
@@ -243,6 +285,7 @@ async function serializeSvg(el: SVGSVGElement): Promise<string> {
 async function fetchSvgImage(
   el: HTMLImageElement,
   rect: { width: number; height: number },
+  flip: Flip | null,
 ): Promise<string | null> {
   const url = el.currentSrc || el.src;
   const blob = await withTimeout(fetchBlob(url));
@@ -259,6 +302,7 @@ async function fetchSvgImage(
   svg.setAttribute('width', String(Math.round(rect.width * 100) / 100));
   svg.setAttribute('height', String(Math.round(rect.height * 100) / 100));
   sanitize(svg);
+  flipSvg(svg, flip);
   prefixIds(svg);
   return new XMLSerializer().serializeToString(svg);
 }
@@ -321,10 +365,16 @@ async function encode(
   renW: number,
   renH: number,
   meta: Pick<RawImageAsset, 'source' | 'originalUrl'>,
+  flip: Flip | null = null,
 ): Promise<Encoded> {
   const [w, h] = targetSize(natW, natH, renW, renH);
   const canvas = new OffscreenCanvas(w, h);
-  canvas.getContext('2d')!.drawImage(source, 0, 0, w, h);
+  const g = canvas.getContext('2d')!;
+  if (flip) {
+    g.translate(flip.h ? w : 0, flip.v ? h : 0);
+    g.scale(flip.h ? -1 : 1, flip.v ? -1 : 1);
+  }
+  g.drawImage(source, 0, 0, w, h);
   const alpha = hasAlpha(canvas, w, h);
   const type = !alpha && w * h > 256 * 256 ? 'image/jpeg' : 'image/png';
   const blob = await canvas.convertToBlob({ type, quality: 0.85 }); // SecurityError when tainted
@@ -369,8 +419,13 @@ async function fetchBlob(url: string): Promise<Blob | null> {
 }
 
 /** CORS fetch or service-worker fetch → decode → encode. */
-function encodeUrl(url: string, renW: number, renH: number): Promise<Encoded | null> {
-  const key = `${url}|${Math.round(renW)}x${Math.round(renH)}`;
+function encodeUrl(
+  url: string,
+  renW: number,
+  renH: number,
+  flip: Flip | null = null,
+): Promise<Encoded | null> {
+  const key = `${url}|${Math.round(renW)}x${Math.round(renH)}|${flip ? `${+flip.h}${+flip.v}` : ''}`;
   let p = urlCache.get(key);
   if (!p) {
     p = withTimeout(
@@ -379,10 +434,15 @@ function encodeUrl(url: string, renW: number, renH: number): Promise<Encoded | n
         if (!blob) return null;
         const bmp = await createImageBitmap(blob);
         try {
-          return await encode(bmp, bmp.width, bmp.height, renW, renH, {
-            source: 'fetch',
-            originalUrl: url,
-          });
+          return await encode(
+            bmp,
+            bmp.width,
+            bmp.height,
+            renW,
+            renH,
+            { source: 'fetch', originalUrl: url },
+            flip,
+          );
         } finally {
           bmp.close();
         }
@@ -393,40 +453,51 @@ function encodeUrl(url: string, renW: number, renH: number): Promise<Encoded | n
   return p;
 }
 
-async function encodeImg(el: HTMLImageElement): Promise<Encoded | null> {
+async function encodeImg(el: HTMLImageElement, flip: Flip | null): Promise<Encoded | null> {
   const url = el.currentSrc || el.src;
   const r = el.getBoundingClientRect();
   if (el.complete && el.naturalWidth > 0) {
     try {
-      return await encode(el, el.naturalWidth, el.naturalHeight, r.width, r.height, {
-        source: 'canvas',
-        ...(url && !url.startsWith('data:') ? { originalUrl: url } : {}),
-      });
+      return await encode(
+        el,
+        el.naturalWidth,
+        el.naturalHeight,
+        r.width,
+        r.height,
+        { source: 'canvas', ...(url && !url.startsWith('data:') ? { originalUrl: url } : {}) },
+        flip,
+      );
     } catch {
       // Tainted (cross-origin without CORS): try a CORS fetch below.
     }
   }
-  return url && !url.startsWith('data:') ? encodeUrl(url, r.width, r.height) : null;
+  return url && !url.startsWith('data:') ? encodeUrl(url, r.width, r.height, flip) : null;
 }
 
-async function encodeVideo(el: HTMLVideoElement): Promise<Encoded | null> {
+async function encodeVideo(el: HTMLVideoElement, flip: Flip | null): Promise<Encoded | null> {
   const r = el.getBoundingClientRect();
   if (el.readyState >= 2 && el.videoWidth > 0) {
     try {
-      return await encode(el, el.videoWidth, el.videoHeight, r.width, r.height, {
-        source: 'canvas',
-      });
+      return await encode(
+        el,
+        el.videoWidth,
+        el.videoHeight,
+        r.width,
+        r.height,
+        { source: 'canvas' },
+        flip,
+      );
     } catch {
       /* tainted: fall back to the poster */
     }
   }
-  return el.poster ? encodeUrl(el.poster, r.width, r.height) : null;
+  return el.poster ? encodeUrl(el.poster, r.width, r.height, flip) : null;
 }
 
 async function resolveJob(job: AssetJob, assets: Record<string, RawImageAsset>): Promise<void> {
-  if (job.kind === 'frame') return; // Tier 3 only
+  if (job.kind === 'frame' || job.kind === 'raster') return; // Tier 3 only
   if (job.kind === 'bg') {
-    job.raw.bgAssets = await compositeBackgrounds(job.box, job.layers, assets);
+    job.raw.bgAssets = await compositeBackgrounds(job.box, job.layers, assets, job.flip);
     return;
   }
   if (job.kind === 'glyph') {
@@ -439,12 +510,12 @@ async function resolveJob(job: AssetJob, assets: Record<string, RawImageAsset>):
   }
   try {
     if (job.kind === 'svg') {
-      job.raw.svg = await serializeSvg(job.el);
+      job.raw.svg = await serializeSvg(job.el, job.flip);
       return;
     }
     if (job.kind === 'img' && /\.svg(\?|#|$)/i.test(job.el.currentSrc || job.el.src)) {
       // The size read during the DOM walk: the element may be gone now (materialized ::before content).
-      const svg = await fetchSvgImage(job.el, job.raw.rect);
+      const svg = await fetchSvgImage(job.el, job.raw.rect, job.flip);
       if (svg) {
         job.raw.svg = svg;
         return;
@@ -453,18 +524,17 @@ async function resolveJob(job: AssetJob, assets: Record<string, RawImageAsset>):
     const r = job.el.getBoundingClientRect();
     const enc =
       job.kind === 'img'
-        ? await encodeImg(job.el)
+        ? await encodeImg(job.el, job.flip)
         : job.kind === 'video'
-          ? await encodeVideo(job.el)
+          ? await encodeVideo(job.el, job.flip)
           : await encode(
               job.el as HTMLCanvasElement,
               (job.el as HTMLCanvasElement).width,
               (job.el as HTMLCanvasElement).height,
               r.width,
               r.height,
-              {
-                source: 'canvas',
-              },
+              { source: 'canvas' },
+              job.flip,
             ).catch(() => null);
     if (enc) {
       assets[enc.id] = enc.asset;
@@ -475,10 +545,14 @@ async function resolveJob(job: AssetJob, assets: Record<string, RawImageAsset>):
   }
 }
 
-/** Resolves every job (bounded concurrency) and stores encoded images in `snapshot.assets`. */
+/**
+ * Resolves every job (bounded concurrency) and stores encoded images in `snapshot.assets`. `pinned`: the page's
+ * fixed/sticky elements, hidden while Tier 3 screenshots are taken.
+ */
 export async function resolveAssets(
   snapshot: RawPageSnapshot,
   jobs: readonly AssetJob[],
+  pinned: readonly Element[] = [],
 ): Promise<void> {
   urlCache.clear();
   const assets: Record<string, RawImageAsset> = {};
@@ -489,94 +563,232 @@ export async function resolveAssets(
   await Promise.all(Array.from({ length: Math.min(CONCURRENCY, jobs.length) }, worker));
   await screenshotCrops(
     jobs.filter(
-      (j): j is Extract<AssetJob, { raw: RawElement }> =>
+      (j): j is CropJob =>
         j.kind === 'frame' ||
+        j.kind === 'raster' ||
         (j.kind !== 'bg' && j.kind !== 'glyph' && Boolean(j.raw.assetFailed) && !j.raw.svg),
     ),
     assets,
+    pinned,
   );
   snapshot.assets = assets;
 }
 
 // ── Tier 3: screenshot crops ────────────────────────────────────────────────────────────────────────────────
 
+type CropJob = Extract<AssetJob, { kind: 'svg' | 'img' | 'canvas' | 'video' | 'frame' | 'raster' }>;
+
 const MAX_SHOTS = 24;
-const nextFrame = () => new Promise((r) => requestAnimationFrame(() => r(null)));
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** Elements up to this many viewport heights tall are stitched from several screenshots. */
+const MAX_STITCH = 4;
+const HIDE_ATTR = 'data-h2f-hide';
+
+/** `child` is `ancestor` or inside it, across shadow-root boundaries. */
+function within(child: Node, ancestor: Element): boolean {
+  for (let n: Node | null = child; n; n = n.parentNode ?? (n instanceof ShadowRoot ? n.host : null))
+    if (n === ancestor) return true;
+  return false;
+}
 
 /**
- * Crops each remaining element out of screenshots of the visible tab (EXT-I-4). Elements are visited top to bottom;
- * each screenshot is centered on the next element and every element fully inside it is cropped. Elements taller
- * or wider than the viewport stay placeholders. The scroll position is restored afterwards.
+ * Hides elements for the screenshots (visibility only: the layout doesn't move), the same way ::before/::after are
+ * hidden during the read: a data attribute + an adopted style sheet per root. The returned function undoes both.
+ */
+function hideForScreenshots(els: readonly Element[]): () => void {
+  const sheets = new Map<Document | ShadowRoot, CSSStyleSheet[]>();
+  const marked: Element[] = [];
+  for (const el of els) {
+    if (!el.isConnected || el.hasAttribute(HIDE_ATTR)) continue;
+    const scope = el.getRootNode() as Document | ShadowRoot;
+    if (!('adoptedStyleSheets' in scope)) continue;
+    if (!sheets.has(scope)) {
+      const sheet = new CSSStyleSheet();
+      sheet.replaceSync(
+        `[${HIDE_ATTR}],[${HIDE_ATTR}] *{visibility:hidden!important;transition:none!important}`,
+      );
+      sheets.set(scope, [...scope.adoptedStyleSheets]); // a copy: the live array is replaced next
+      scope.adoptedStyleSheets = [...scope.adoptedStyleSheets, sheet];
+    }
+    el.setAttribute(HIDE_ATTR, '');
+    marked.push(el);
+  }
+  return () => {
+    for (const el of marked) el.removeAttribute(HIDE_ATTR);
+    for (const [scope, original] of sheets) scope.adoptedStyleSheets = original;
+  };
+}
+
+interface CropItem {
+  job: CropJob;
+  /** Document top (CSS px), refreshed from the live rect at every screenshot (scrolling can move content). */
+  y: number;
+  w: number;
+  h: number;
+  /** Rows of the element (from its top, CSS px) already in its canvas (stitching). */
+  filled: number;
+  canvas: OffscreenCanvas | null;
+}
+
+/**
+ * Crops elements out of screenshots of the visible tab (EXT-I-4):
+ * 1. Elements inside fixed/sticky elements (a logo in a fixed header) are cropped from one screenshot at the
+ *    current scroll position, where they are on screen.
+ * 2. The fixed/sticky elements are hidden (a header or a sticky bar would cover what is under it), then the page is
+ *    scrolled top to bottom; every element fully on screen is cropped, and elements taller than the window (up to
+ *    MAX_STITCH windows) are stitched from consecutive screenshots.
+ * After each scroll the page settles (scroll handlers, reveal animations), and each element is cropped where its
+ * live rect is at that moment. Elements wider than the window stay placeholders. Scroll position and page styles
+ * are restored afterwards.
  */
 async function screenshotCrops(
-  jobs: readonly Extract<AssetJob, { raw: RawElement }>[],
+  jobs: readonly CropJob[],
   assets: Record<string, RawImageAsset>,
+  pinned: readonly Element[],
 ): Promise<void> {
   if (!jobs.length || !runtime()) return;
   const sx = scrollX;
   const sy = scrollY;
   const vw = document.documentElement.clientWidth;
-  const items = jobs
-    .map((job) => {
-      const r = job.el.getBoundingClientRect();
-      return { job, x: r.x + sx, y: r.y + sy, w: r.width, h: r.height };
-    })
-    .filter(
-      (i) =>
-        i.w >= 2 && i.h >= 2 && i.h <= innerHeight && i.x - sx >= 0 && i.x - sx + i.w <= vw + 0.5,
-    )
-    .sort((a, b) => a.y - b.y);
+  const vh = innerHeight;
   const maxTop = Math.max(
     0,
-    (document.scrollingElement ?? document.documentElement).scrollHeight - innerHeight,
+    (document.scrollingElement ?? document.documentElement).scrollHeight - vh,
   );
+  const items: CropItem[] = [];
+  const pinnedItems: CropItem[] = [];
+  for (const job of jobs) {
+    const r = job.el.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2 || r.x < -0.5 || r.x + r.width > vw + 0.5) continue;
+    const it: CropItem = { job, y: r.y + sy, w: r.width, h: r.height, filled: 0, canvas: null };
+    (pinned.some((p) => within(job.el, p)) ? pinnedItems : items).push(it);
+  }
+
   let shots = 0;
+  const shoot = async (top: number | null): Promise<ImageBitmap | null> => {
+    if (top !== null) scrollTo({ left: sx, top, behavior: 'instant' });
+    await settle(800);
+    const shot = await ask({ type: 'h2f:capture-visible' });
+    shots++;
+    if (!shot?.ok || shot.type !== 'h2f:screenshot') return null;
+    return createImageBitmap(await (await fetch(shot.dataUrl)).blob());
+  };
+  const store = async (it: CropItem, canvas: OffscreenCanvas) => {
+    const enc = await encode(canvas, canvas.width, canvas.height, it.w, it.h, {
+      source: 'screenshot',
+    });
+    assets[enc.id] = enc.asset;
+    it.job.raw.assetId = enc.id;
+    delete it.job.raw.assetFailed;
+    if (it.job.kind === 'raster') it.job.raw.raster = true;
+  };
+
+  let restoreHidden = () => {};
   try {
-    while (items.length && shots < MAX_SHOTS) {
-      const first = items[0]!;
-      const top = Math.min(maxTop, Math.max(0, first.y - (innerHeight - first.h) / 2));
-      scrollTo({ left: sx, top, behavior: 'instant' });
-      await nextFrame();
-      await nextFrame();
-      await sleep(100);
-      const shot = await ask({ type: 'h2f:capture-visible' });
-      shots++;
-      if (!shot?.ok || shot.type !== 'h2f:screenshot') break;
-      const bmp = await createImageBitmap(await (await fetch(shot.dataUrl)).blob());
+    // 1. Inside fixed/sticky elements: where they are now (live rects, viewport coordinates).
+    if (pinnedItems.length) {
+      const bmp = await shoot(null);
+      if (!bmp) return;
       const scale = bmp.width / innerWidth;
-      const nowTop = scrollY;
-      for (let k = 0; k < items.length;) {
-        const it = items[k]!;
-        const vy = it.y - nowTop;
-        if (vy < -0.5 || vy + it.h > innerHeight + 0.5) {
-          k++;
+      for (const it of pinnedItems) {
+        const r = it.job.el.getBoundingClientRect();
+        if (r.y < -0.5 || r.y + r.height > vh + 0.5 || r.x < -0.5 || r.x + r.width > vw + 0.5) {
+          items.push(it); // e.g. a sticky element further down: cropped in step 2 with the others
           continue;
         }
-        items.splice(k, 1);
         try {
-          const crop = await createImageBitmap(
-            bmp,
-            Math.round((it.x - sx) * scale),
-            Math.round(vy * scale),
-            Math.max(1, Math.round(it.w * scale)),
-            Math.max(1, Math.round(it.h * scale)),
+          const c = new OffscreenCanvas(
+            Math.max(1, Math.round(r.width * scale)),
+            Math.max(1, Math.round(r.height * scale)),
           );
-          const enc = await encode(crop, crop.width, crop.height, it.w, it.h, {
-            source: 'screenshot',
-          });
-          crop.close();
-          assets[enc.id] = enc.asset;
-          it.job.raw.assetId = enc.id;
-          delete it.job.raw.assetFailed;
+          c.getContext('2d')!.drawImage(
+            bmp,
+            Math.round(r.x * scale),
+            Math.round(r.y * scale),
+            c.width,
+            c.height,
+            0,
+            0,
+            c.width,
+            c.height,
+          );
+          await store(it, c);
         } catch {
           /* stays a placeholder */
         }
       }
       bmp.close();
-      if (items[0] === first) items.shift(); // could not be brought fully into view
+    }
+
+    // 2. Everything else, with the fixed/sticky elements that don't contain a remaining item hidden.
+    const queue = items.filter((i) => i.h <= MAX_STITCH * vh).sort((a, b) => a.y - b.y);
+    if (!queue.length) return;
+    restoreHidden = hideForScreenshots(
+      pinned.filter((p) => !queue.some((it) => within(it.job.el, p))),
+    );
+    while (queue.length && shots < MAX_SHOTS) {
+      const first = queue[0]!;
+      const before = first.filled;
+      const want =
+        first.filled > 0.5
+          ? first.y + first.filled // continue stitching
+          : first.h <= vh
+            ? first.y - (vh - first.h) / 2 // centered
+            : first.y;
+      const bmp = await shoot(Math.min(maxTop, Math.max(0, want)));
+      if (!bmp) break;
+      const scale = bmp.width / innerWidth;
+      for (let k = 0; k < queue.length;) {
+        const it = queue[k]!;
+        const r = it.job.el.getBoundingClientRect();
+        it.y = r.y + scrollY;
+        // Rows of the element on screen; the next ones must start exactly where its canvas stops.
+        const visTop = Math.max(0, -r.y);
+        const visBottom = Math.min(r.height, vh - r.y);
+        if (
+          r.width < 2 ||
+          r.x < -0.5 ||
+          r.x + r.width > vw + 0.5 ||
+          visTop > it.filled + 0.5 ||
+          visBottom <= it.filled + 0.5
+        ) {
+          k++;
+          continue;
+        }
+        try {
+          it.canvas ??= new OffscreenCanvas(
+            Math.max(1, Math.round(r.width * scale)),
+            Math.max(1, Math.round(r.height * scale)),
+          );
+          const srcY = Math.max(0, Math.round((r.y + it.filled) * scale));
+          const srcH = Math.max(1, Math.round((r.y + visBottom) * scale) - srcY);
+          it.canvas
+            .getContext('2d')!
+            .drawImage(
+              bmp,
+              Math.round(r.x * scale),
+              srcY,
+              it.canvas.width,
+              srcH,
+              0,
+              Math.round(it.filled * scale),
+              it.canvas.width,
+              srcH,
+            );
+          it.filled = visBottom;
+        } catch {
+          queue.splice(k, 1); // stays a placeholder
+          continue;
+        }
+        if (it.filled >= r.height - 0.5) {
+          queue.splice(k, 1);
+          await store(it, it.canvas).catch(() => undefined);
+        } else k++;
+      }
+      bmp.close();
+      if (queue[0] === first && first.filled === before) queue.shift(); // could not be brought into view
     }
   } finally {
+    restoreHidden();
     scrollTo({ left: sx, top: sy, behavior: 'instant' });
   }
 }
@@ -698,6 +910,7 @@ async function compositeBackgrounds(
   box: BgBox,
   layers: { url: string; layer: number }[],
   assets: Record<string, RawImageAsset>,
+  flip: Flip | null,
 ): Promise<(string | null)[]> {
   const r = { width: box.width, height: box.height };
   /** Positioning area per background-origin (default padding-box): [left, top, width, height] in the border box. */
@@ -765,10 +978,18 @@ async function compositeBackgrounds(
           for (let j = ys; j < ye && tiles < 4000; j++, tiles++)
             g.drawImage(img, x0 + i * tw, y0 + j * th, tw, th);
       }
-      const enc = await encode(canvas, cw, ch, r.width, r.height, {
-        source: url.startsWith('data:') ? 'canvas' : 'fetch',
-        ...(url.startsWith('data:') ? {} : { originalUrl: url }),
-      });
+      const enc = await encode(
+        canvas,
+        cw,
+        ch,
+        r.width,
+        r.height,
+        {
+          source: url.startsWith('data:') ? 'canvas' : 'fetch',
+          ...(url.startsWith('data:') ? {} : { originalUrl: url }),
+        },
+        flip,
+      );
       assets[enc.id] = enc.asset;
       ids.push(enc.id);
     } catch {
@@ -802,5 +1023,5 @@ async function drawGlyph(job: Extract<AssetJob, { kind: 'glyph' }>): Promise<Enc
     0,
     m.fontBoundingBoxAscent + (job.height - m.fontBoundingBoxAscent - m.fontBoundingBoxDescent) / 2,
   );
-  return encode(canvas, w, h, job.width, job.height, { source: 'canvas' });
+  return encode(canvas, w, h, job.width, job.height, { source: 'canvas' }, job.flip);
 }

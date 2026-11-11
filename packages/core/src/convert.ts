@@ -17,8 +17,10 @@ import type {
 } from '@h2f/schema';
 import {
   isTranslationOnly,
+  flipOf,
   isVisuallyHidden,
   parseBlendMode,
+  parseInsetClip,
   parseBorder,
   parseBoxShadow,
   parseRadii,
@@ -60,6 +62,7 @@ const AGGREGATED = new Set([
   'TEXT_ELLIPSIS_NOT_APPLIED',
   'IMAGE_FETCH_FAILED',
   'GRADIENT_UNSUPPORTED',
+  'BLEND_MODE_RASTERIZED',
 ]);
 
 /** Serialized SVGs above this become raster-only / placeholders (EXT-S-6). */
@@ -82,6 +85,8 @@ const AGGREGATED_MESSAGE: Record<string, string> = {
     'Some images could not be read (cross-origin without CORS, or not loaded); placeholders instead (EXT-I-5).',
   TEXT_ELLIPSIS_NOT_APPLIED:
     'text-overflow: ellipsis not reproduced yet; truncated text is clipped without "…" (EXT-X-8).',
+  BLEND_MODE_RASTERIZED:
+    'Elements with mix-blend-mode are captured as a picture of how they look (not editable layers).',
 };
 
 interface Ctx {
@@ -376,7 +381,95 @@ const OBJECT_FIT: Record<string, ImageNode['scaleMode']> = {
   'scale-down': 'FIT',
 };
 
+/** Union of the rects of emitted nodes and all their descendants (document coordinates). */
+function extentOf(nodes: readonly CaptureNode[]): RawRect | null {
+  const rects: RawRect[] = [];
+  const visit = (n: CaptureNode) => {
+    if (n.rect.width > 0 && n.rect.height > 0) rects.push(n.rect);
+    if (n.type === 'FRAME') n.children.forEach(visit);
+  };
+  nodes.forEach(visit);
+  return rects.length ? unionRect(rects) : null;
+}
+
+/**
+ * `clip-path: inset(…)` (EXT-V-10): the element's output is wrapped in a clipping frame the size of the inset box,
+ * trimmed to what the content actually covers (insets like -9999px only clip one side). clip-path creates a
+ * stacking context, so grouping its content keeps the paint order. Other shapes stay CLIP_MASK_UNSUPPORTED.
+ */
+function applyClipPath(el: RawElement, out: Emitted[], ctx: Ctx, key: OrderKey): Emitted[] {
+  const value = el.style['clip-path'] ?? 'none';
+  if (value === 'none' || !out.length) return out;
+  const r = toDoc(ctx, el.rect);
+  const inset = parseInsetClip(value, r.width, r.height);
+  if (!inset) {
+    warn(ctx, 'CLIP_MASK_UNSUPPORTED', out[0]!.node.id, '');
+    return out;
+  }
+  const extent = extentOf(out.map((e) => e.node));
+  if (!extent) return out;
+  const cx1 = r.x + inset.left;
+  const cy1 = r.y + inset.top;
+  const cx2 = r.x + r.width - inset.right;
+  const cy2 = r.y + r.height - inset.bottom;
+  const x1 = Math.max(cx1, extent.x);
+  const y1 = Math.max(cy1, extent.y);
+  const x2 = Math.min(cx2, extent.x + extent.width);
+  const y2 = Math.min(cy2, extent.y + extent.height);
+  if (x2 - x1 <= 0.5 || y2 - y1 <= 0.5) return []; // clipped away entirely
+  const cuts =
+    x1 > extent.x + 0.5 ||
+    y1 > extent.y + 0.5 ||
+    x2 < extent.x + extent.width - 0.5 ||
+    y2 < extent.y + extent.height - 0.5;
+  // Rounded corners only matter where the clip box edge is the visible edge.
+  const rounded = inset.radius > 0 && x1 === cx1 && y1 === cy1 && x2 === cx2 && y2 === cy2;
+  if (!cuts && !rounded) return out; // nothing visible is cut off
+  countNode(ctx);
+  const radius = round2(inset.radius);
+  const frame: FrameNode = {
+    id: newId(ctx),
+    name: `clip · ${layerName(el)}`,
+    type: 'FRAME',
+    rect: {
+      x: round2(x1),
+      y: round2(y1),
+      width: round2(x2 - x1),
+      height: round2(y2 - y1),
+    },
+    opacity: 1,
+    fills: [],
+    ...(rounded ? { radii: { tl: radius, tr: radius, br: radius, bl: radius } } : {}),
+    clipsContent: true,
+    children: sorted(out),
+  };
+  return [{ node: frame, key }];
+}
+
+/** Visible text (not an icon glyph) anywhere in the subtree. */
+function hasText(el: RawElement): boolean {
+  return el.children.some((c) =>
+    c.kind === 'text' ? !c.iconAssetId && c.text.trim() !== '' : hasText(c),
+  );
+}
+
+function orderKey(s: RawElement['style'], path: number[]): OrderKey {
+  const positioned = s.position !== 'static';
+  const zRaw = s['z-index'];
+  const z = positioned && zRaw !== 'auto' ? parseInt(zRaw, 10) || 0 : null;
+  return {
+    layer: !positioned ? 1 : z !== null && z < 0 ? 0 : z === null || z === 0 ? 2 : 3,
+    z: z ?? 0,
+    path,
+  };
+}
+
 export function convertElement(el: RawElement, ctx: Ctx, path: number[]): Emitted[] {
+  const key = orderKey(el.style, path);
+  return applyClipPath(el, convertBox(el, ctx, path, key), ctx, key);
+}
+
+function convertBox(el: RawElement, ctx: Ctx, path: number[], key: OrderKey): Emitted[] {
   const s = el.style;
   const opacity = px(s.opacity, 1);
   if (opacity <= 0) return [];
@@ -384,16 +477,30 @@ export function convertElement(el: RawElement, ctx: Ctx, path: number[]): Emitte
   const positioned = s.position !== 'static';
   const zRaw = s['z-index'];
   const z = positioned && zRaw !== 'auto' ? parseInt(zRaw, 10) || 0 : null;
-  const key: OrderKey = {
-    layer: !positioned ? 1 : z !== null && z < 0 ? 0 : z === null || z === 0 ? 2 : 3,
-    z: z ?? 0,
-    path,
-  };
   const rect = toDoc(ctx, el.rect);
   if (isVisuallyHidden(s, rect.width, rect.height)) return []; // screen-reader-only content
   const zeroArea = rect.width <= 0 || rect.height <= 0;
   const hidden = s.visibility !== 'visible';
   const radii = zeroArea ? null : parseRadii(s, rect.width, rect.height);
+
+  // Blended element (mix-blend-mode): a screenshot of how it looks on the page, children included (EXT-V-10).
+  if (el.raster && el.assetId && ctx.assets?.[el.assetId] && !zeroArea && !hidden) {
+    const id = newId(ctx);
+    countNode(ctx);
+    ctx.imageCount++;
+    ctx.usedAssets.add(el.assetId);
+    warn(ctx, 'BLEND_MODE_RASTERIZED', id, '');
+    const node: ImageNode = {
+      id,
+      name: `${layerName(el)} · blended`,
+      type: 'IMAGE',
+      rect,
+      opacity: 1, // the screenshot already shows the element's opacity
+      assetId: el.assetId,
+      scaleMode: 'STRETCH',
+    };
+    return [{ node, key }];
+  }
 
   // Replaced content: SVG markup or encoded pixels from the collector's asset phase (R4), else a placeholder.
   if (el.replaced) {
@@ -512,8 +619,9 @@ export function convertElement(el: RawElement, ctx: Ctx, path: number[]): Emitte
   const blur = /^blur\(([\d.]+)px\)$/.exec(filter.trim());
   if (blur) effects.push({ type: 'LAYER_BLUR', radius: parseFloat(blur[1]!) });
   else if (filter !== 'none') warn(ctx, 'FILTER_UNSUPPORTED', id, '');
-  if ((s['clip-path'] ?? 'none') !== 'none') warn(ctx, 'CLIP_MASK_UNSUPPORTED', id, ''); // (fully hidden insets skipped above)
-  if (!isTranslationOnly(s.transform)) warn(ctx, 'TRANSFORM_UNSUPPORTED', id, '');
+  // A mirroring transform is reproduced on the images and SVGs inside (collector); only text stays unmirrored.
+  if (!isTranslationOnly(s.transform) && !(flipOf(s.transform) && !hasText(el)))
+    warn(ctx, 'TRANSFORM_UNSUPPORTED', id, '');
   const { blendMode, unsupported } = parseBlendMode(s['mix-blend-mode']);
   if (unsupported) warn(ctx, 'BLEND_MODE_UNSUPPORTED', id, '', unsupported);
   if (el.pseudo?.before) warn(ctx, 'PSEUDO_ELEMENT_NOT_CAPTURED', id, '');
