@@ -245,6 +245,12 @@ test('captured as scrolled to the top: fixed header at y = 0, mirrored pixels an
   expect(clip.rect.y + clip.rect.height).toBe(section.rect.y + section.rect.height);
   expect(clipImg.rect.y + clipImg.rect.height).toBeGreaterThan(clip.rect.y + clip.rect.height);
 
+  // A canvas that reads back blank (WebGL; same symptom as a GPU-decoded video frame) is not kept as an empty image:
+  // without the extension's screenshot tier it stays a marked placeholder.
+  const gl = byName(/canvas#gl/) as { assetId: string | null; name: string };
+  expect(gl.assetId).toBeNull();
+  expect(gl.name).toMatch(/^⚠/);
+
   // 4. Copy to Figma writes capitalized text as shown.
   const { svg } = figmaSvg(r.document, r.textLines);
   expect(svg).toContain('A Selection Of Designer Pieces');

@@ -103,20 +103,14 @@ export function fontFamilyList(font: { family: string; style: string }): string 
   return `${font.family.replace(/\s+/g, '')}-${font.style.replace(/\s+/g, '')}, ${font.family}`;
 }
 
-/** Unique XML ids from layer names. XML names allow Unicode letters, so Arabic names survive. */
+/**
+ * Layer names: Figma names each imported layer after its `id`, so the id is the readable name itself ("Button · Add
+ * to cart", Arabic included), whitespace collapsed, at most 64 characters, XML-escaped where it is written. Names
+ * may repeat (many "Box"): nothing references a layer id; clip paths, filters and gradients use generated ids in
+ * <defs>, which come first. Spikes: names with spaces, "·" and Arabic survive a paste (Phase 2 findings, N).
+ */
 function idFactory(): (name: string) => string {
-  const used = new Map<string, number>();
-  return (name) => {
-    const base =
-      (name || 'layer')
-        .trim()
-        .replace(/[^\p{L}\p{M}\p{N}_.-]+/gu, '_')
-        .replace(/^[^\p{L}_]+/u, 'n_')
-        .slice(0, 60) || 'layer';
-    const n = (used.get(base) ?? 0) + 1;
-    used.set(base, n);
-    return n === 1 ? base : `${base}_${n}`;
-  };
+  return (name) => (name ?? '').replace(/\s+/g, ' ').trim().slice(0, 64) || 'Layer';
 }
 
 function roundedPath(x: number, y: number, w: number, h: number, r: Radii): string {
@@ -159,9 +153,49 @@ export function planToSvg(plan: RenderPlan, options: SvgOptions = {}): SvgResult
   const stats = { boxes: 0, texts: 0, images: 0, svgs: 0, placeholders: 0, lines: 0 };
   let defId = 0;
 
+  /**
+   * A shadow with no blur and no offset, only spread, is a solid ring: a common way to draw outlines
+   * (`box-shadow: inset 0 0 0 1px`) and focus rings. Drawn exactly as a stroke instead of a filter.
+   */
+  const isRing = (e: PlanBox['effects'][number]) =>
+    (e.type === 'DROP_SHADOW' || e.type === 'INNER_SHADOW') &&
+    e.radius === 0 &&
+    e.offset.x === 0 &&
+    e.offset.y === 0 &&
+    e.spread > 0;
+  const ringsFor = (n: PlanBox, ax: number, ay: number, inner: boolean): string =>
+    n.effects
+      .filter((e) => isRing(e) && (e.type === 'INNER_SHADOW') === inner)
+      .map((e) => {
+        if (e.type !== 'DROP_SHADOW' && e.type !== 'INNER_SHADOW') return '';
+        // The stroke is centered on its path: inside rings move in by half the spread, outside rings out.
+        const g = (inner ? -e.spread : e.spread) / 2;
+        const r = n.radii && {
+          tl: Math.max(0, n.radii.tl + g),
+          tr: Math.max(0, n.radii.tr + g),
+          br: Math.max(0, n.radii.br + g),
+          bl: Math.max(0, n.radii.bl + g),
+        };
+        const stroke =
+          ` fill="none" stroke="${rgb(e.color)}"` +
+          (e.color.a < 1 ? ` stroke-opacity="${num(e.color.a)}"` : '') +
+          ` stroke-width="${num(e.spread)}"`;
+        return shape(
+          id(`${n.name} ${inner ? 'inner' : 'outer'} ring`),
+          ax - g,
+          ay - g,
+          n.width + 2 * g,
+          n.height + 2 * g,
+          r,
+          stroke,
+        );
+      })
+      .join('');
+
   const filterFor = (effects: PlanBox['effects']): string => {
     const prims: string[] = [];
     for (const e of effects) {
+      if (isRing(e)) continue; // drawn as strokes (ringsFor)
       if (e.type === 'DROP_SHADOW') {
         if (e.spread) skipped.add('shadow spread');
         prims.push(
@@ -408,9 +442,11 @@ export function planToSvg(plan: RenderPlan, options: SvgOptions = {}): SvgResult
     const name = id(n.name);
     const kids = n.children.map((c) => visit(c, ax, ay)).join('');
     const filter = filterFor(n.effects);
+    const outerRings = ringsFor(n, ax, ay, false);
+    const innerRings = ringsFor(n, ax, ay, true);
     // Leaf box with at most one solid/gradient fill: one shape named after the layer (no wrapper group).
     const single = n.fills.length <= 1 && n.fills[0]?.type !== 'IMAGE';
-    if (!kids && !n.strokes && single)
+    if (!kids && !n.strokes && single && !outerRings && !innerRings)
       return shape(
         name,
         ax,
@@ -422,7 +458,7 @@ export function planToSvg(plan: RenderPlan, options: SvgOptions = {}): SvgResult
       );
     // Background layers bottom → top; an unpainted box only exists for its border or children (no empty layer).
     const bg =
-      n.fills.length || n.effects.length
+      n.fills.length || n.effects.some((e) => !isRing(e))
         ? (n.fills.length ? n.fills : [undefined])
             .map((f, i) => background(f, n, ax, ay, i === 0 ? filter : ''))
             .join('')
@@ -435,7 +471,8 @@ export function planToSvg(plan: RenderPlan, options: SvgOptions = {}): SvgResult
       );
       inner = `<g clip-path="url(#${cid})">${kids}</g>`;
     }
-    return `<g id="${esc(name)}"${op}>${bg}${inner}${strokesFor(n, ax, ay)}</g>`;
+    // CSS order: outer shadows under the background, inset shadows above it and under the content.
+    return `<g id="${esc(name)}"${op}>${outerRings}${bg}${innerRings}${inner}${strokesFor(n, ax, ay)}</g>`;
   };
 
   // Root: the SVG becomes a Figma frame that already clips, so content goes straight into it (no wrapper group,

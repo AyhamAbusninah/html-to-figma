@@ -63,7 +63,7 @@ describe('planToSvg', () => {
       /^<svg xmlns="http:\/\/www.w3.org\/2000\/svg" width="400" height="300" viewBox="0 0 400 300"><rect id="Background" x="0" y="0" width="400" height="300" fill="rgb\(255,255,255\)"\/><g id="div.card">/,
     );
     expect(svg).toContain(
-      '<rect id="div.card_background" x="20" y="20" width="200" height="100" rx="8" fill="rgb(51,102,255)"/>',
+      '<rect id="div.card background" x="20" y="20" width="200" height="100" rx="8" fill="rgb(51,102,255)"/>',
     );
     expect(svg).not.toContain('clip-path'); // the card clips, but nothing overflows it
     expect(stats).toEqual({ boxes: 1, texts: 1, images: 0, svgs: 0, placeholders: 0, lines: 1 });
@@ -103,7 +103,7 @@ describe('planToSvg', () => {
     const { svg, stats, skipped } = planToSvg(plan, {
       lines: (id) => (id === 'n4' ? ['one two', 'three four'] : undefined),
     });
-    expect(svg).toContain('<text id="one_two" ');
+    expect(svg).toContain('<text id="one two" ');
     expect(svg).toContain(
       '<tspan x="10" y="26">one two</tspan><tspan x="10" y="53">three four</tspan>',
     );
@@ -145,7 +145,7 @@ describe('planToSvg', () => {
     );
     expect(svg).toContain('<g clip-path="url(#clip1)">');
     expect(svg).toContain('>a &lt; b &amp; &quot;c&quot;</tspan>');
-    expect(svg).toMatch(/<rect id="img.logo_image_not_captured_"[^>]*stroke-dasharray="4 4"\/>/);
+    expect(svg).toMatch(/<rect id="img.logo \(image not captured\)"[^>]*stroke-dasharray="4 4"\/>/);
     expect(stats.placeholders).toBe(1);
   });
 
@@ -231,9 +231,9 @@ describe('planToSvg', () => {
     };
     const { svg, stats } = planToSvg(buildPlan(d, MOCK_FONTS));
     const order = [
-      'section.hero_background"',
-      'section.hero_background_image"',
-      'section.hero_gradient"',
+      'section.hero background"',
+      'section.hero background image"',
+      'section.hero gradient"',
     ].map((x) => svg.indexOf(x));
     expect(order.every((i) => i > 0)).toBe(true);
     expect(order).toEqual([...order].sort((a, b) => a - b));
@@ -306,5 +306,45 @@ describe('hard line breaks', () => {
     const { svg } = planToSvg(buildPlan(doc([t]), MOCK_FONTS));
     expect(svg).toMatch(/<tspan[^>]*>First line<\/tspan><tspan[^>]*>Second line<\/tspan>/);
     expect(svg).not.toContain('First line\nSecond');
+  });
+});
+
+describe('solid rings (box-shadow with spread only)', () => {
+  const ringBox = (type: 'DROP_SHADOW' | 'INNER_SHADOW'): FrameNode => ({
+    id: 'r1',
+    name: 'Button · Save',
+    type: 'FRAME',
+    rect: { x: 10, y: 10, width: 200, height: 48 },
+    opacity: 1,
+    fills: [],
+    radii: { tl: 4, tr: 4, br: 4, bl: 4 },
+    effects: [
+      {
+        type,
+        color: { r: 0.098, g: 0.098, b: 0.098, a: 1 },
+        offset: { x: 0, y: 0 },
+        radius: 0,
+        spread: 1,
+      },
+    ],
+    clipsContent: false,
+    children: [],
+  });
+
+  it('inset 0 0 0 1px is drawn as an inside stroke (the outline Envato-style buttons use)', () => {
+    const { svg, skipped } = planToSvg(buildPlan(doc([ringBox('INNER_SHADOW')]), MOCK_FONTS));
+    expect(svg).toMatch(
+      /id="Button · Save inner ring" x="10.5" y="10.5" width="199" height="47" rx="3.5"[^>]*stroke="rgb\(25,25,25\)"[^>]*stroke-width="1"/,
+    );
+    expect(skipped).not.toContain('inner shadows');
+  });
+
+  it('0 0 0 2px outside (focus ring) is drawn as an outside stroke', () => {
+    const b = ringBox('DROP_SHADOW');
+    b.effects![0] = { ...b.effects![0]!, spread: 2 } as never;
+    const { svg, skipped } = planToSvg(buildPlan(doc([b]), MOCK_FONTS));
+    expect(svg).toMatch(/id="Button · Save outer ring" x="9" y="9" width="202" height="50" rx="5"/);
+    expect(svg).not.toContain('<filter');
+    expect(skipped).not.toContain('shadow spread');
   });
 });

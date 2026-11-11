@@ -540,6 +540,12 @@ test.describe('Tier 3 screenshot crops (test build with all-sites access granted
       Buffer.from(tall!.asset.data, 'base64'),
     );
 
+    // WebGL canvas that reads back blank: the blank check sends it to a screenshot, which shows its orange.
+    const gl = image(/canvas#gl/);
+    expect(gl?.asset.source).toBe('screenshot');
+    const [glPixel] = await pixels(gl!.asset, [[0.5, 0.5]]);
+    expect(near(glPixel!, [255, 128, 0]), `orange, got ${glPixel}`).toBe(true);
+
     // mix-blend-mode block: one picture of what the page shows (white box, brown letters).
     const blended = image(/· blended$/);
     expect(blended?.asset.source).toBe('screenshot');

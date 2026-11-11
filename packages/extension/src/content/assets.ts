@@ -350,6 +350,35 @@ function hasAlpha(source: CanvasImageSource, w: number, h: number): boolean {
   return false;
 }
 
+/**
+ * True when a drawn source has no picture: fully transparent, or one flat color. Chrome can return such frames
+ * without any error when it decodes video on the GPU (common on Linux) or for a WebGL canvas without
+ * preserveDrawingBuffer; the caller then tries the next tier (poster, screenshot). A tainted source throws.
+ */
+function isBlank(source: CanvasImageSource): boolean {
+  const c = new OffscreenCanvas(32, 32);
+  const g = c.getContext('2d', { willReadFrequently: true })!;
+  g.drawImage(source, 0, 0, 32, 32);
+  const d = g.getImageData(0, 0, 32, 32).data;
+  const min = [255, 255, 255, 255];
+  const max = [0, 0, 0, 0];
+  for (let i = 0; i < d.length; i += 4)
+    for (let k = 0; k < 4; k++) {
+      min[k] = Math.min(min[k]!, d[i + k]!);
+      max[k] = Math.max(max[k]!, d[i + k]!);
+    }
+  if (max[3] === 0) return true;
+  return max.every((v, k) => v - min[k]! <= 3);
+}
+
+function isBlankCanvas(el: HTMLCanvasElement): boolean {
+  try {
+    return el.width > 0 && el.height > 0 && isBlank(el);
+  } catch {
+    return false; // tainted: encode() fails and the screenshot tier takes over
+  }
+}
+
 function base64(bytes: Uint8Array): string {
   let s = '';
   for (let i = 0; i < bytes.length; i += 0x8000)
@@ -478,6 +507,8 @@ async function encodeVideo(el: HTMLVideoElement, flip: Flip | null): Promise<Enc
   const r = el.getBoundingClientRect();
   if (el.readyState >= 2 && el.videoWidth > 0) {
     try {
+      // A blank current frame (GPU-decoded video) is no picture: use the poster, else a screenshot.
+      if (isBlank(el)) throw new Error('blank frame');
       return await encode(
         el,
         el.videoWidth,
@@ -527,15 +558,17 @@ async function resolveJob(job: AssetJob, assets: Record<string, RawImageAsset>):
         ? await encodeImg(job.el, job.flip)
         : job.kind === 'video'
           ? await encodeVideo(job.el, job.flip)
-          : await encode(
-              job.el as HTMLCanvasElement,
-              (job.el as HTMLCanvasElement).width,
-              (job.el as HTMLCanvasElement).height,
-              r.width,
-              r.height,
-              { source: 'canvas' },
-              job.flip,
-            ).catch(() => null);
+          : isBlankCanvas(job.el as HTMLCanvasElement)
+            ? null // WebGL without preserveDrawingBuffer reads back empty: Tier 3 screenshot instead
+            : await encode(
+                job.el as HTMLCanvasElement,
+                (job.el as HTMLCanvasElement).width,
+                (job.el as HTMLCanvasElement).height,
+                r.width,
+                r.height,
+                { source: 'canvas' },
+                job.flip,
+              ).catch(() => null);
     if (enc) {
       assets[enc.id] = enc.asset;
       job.raw.assetId = enc.id;

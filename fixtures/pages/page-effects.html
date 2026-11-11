@@ -19,6 +19,8 @@
       (extension) one IMAGE "· blended"; without one, the layers with BLEND_MODE warnings.
     - #tall (tainted canvas, 600×1200: green top half, blue bottom half): Tier 3 only; stitched from two
       screenshots with the fixed header and the scroll bar hidden, so the crop's top rows are green.
+    - #gl (WebGL canvas cleared to orange, no preserveDrawingBuffer): drawing it reads back blank, like a
+      GPU-decoded video frame; the blank check sends it to Tier 3, so the crop is orange (not transparent).
 -->
 <html lang="en">
   <head>
@@ -145,6 +147,9 @@
         <div id="blend"><span>INK</span><div class="tex"></div></div>
       </section>
       <section>
+        <canvas id="gl" width="200" height="100" style="display: block; width: 200px; height: 100px"></canvas>
+      </section>
+      <section>
         <canvas id="tall" width="600" height="1200"></canvas>
       </section>
     </main>
@@ -154,6 +159,11 @@
         () => document.body.classList.toggle('scrolled', scrollY > 200),
         { passive: true },
       );
+      const gl = document.getElementById('gl').getContext('webgl');
+      if (gl) {
+        gl.clearColor(1, 0.5, 0, 1);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+      }
       const c = document.getElementById('tall');
       const g = c.getContext('2d');
       g.fillStyle = 'rgb(0, 200, 0)';
