@@ -1,20 +1,20 @@
 # HTML to Figma (H2F): install the Chrome extension (Fedora)
 
-Version 0.3.0 · internal Arkan Tech tool · not published to the Chrome Web Store.
+Version 0.4.0 · internal Arkan Tech tool · not published to the Chrome Web Store.
 
 ## Install (once)
 
 1. Get the extension folder, either way:
-   - **Folder:** `release/html-to-figma-extension-0.3.0/` from a local build, or
+   - **Folder:** `release/html-to-figma-extension-0.4.0/` from a local build, or
    - **ZIP:** unpack it to a folder you'll keep (Chrome loads the extension from that folder every time it starts):
      ```bash
-     mkdir -p ~/h2f && unzip -o html-to-figma-extension-0.3.0.zip -d ~/h2f/html-to-figma-extension-0.3.0
+     mkdir -p ~/h2f && unzip -o html-to-figma-extension-0.4.0.zip -d ~/h2f/html-to-figma-extension-0.4.0
      ```
 2. Open Google Chrome and go to **`chrome://extensions`**.
 3. Turn on **Developer mode** (top-right toggle).
 4. Click **Load unpacked** and select the folder that contains `manifest.json`
-   (e.g. `~/h2f/html-to-figma-extension-0.3.0`).
-5. "HTML to Figma (H2F) 0.3.0" appears in the list. Click the puzzle icon in the toolbar and **pin** it.
+   (e.g. `~/h2f/html-to-figma-extension-0.4.0`).
+5. "HTML to Figma (H2F) 0.4.0" appears in the list. Click the puzzle icon in the toolbar and **pin** it.
 
 Don't delete or move the folder afterwards, or Chrome will disable the extension. To update, replace the folder
 contents and click the ↻ reload button on the extension's card.
@@ -47,6 +47,21 @@ contents and click the ↻ reload button on the extension's card.
 
 The extension sends nothing anywhere. The file stays on your machine.
 
+## Changes in 0.4.0
+
+- **Images and icons:** photos, logos, inline SVG icons (editable vectors in Figma), canvas and video frames.
+  Images from other sites are downloaded by the extension (company hosts, or all sites after **Allow images from
+  other sites**) or cropped from screenshots of the page.
+- **Gradients and CSS background images** (linear and radial gradients, background size/position/repeat).
+- **`::before`/`::after` decorations** (badges, dots, separators, numbered steps) and **icon fonts** (Font Awesome,
+  Material Symbols, Bootstrap Icons…).
+- **Captured as seen from the top** even if you scrolled: fixed and sticky headers sit at the top of the page, bars
+  that only appear on scroll are left out, and your scroll position is restored.
+- **Screenshot crops** are never covered by fixed headers or sticky bars, and images taller than the window are joined
+  from two screenshots.
+- **Mirrored images and icons** (CSS `scaleX(-1)`), **`clip-path: inset()`** clipping, and capitalized text
+  (`text-transform: capitalize`) come in as on the page. Blocks that rely on CSS blend modes come in as a picture.
+
 ## Changes in 0.3.0
 
 - **Copy to Figma:** paste a captured page straight into Figma (Ctrl+V) as editable layers, Arabic included,
@@ -57,11 +72,15 @@ The extension sends nothing anywhere. The file stays on your machine.
 - Wrapped text that starts or ends next to a link, bold word or label tag no longer overlaps its neighbors in Figma:
   its lines are split into separate text layers where needed (plain paragraphs stay one layer). Arabic and Latin.
 
-## Limitations of 0.3.0
+## Limitations of 0.4.0
 
-- **Images, SVG icons/charts, canvas, video and iframes** become marked placeholder layers (coming in a later release).
-- Not captured yet: gradients, CSS background images, `::before/::after` decorations, "…" truncation.
-  Every capture lists what was skipped.
+- Not captured yet: the page's own (html/body) background image, repeating and conic gradients (first color),
+  "…" truncation, list bullets (`::marker`), rotation and skew (bounding box only), CSS masks and clip-path shapes
+  other than `inset()`. Every capture lists what was skipped.
+- Images taller than four windows or wider than the window can't be cropped from screenshots; allow images from other
+  sites to download them instead.
+- Carousels and scroll-linked effects are copied as they look at the top of the page.
+- Blocks that use CSS blend modes come in as pictures, not editable layers.
 - Pages Chrome protects can't be captured: `chrome://` pages, the Chrome Web Store, the built-in PDF viewer.
   Local `file://` pages need **Details → Allow access to file URLs** on the extension card.
 - **Figma:** the plugin that imports the JSON needs the Figma **desktop app (macOS/Windows)** to load as a development
