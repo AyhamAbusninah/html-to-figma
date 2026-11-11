@@ -1,20 +1,20 @@
 # HTML to Figma (H2F): install the Chrome extension (Fedora)
 
-Version 0.4.0 · internal Arkan Tech tool · not published to the Chrome Web Store.
+Version 0.5.0 · internal Arkan Tech tool · not published to the Chrome Web Store.
 
 ## Install (once)
 
 1. Get the extension folder, either way:
-   - **Folder:** `release/html-to-figma-extension-0.4.0/` from a local build, or
+   - **Folder:** `release/html-to-figma-extension-0.5.0/` from a local build, or
    - **ZIP:** unpack it to a folder you'll keep (Chrome loads the extension from that folder every time it starts):
      ```bash
-     mkdir -p ~/h2f && unzip -o html-to-figma-extension-0.4.0.zip -d ~/h2f/html-to-figma-extension-0.4.0
+     mkdir -p ~/h2f && unzip -o html-to-figma-extension-0.5.0.zip -d ~/h2f/html-to-figma-extension-0.5.0
      ```
 2. Open Google Chrome and go to **`chrome://extensions`**.
 3. Turn on **Developer mode** (top-right toggle).
 4. Click **Load unpacked** and select the folder that contains `manifest.json`
-   (e.g. `~/h2f/html-to-figma-extension-0.4.0`).
-5. "HTML to Figma (H2F) 0.4.0" appears in the list. Click the puzzle icon in the toolbar and **pin** it.
+   (e.g. `~/h2f/html-to-figma-extension-0.5.0`).
+5. "HTML to Figma (H2F) 0.5.0" appears in the list. Click the puzzle icon in the toolbar and **pin** it.
 
 Don't delete or move the folder afterwards, or Chrome will disable the extension. To update, replace the folder
 contents and click the ↻ reload button on the extension's card.
@@ -28,6 +28,8 @@ contents and click the ↻ reload button on the extension's card.
    then **Ctrl+V**. The page arrives as a frame with editable text and shapes; click a section to select it,
    double-click (or Ctrl+click) to reach items inside it, and press Delete to remove anything.
    No Figma plugin and no desktop app are needed. Boxes come in as shapes inside groups (not auto-layout frames).
+5. Optional: click **Copy styles** and paste next to the page. You get the page's colors and text styles as named
+   swatches and samples; select one and use **Create style** in Figma's right panel.
 
 ## Or save the JSON (for the Figma plugin)
 
@@ -46,6 +48,17 @@ contents and click the ↻ reload button on the extension's card.
 | *Optional:* read images on all sites | Asked only if you click **Allow images from other sites** after a capture. Lets the extension download images that other websites don't share with the page, at full quality. Without it, those images are cropped from screenshots. You can remove it any time on the extension's card (Details → Site access). |
 
 The extension sends nothing anywhere. The file stays on your machine.
+
+## Changes in 0.5.0
+
+- **Readable layer names** in Figma: "Header", "Nav · Main menu", "Button · Add to cart", "Heading 2 · New
+  arrivals", "Image · Leather tote", "Product card" instead of CSS class names.
+- **Copy styles:** a second button copies a board with the page's colors (named swatches, most used first) and its
+  type scale (a sample of the page's own text for each font, weight and size). Paste it next to the page, select a
+  swatch or sample, and create Figma styles from it.
+- **Form fields:** text inside inputs, selects and buttons sits where it does on the page (it was a few pixels high);
+  textarea text starts at the top and keeps its line breaks.
+- **"…" truncation:** text the page cuts with an ellipsis comes in as the visible part followed by "…", editable.
 
 ## Changes in 0.4.0
 
@@ -72,11 +85,13 @@ The extension sends nothing anywhere. The file stays on your machine.
 - Wrapped text that starts or ends next to a link, bold word or label tag no longer overlaps its neighbors in Figma:
   its lines are split into separate text layers where needed (plain paragraphs stay one layer). Arabic and Latin.
 
-## Limitations of 0.4.0
+## Limitations of 0.5.0
 
-- Not captured yet: the page's own (html/body) background image, repeating and conic gradients (first color),
-  "…" truncation, list bullets (`::marker`), rotation and skew (bounding box only), CSS masks and clip-path shapes
-  other than `inset()`. Every capture lists what was skipped.
+- Not captured yet: the page's own (html/body) background image, repeating and conic gradients (first color), list
+  bullets (`::marker`), multi-line clamps (`-webkit-line-clamp`), rotation and skew (bounding box only), CSS masks and
+  clip-path shapes other than `inset()`. Every capture lists what was skipped.
+- A wrapped paragraph arrives as a group of one-line text layers: Figma's SVG import can't create a multi-line text
+  layer.
 - Images taller than four windows or wider than the window can't be cropped from screenshots; allow images from other
   sites to download them instead.
 - Carousels and scroll-linked effects are copied as they look at the top of the page.

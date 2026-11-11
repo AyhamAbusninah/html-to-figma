@@ -66,3 +66,7 @@ past entries. Add new entries at the bottom, under a `## YYYY-MM-DD` heading for
 - **What changed:** Styles board (Phase 2): popup button "Copy styles" copies a separate SVG with the page's text, background and border colors (named swatches "Color · #1F2937", most used first, ≤ 16 each) and its type scale (font + style + size, line-height/tracking/case variants merged, largest first, a readable sample of the page's own text in that font, named "Text style · Tajawal Bold 28/36"). Built from the same render plan as Copy to Figma; samples left-aligned with the planner's direction mark.
 - **Hooks/Dependencies updated:** New export `@h2f/figma-plugin/styles`; popup element `#copyStyles` writes to the clipboard (second write after Copy to Figma in the e2e).
 
+- **Feature/File modified:** `packages/extension/{package.json,public/manifest.json,src/config/version.ts,INSTALL.md}`, `e2e/extension.spec.ts`
+- **What changed:** Extension 0.5.0 (Phase 2, easier editing): version bumped in the 5 places; INSTALL.md lists the 0.5.0 changes and updated limitations. Merged to main for the user's test; release to be published after it.
+- **Hooks/Dependencies updated:** None beyond the version constant.
+

@@ -20,8 +20,8 @@ import {
   type Variant,
 } from './helpers.ts';
 
-/** The reference build is the R0-recovered 0.1.0; the rebuilt extension is 0.4.0 (R2 capture, OQ-11 line split, Copy to Figma, images & icons). */
-const VERSION: Record<Variant, string> = { rebuilt: '0.4.0', reference: '0.1.0' };
+/** The reference build is the R0-recovered 0.1.0; the rebuilt extension is 0.5.0 (R2 capture, OQ-11 line split, Copy to Figma, images & icons, easier editing). */
+const VERSION: Record<Variant, string> = { rebuilt: '0.5.0', reference: '0.1.0' };
 
 let fixtures: FixtureServer;
 test.beforeAll(async () => {

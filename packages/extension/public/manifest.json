@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "HTML to Figma (H2F)",
   "short_name": "H2F",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Capture the current page as editable Figma layers. Everything stays on your machine.",
   "minimum_chrome_version": "120",
   "icons": {
