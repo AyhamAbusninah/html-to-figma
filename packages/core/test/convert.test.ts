@@ -271,7 +271,8 @@ describe('boxes, pruning, order (EXT-T-5/6/8, EXT-V-*)', () => {
     expect(out).toHaveLength(1);
     expect(out[0]).toMatchObject({
       type: 'FRAME',
-      name: 'section',
+      name: 'Section',
+      domPath: 'section',
       fills: [{ type: 'SOLID', color: { r: 1, g: 0, b: 0, a: 1 } }],
     });
   });
@@ -328,7 +329,7 @@ describe('boxes, pruning, order (EXT-T-5/6/8, EXT-V-*)', () => {
       box('e', {}),
       box('f', { position: 'absolute', 'z-index': '2' }),
     ]);
-    expect(kids(raw).map((n) => n.name)).toEqual(['c', 'b', 'e', 'd', 'f', 'a']);
+    expect(kids(raw).map((n) => n.domPath)).toEqual(['c', 'b', 'e', 'd', 'f', 'a']);
   });
 
   it('opacity 0 subtrees are skipped; visibility:hidden keeps visible descendants', () => {
@@ -340,7 +341,7 @@ describe('boxes, pruning, order (EXT-T-5/6/8, EXT-V-*)', () => {
         el('b', rect(0, 0, 5, 5), { 'background-color': 'rgb(2, 2, 2)' }),
       ]),
     ]);
-    expect(kids(raw).map((n) => n.name)).toEqual(['b']);
+    expect(kids(raw).map((n) => n.domPath)).toEqual(['b']);
   });
 });
 
@@ -431,7 +432,8 @@ describe('replaced content, controls, warnings', () => {
     expect(validateCapture(doc).ok).toBe(true);
     expect(doc.root.children[0]).toMatchObject({
       type: 'IMAGE',
-      name: 'icon · i.fa-check',
+      name: 'Icon · Fa check',
+      domPath: 'i.fa-check',
       assetId: 'img_icon',
       rect: { x: 10, y: 10, width: 16, height: 20 },
     });
@@ -493,7 +495,7 @@ describe('replaced content, controls, warnings', () => {
     expect(byCode.BACKGROUND_IMAGE_NOT_CAPTURED).toMatch(/\(1×\)$/);
     expect(byCode.PSEUDO_ELEMENT_NOT_CAPTURED).toMatch(/\(2×\)$/);
     expect(byCode.TEXT_ELLIPSIS_NOT_APPLIED).toMatch(/\(1×\)$/);
-    expect(doc.root.children.map((n) => n.name)).toEqual(['div', 'div ⚠ bg-image', 'div']);
+    expect(doc.root.children.map((n) => n.name)).toEqual(['Box', 'Box ⚠ bg-image', 'Box']);
     // Unsupported gradients fall back to their first color.
     expect((doc.root.children[0] as FrameNode).fills).toEqual([
       { type: 'SOLID', color: { r: 1, g: 0, b: 0, a: 1 } },
@@ -522,7 +524,7 @@ describe('replaced content, controls, warnings', () => {
     const f = doc.root.children[0] as FrameNode;
     expect(f.fills.map((p) => p.type)).toEqual(['SOLID', 'IMAGE', 'GRADIENT_LINEAR']);
     expect(f.fills[1]).toEqual({ type: 'IMAGE', assetId: 'img_hero', scaleMode: 'FILL' });
-    expect(f.name).toBe('section');
+    expect(f.domPath).toBe('section');
     expect(Object.keys(doc.assets.images)).toEqual(['img_hero']);
     expect(doc.meta.warnings).toEqual([]);
   });
@@ -597,12 +599,13 @@ describe('page effects: clip-path inset, blended elements, mirroring (EXT-V-10, 
     // Left/top/right: the content's own extent, image ∪ section (nothing cut); bottom: the section's edge.
     expect(clip).toMatchObject({
       type: 'FRAME',
-      name: 'clip · section',
+      name: 'Clip · Section',
+      domPath: 'section::clip',
       clipsContent: true,
       fills: [],
       rect: { x: -190, y: 520, width: 1470, height: 480 }, // image ∪ section
     });
-    expect(clip!.children.map((c) => c.name)).toEqual(['section']);
+    expect(clip!.children.map((c) => c.domPath)).toEqual(['section']);
     expect(doc.meta.warnings.map((w) => w.code)).not.toContain('CLIP_MASK_UNSUPPORTED');
   });
 
@@ -636,7 +639,7 @@ describe('page effects: clip-path inset, blended elements, mirroring (EXT-V-10, 
         }),
       ]),
     );
-    expect(doc.root.children.map((c) => c.name)).toEqual(['div', 'div']);
+    expect(doc.root.children.map((c) => c.domPath)).toEqual(['div', 'div']);
     expect(doc.meta.warnings.map((w) => w.code)).toContain('CLIP_MASK_UNSUPPORTED');
   });
 
@@ -658,7 +661,8 @@ describe('page effects: clip-path inset, blended elements, mirroring (EXT-V-10, 
     const nodes = all(doc.root);
     const shot = nodes.find((n) => n.type === 'IMAGE')!;
     expect(shot).toMatchObject({
-      name: 'div · blended',
+      name: 'Box · blended',
+      domPath: 'div',
       assetId: 'img_shot',
       scaleMode: 'STRETCH',
     });

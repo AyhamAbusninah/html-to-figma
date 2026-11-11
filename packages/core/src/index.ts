@@ -1,4 +1,5 @@
 export type {
+  RawAttrs,
   RawControl,
   RawElement,
   RawImageAsset,
@@ -12,6 +13,7 @@ export type {
   ReplacedKind,
 } from './raw-snapshot.ts';
 export { RAW_STYLE_KEYS } from './raw-snapshot.ts';
+export { semanticName, humanize, readableClass } from './naming.ts';
 export { CaptureTooLargeError, MAX_NODES } from './convert.ts';
 export {
   normalizeWhitespace,

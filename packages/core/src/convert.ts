@@ -29,6 +29,7 @@ import {
 } from './css.ts';
 import { isTransparent, parseCssColor } from './color.ts';
 import { gradientTextColor, parseBackgroundLayers } from './gradient.ts';
+import { iconName, semanticName } from './naming.ts';
 import type { RawElement, RawImageAsset, RawRect, RawText, RawTextLine } from './raw-snapshot.ts';
 import {
   countLines,
@@ -191,6 +192,7 @@ function unionRect(rects: readonly RawRect[]): RawRect {
   return { x: x1, y: y1, width: x2 - x1, height: y2 - y1 };
 }
 
+/** CSS-style name ("div#main.card"), kept in `domPath`; the layer name itself is semanticName (naming.ts). */
 export function layerName(el: RawElement): string {
   const name =
     el.tag +
@@ -269,7 +271,8 @@ function convertText(raw: RawText, parent: RawElement, ctx: Ctx, path: number[])
     ctx.usedAssets.add(raw.iconAssetId);
     const node: ImageNode = {
       id,
-      name: `icon · ${layerName(parent)}`,
+      name: iconName(parent, raw.text),
+      domPath: layerName(parent),
       type: 'IMAGE',
       rect: toDoc(ctx, unionRect(raw.rects)),
       opacity: 1,
@@ -429,7 +432,8 @@ function applyClipPath(el: RawElement, out: Emitted[], ctx: Ctx, key: OrderKey):
   const radius = round2(inset.radius);
   const frame: FrameNode = {
     id: newId(ctx),
-    name: `clip · ${layerName(el)}`,
+    name: `Clip · ${semanticName(el)}`,
+    domPath: `${layerName(el)}::clip`,
     type: 'FRAME',
     rect: {
       x: round2(x1),
@@ -492,7 +496,8 @@ function convertBox(el: RawElement, ctx: Ctx, path: number[], key: OrderKey): Em
     warn(ctx, 'BLEND_MODE_RASTERIZED', id, '');
     const node: ImageNode = {
       id,
-      name: `${layerName(el)} · blended`,
+      name: `${semanticName(el)} · blended`,
+      domPath: layerName(el),
       type: 'IMAGE',
       rect,
       opacity: 1, // the screenshot already shows the element's opacity
@@ -513,7 +518,8 @@ function convertBox(el: RawElement, ctx: Ctx, path: number[], key: OrderKey): Em
       ctx.svgCount++;
       const node: SvgNode = {
         id,
-        name: layerName(el),
+        name: semanticName(el),
+        domPath: layerName(el),
         type: 'SVG',
         rect,
         opacity: op,
@@ -535,7 +541,8 @@ function convertBox(el: RawElement, ctx: Ctx, path: number[], key: OrderKey): Em
       ctx.usedAssets.add(el.assetId);
       const node: ImageNode = {
         id,
-        name: layerName(el),
+        name: semanticName(el),
+        domPath: layerName(el),
         type: 'IMAGE',
         rect,
         opacity: op,
@@ -565,7 +572,8 @@ function convertBox(el: RawElement, ctx: Ctx, path: number[], key: OrderKey): Em
     else ctx.imageCount++;
     const node: ImageNode = {
       id,
-      name: `⚠ ${layerName(el)}`,
+      name: `⚠ ${semanticName(el)}`,
+      domPath: layerName(el),
       type: 'IMAGE',
       rect,
       opacity: Math.round(opacity * 1000) / 1000,
@@ -666,7 +674,8 @@ function convertBox(el: RawElement, ctx: Ctx, path: number[], key: OrderKey): Em
   const suffix = hasBgUrl ? ' ⚠ bg-image' : hasGradient ? ' ⚠ gradient' : '';
   const frame: FrameNode = {
     id,
-    name: `${layerName(el)}${suffix}`,
+    name: `${semanticName(el)}${suffix}`,
+    domPath: layerName(el),
     type: 'FRAME',
     rect,
     opacity: Math.round(opacity * 1000) / 1000,

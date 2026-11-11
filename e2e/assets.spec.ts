@@ -167,7 +167,7 @@ test('icon fonts: Font Awesome, Material ligatures and PUA glyphs become images;
   page,
 }) => {
   const { nodes, document } = await capture(page, 'icon-fonts.html');
-  const icons = nodes.filter((n) => n.type === 'IMAGE' && n.name.startsWith('icon ·'));
+  const icons = nodes.filter((n) => n.type === 'IMAGE' && n.name.startsWith('Icon'));
   expect(icons.length).toBeGreaterThanOrEqual(15);
   for (const n of icons)
     expect(n.type === 'IMAGE' && n.assetId && document.assets.images[n.assetId]!.mime).toBe(
@@ -209,7 +209,8 @@ test('captured as scrolled to the top: fixed header at y = 0, mirrored pixels an
     if (n.type === 'FRAME') n.children.forEach(walk);
   };
   walk(r.document.root);
-  const byName = (re: RegExp) => nodes.find((n) => re.test(n.name));
+  // CSS-style names live in domPath (layer names are readable names, core/naming.ts).
+  const byName = (re: RegExp) => nodes.find((n) => re.test(n.domPath ?? n.name));
 
   // 1. Fixed header where it is at the top of the page; the scroll-only bar is off screen (as at the top).
   expect(byName(/header#top-header/)!.rect.y).toBe(0);
@@ -236,8 +237,8 @@ test('captured as scrolled to the top: fixed header at y = 0, mirrored pixels an
     '<g transform="matrix(-1 0 0 1 24 0)">',
   );
   // 3c. clip-path: inset(-9999px -9999px 0): a clipping frame ending at the section's bottom edge.
-  const clip = byName(/^clip · section#clip-section/) as FrameNode;
-  const section = byName(/^section#clip-section/)!;
+  const clip = byName(/^section#clip-section::clip$/) as FrameNode;
+  const section = byName(/^section#clip-section$/)!;
   const clipImg = byName(/img#clip-img/)!;
   expect(clip.clipsContent).toBe(true);
   expect(clip.rect.y).toBe(clipImg.rect.y); // nothing cut at the top

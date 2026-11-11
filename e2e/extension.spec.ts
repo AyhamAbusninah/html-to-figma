@@ -411,12 +411,12 @@ test.describe('Tier 3 screenshot crops (test build with all-sites access granted
     };
     walk(doc.root);
     const source = (name: RegExp) => {
-      const n = flat.find((x) => x.type === 'IMAGE' && name.test(x.name)) as
+      const n = flat.find((x) => x.type === 'IMAGE' && name.test(x.domPath ?? x.name)) as
         { assetId: string | null } | undefined;
       return n?.assetId ? doc.assets.images[n.assetId]!.source : null;
     };
     expect(source(/canvas#tainted/)).toBe('screenshot');
-    const crop = flat.find((x) => x.type === 'IMAGE' && /canvas#tainted/.test(x.name)) as {
+    const crop = flat.find((x) => x.type === 'IMAGE' && /canvas#tainted/.test(x.domPath ?? '')) as {
       assetId: string;
     };
     writeFileSync(
@@ -473,8 +473,9 @@ test.describe('Tier 3 screenshot crops (test build with all-sites access granted
     };
     walk(doc.root);
     const image = (re: RegExp) => {
-      const n = flat.find((x) => x.type === 'IMAGE' && re.test(x.name)) as
-        { assetId: string | null; rect: { width: number; height: number } } | undefined;
+      const n = flat.find(
+        (x) => x.type === 'IMAGE' && (re.test(x.name) || re.test(x.domPath ?? '')),
+      ) as { assetId: string | null; rect: { width: number; height: number } } | undefined;
       return n?.assetId ? { node: n, asset: doc.assets.images[n.assetId]! } : null;
     };
     /** RGB at fractional positions of an encoded asset, read in the browser. */
@@ -500,7 +501,7 @@ test.describe('Tier 3 screenshot crops (test build with all-sites access granted
       rgb.every((v, k) => Math.abs(v - want[k]!) <= 24);
 
     // Header at the top of the capture although the user had scrolled to 1500.
-    expect(flat.find((n) => /header#top-header/.test(n.name))!.rect.y).toBe(0);
+    expect(flat.find((n) => /header#top-header/.test(n.domPath ?? ''))!.rect.y).toBe(0);
 
     // 1200 px canvas (taller than the 800 px window): stitched from two screenshots, nothing covering it.
     const tall = image(/canvas#tall/);

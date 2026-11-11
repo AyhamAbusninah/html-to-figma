@@ -69,3 +69,22 @@ Test board `media.html` (`media.mjs` → `out/media.json`), checked by the user 
 
 Consequence: images, inline SVG, gradients and background images can all ship through Copy to Figma; ~26 MB pastes
 work, so the existing 4096 px / JPEG limits are enough.
+
+## Phase 2 findings: paragraphs and layer names (2026-11-11)
+
+Board `media.html?board=editing` (`editing.mjs` → `out/editing.json`). Round 1 imported with Figma's own SVG importer
+(`figma.createNodeFromSvg` through the official Figma MCP), every layer read back:
+
+| Case | SVG technique | Figma result |
+|---|---|---|
+| P0 | one `<tspan x y>` per line (today) | a GROUP of one-line TEXT layers (line height AUTO) |
+| P1 | one tspan, lines joined with line feeds (`&#10;`) | ❌ one TEXT, line feeds became spaces: one long line |
+| P2 | P1 + `style="white-space: pre; line-height"` | ❌ same as P1; line height stays AUTO |
+| P3 | tspans positioned with `dy` only | ❌ a GROUP, like P0 |
+| P4 | SVG 2 `inline-size` auto-wrap | ❌ ignored: one long line |
+| P5 | HTML in `<foreignObject>` | ❌ dropped entirely |
+| N | `<g id>`/`<text id>` with spaces, "·" and Arabic ("Card · New arrivals", "زر · أضف إلى السلة") | ✅ kept exactly as layer names |
+
+Round 2 (Q1–Q5: U+2028/U+2029 separators inside one tspan, with line-height hints) needs a user paste: the MCP
+Starter quota ran out after round 1.
+

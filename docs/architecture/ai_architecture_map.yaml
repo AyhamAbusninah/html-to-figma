@@ -2,7 +2,7 @@
 # Maintained by the AI workflow (docs/AI_WORKFLOW.md). Every path:line was verified at `commit`.
 schema_version: 1
 generated: "2026-11-11"
-commit: images-icons part 5 (feat/images-icons)
+commit: easier-editing (feat/easier-editing)
 
 project:
   name: "HTML to Figma (H2F)"
@@ -67,12 +67,13 @@ domains:
   - id: engine
     trace_depth: deep
     entry_points: ["buildCaptureDocument packages/core/src/document.ts:44", "convertTree packages/core/src/convert.ts:453"]
-    core_logic_files: ["packages/core/src/convert.ts", "packages/core/src/document.ts", "packages/core/src/text.ts", "packages/core/src/css.ts", "packages/core/src/color.ts"]
+    core_logic_files: ["packages/core/src/convert.ts", "packages/core/src/document.ts", "packages/core/src/text.ts", "packages/core/src/css.ts", "packages/core/src/color.ts", "packages/core/src/naming.ts"]
     hidden_hooks_or_events:
       - "Pruned hierarchy: elements without paint/clip/stacking become no FRAME; children hoisted with their order keys (convert.ts:427-430)"
       - "Paint order: OrderKey layer/z/path sort (convert.ts:173); text fragments use path [...path, i]"
       - "RTL document x normalization from scrollX ≤ 0 (document.ts:50)"
       - "OQ-11 line split: groupLines (text.ts:125) used by convertText (convert.ts:230)"
+      - "Layer names: semanticName / iconName (naming.ts) from RawElement.attrs + text; CSS-style layerName goes to node.domPath (tests match domPath, not name)"
     critical_invariants:
       - "Fail-closed size limit: countNode throws CaptureTooLargeError above MAX_NODES = 10,000 (convert.ts:142)."
       - "Pure and deterministic: no DOM, no Date/random; capturedAt injected (document.ts:33)."

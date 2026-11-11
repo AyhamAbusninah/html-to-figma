@@ -86,7 +86,7 @@ interface ImageAsset {
 
 interface BaseNode {
   id: string;                     // unique within document, e.g. "n482"
-  name: string;                   // layer name, e.g. "div#main.content" (≤ 64 chars)
+  name: string;                   // readable layer name, e.g. "Button · Add to cart" (≤ 64 chars); CSS-style name in domPath
   domPath?: string;               // CSS-ish path, for debugging/report
   rect: Rect;
   opacity: number;                // 0–1, element's own opacity (not cumulative)
@@ -367,7 +367,7 @@ This lists generic web patterns, the generic requirement that handles each, and 
 | PLG-R-8 | **SVG:** `figma.createNodeFromSvg(svg)` and position/resize to the rect. On exception, use the raster fallback as an image rectangle and log `SVG_PARSE_FAILED`. |
 | PLG-R-9 | **Text:** `TextNode` with `characters`, `fontName` (§4.4), `fontSize`, `lineHeight` (`"normal"` → `{unit:"AUTO"}`, else `{unit:"PIXELS"}`), `letterSpacing` (px), `fills` (color), `textAlignHorizontal`, `textDecoration`, and `textCase`. Sizing: `lineCount == 1` → `textAutoResize = "WIDTH_AND_HEIGHT"` (prevents spurious wrapping from wider fallback fonts); `lineCount > 1` → fixed width = rect width, `textAutoResize = "HEIGHT"`. |
 | PLG-R-9a | **Edge anchoring:** for auto-width (single-line) text, after the width is known the node MUST be anchored by its aligned edge, so substituted fonts drift away from that edge rather than off it: `textAlign = right` → `x = rect.x + rect.width − node.width` · `center` → `x = rect.x + (rect.width − node.width) / 2` · `left` → `x = rect.x`. This is required for RTL, where most text is right-aligned. |
-| PLG-R-10 | **Layer names** come from `node.name`. TextNodes are named from their first 40 chars of content. |
+| PLG-R-10 | **Layer names** come from `node.name`. TextNodes are named from their first 40 chars of content. *0.5.0:* element layers get readable names from HTML semantics only (tag, ARIA role/label, alt/title, input type, visible text, readable class/id; generated and utility classes skipped): "Header", "Nav · Main menu", "Button · Add to cart", "Heading 2 · New arrivals", "Image · Leather tote", "Input · Email", "Product card", "Box". The CSS-style name ("div#main.card") moves to `domPath` (core/naming.ts). |
 | PLG-R-11 | **Resilience:** an exception while creating any single node MUST be caught. The node is skipped (its children are attempted under the nearest ancestor), recorded in the report, and rendering continues. |
 | PLG-R-12 | The render MUST be a single undo step (no `figma.commitUndo()` calls mid-render). After rendering, the root frame is selected and `figma.viewport.scrollAndZoomIntoView([root])` is called. |
 | PLG-R-13 | **Progress:** the main thread MUST post progress to the UI at least every 200 nodes and yield (`await` a resolved promise / short timer) between batches so Figma stays responsive. |

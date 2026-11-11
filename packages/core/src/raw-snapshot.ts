@@ -98,6 +98,11 @@ export interface RawElement {
   style: RawStyle;
   children: RawNode[];
   replaced?: { kind: ReplacedKind };
+  /**
+   * The few attributes readable layer names need (core/naming.ts), only when present: ARIA role and label, alt and
+   * title, <input>/<button> type, and the current src of an <img>.
+   */
+  attrs?: RawAttrs;
   control?: RawControl;
   /** Visible ::before / ::after with content (not captured yet, reported explicitly). */
   pseudo?: { before: boolean; after: boolean };
@@ -118,6 +123,15 @@ export interface RawElement {
    * box, so `assetId` is a picture of the element as composited on the page, children included (EXT-V-10).
    */
   raster?: boolean;
+}
+
+export interface RawAttrs {
+  role?: string;
+  ariaLabel?: string;
+  alt?: string;
+  title?: string;
+  type?: string;
+  src?: string;
 }
 
 /** Encoded image from the collector (CaptureDocument ImageAsset shape). */

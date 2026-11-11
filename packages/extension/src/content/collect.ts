@@ -3,6 +3,7 @@ import {
   flipOf,
   lineTops,
   RAW_STYLE_KEYS,
+  type RawAttrs,
   type RawControl,
   type RawElement,
   type RawNode,
@@ -91,6 +92,28 @@ function pickStyle(cs: CSSStyleDeclaration): RawStyle {
   const out = {} as RawStyle;
   for (const key of RAW_STYLE_KEYS) out[key] = cs.getPropertyValue(key);
   return out;
+}
+
+const NAME_ATTRS: [keyof RawAttrs, string][] = [
+  ['role', 'role'],
+  ['ariaLabel', 'aria-label'],
+  ['alt', 'alt'],
+  ['title', 'title'],
+  ['type', 'type'],
+];
+
+/** Attributes for readable layer names (core/naming.ts); undefined when none is present. */
+function readAttrs(el: Element, tag: string): RawAttrs | undefined {
+  const out: RawAttrs = {};
+  for (const [key, attr] of NAME_ATTRS) {
+    const v = el.getAttribute(attr)?.trim();
+    if (v) out[key] = v.slice(0, 120);
+  }
+  if (tag === 'img') {
+    const src = (el as HTMLImageElement).currentSrc || (el as HTMLImageElement).src;
+    if (src && !src.startsWith('data:')) out.src = src.slice(0, 500);
+  }
+  return Object.keys(out).length ? out : undefined;
 }
 
 function hasVisiblePseudo(el: Element, which: '::before' | '::after'): boolean {
@@ -316,6 +339,8 @@ function collectElement(el: Element, inherited: Inherited): RawElement | null {
     style: pickStyle(cs),
     children: [],
   };
+  const attrs = pseudoOf ? undefined : readAttrs(el, tag);
+  if (attrs) raw.attrs = attrs;
   const flip = combineFlip(inherited.flip, flipOf(cs.transform));
   if (cs.position === 'fixed' || cs.position === 'sticky') pinned.push(el);
   // mix-blend-mode mixes the element with what is behind it: only a screenshot shows that (EXT-V-10). Children are

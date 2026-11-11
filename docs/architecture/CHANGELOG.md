@@ -49,3 +49,8 @@ past entries. Add new entries at the bottom, under a `## YYYY-MM-DD` heading for
 - **Feature/File modified:** `packages/extension/{package.json,public/manifest.json,src/config/version.ts,INSTALL.md}`, `e2e/extension.spec.ts`
 - **What changed:** Extension 0.4.0 (Phase 1, images & icons) for release: version bumped in the 5 places; INSTALL.md gains the 0.4.0 changes and updated limitations.
 - **Hooks/Dependencies updated:** None beyond the version constant (popup, service worker log, BUILD-INFO.json, release ZIP name).
+
+- **Feature/File modified:** `packages/core/src/naming.ts` (new), `packages/core/src/{convert,raw-snapshot,index}.ts`, `packages/extension/src/content/collect.ts`, `packages/core/test/naming.test.ts` (new), `e2e/{assets,extension}.spec.ts`, `spikes/figma-svg/{editing.mjs (new),media.html,README.md}`, `REQUIREMENTS.md` PLG-R-10
+- **What changed:** Phase 2 start (branch feat/easier-editing): readable layer names from HTML semantics only (tag, ARIA role/label, alt/title, input type, visible text, readable class/id; hashed and utility classes skipped), e.g. "Button · Add to cart", "Nav · Main menu", "Image · Leather tote", "Product card". The CSS-style name moves to `domPath` (already optional in schema v1). Paragraph spike board: line feeds, dy, inline-size and foreignObject all fail in Figma's SVG import; separator test pending a paste.
+- **Hooks/Dependencies updated:** RawElement.attrs (role, aria-label, alt, title, type, img src) read by the collector; every element-derived node now sets domPath; tests that matched CSS names now match domPath. Schema unchanged.
+
