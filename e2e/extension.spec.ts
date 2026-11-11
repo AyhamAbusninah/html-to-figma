@@ -240,6 +240,24 @@ for (const variant of Object.keys(VARIANTS) as Variant[]) {
           });
           expect(svg.texts).toBeGreaterThan(5);
           if (fixture === 'rtl-arabic.html') expect(svg.arabicRight).toBeGreaterThan(20);
+
+          // Styles board (Phase 2): a second, separate SVG with named color swatches and text-style samples.
+          await popup.locator('#copyStyles').click();
+          await expect(popup.locator('#figmaNote')).toContainText('Copied the styles board');
+          const board = await popup.evaluate(() => {
+            const copied = (window as unknown as { __copied: string[] }).__copied;
+            const xml = new DOMParser().parseFromString(copied[1] ?? '', 'image/svg+xml');
+            const ids = [...xml.querySelectorAll('[id]')].map((e) => e.getAttribute('id') ?? '');
+            return {
+              copies: copied.length,
+              wellFormed: !xml.querySelector('parsererror'),
+              colors: ids.filter((i) => i.startsWith('Color · #')).length,
+              textStyles: ids.filter((i) => i.startsWith('Text style · ')).length,
+            };
+          });
+          expect(board).toMatchObject({ copies: 2, wellFormed: true });
+          expect(board.colors).toBeGreaterThan(2);
+          expect(board.textStyles).toBeGreaterThan(1);
         }
 
         // Download through chrome.downloads. Playwright's download interception (acceptDownloads) ignores the

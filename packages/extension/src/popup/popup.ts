@@ -1,7 +1,7 @@
 /** Popup: Idle → Busy → Done | Error (EXT-O-1). Pure logic lives in ../shared/popup-model.ts. */
 import type { CaptureDocument } from '@h2f/schema';
 import { CAPTURE_GLOBAL, LIMITS } from '../config/constants.ts';
-import { figmaCopyNote, figmaSvg } from '../shared/figma-copy.ts';
+import { figmaCopyNote, figmaStylesSvg, figmaSvg } from '../shared/figma-copy.ts';
 import type { CaptureResult } from '../shared/messages.ts';
 import {
   captureFilename,
@@ -186,8 +186,25 @@ async function copyToFigma() {
   }
 }
 
+/** Styles board: the page's colors and text styles as an SVG to paste next to the page. */
+async function copyStyles() {
+  if (!captured) return;
+  const note = $('figmaNote');
+  try {
+    const { svg, stats } = figmaStylesSvg(captured);
+    await Promise.race([
+      navigator.clipboard.writeText(svg),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timed out')), 4000)),
+    ]);
+    note.textContent = `Copied the styles board (${stats.colors} colors, ${stats.textStyles} text styles). In Figma: click next to the page, press Esc, then Ctrl+V.`;
+  } catch (e) {
+    note.textContent = `Copy failed: ${e instanceof Error ? e.message : String(e)}. Try again.`;
+  }
+}
+
 $('capture').addEventListener('click', () => void capture());
 $('copyFigma').addEventListener('click', () => void copyToFigma());
+$('copyStyles').addEventListener('click', () => void copyStyles());
 $('allowImages').addEventListener('click', () => void allowImages());
 $('retry').addEventListener('click', () => show('idle'));
 $('download').addEventListener('click', () => void download());

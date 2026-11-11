@@ -18,7 +18,8 @@
     "./plan": "./src/plan/plan.ts",
     "./fonts": "./src/plan/fonts.ts",
     "./known-figma-fonts": "./src/config/known-figma-fonts.ts",
-    "./svg": "./src/svg/svg.ts"
+    "./svg": "./src/svg/svg.ts",
+    "./styles": "./src/svg/styles.ts"
   },
   "sideEffects": false
 }

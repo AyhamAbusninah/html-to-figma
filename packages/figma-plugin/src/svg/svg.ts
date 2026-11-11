@@ -87,7 +87,6 @@ export function styleToCss(style: string): { weight: number; italic: boolean } {
   return { weight: hit ? hit[1] : 400, italic: /italic|oblique/.test(s) };
 }
 
-/** "<PostScript-style name>, <family>": Figma resolves the exact style from the first, browsers use the second. */
 /**
  * CSS `text-transform: capitalize`: the first letter of each word upper-cased, the rest left as written. A word starts
  * after a space or punctuation, not after an apostrophe ("don't" → "Don't"). Scripts without case are unchanged.
@@ -99,6 +98,7 @@ export function titleCase(text: string): string {
   );
 }
 
+/** "<PostScript-style name>, <family>": Figma resolves the exact style from the first, browsers use the second. */
 export function fontFamilyList(font: { family: string; style: string }): string {
   return `${font.family.replace(/\s+/g, '')}-${font.style.replace(/\s+/g, '')}, ${font.family}`;
 }

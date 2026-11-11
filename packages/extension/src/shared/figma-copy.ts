@@ -6,10 +6,16 @@ import type { CaptureDocument } from '@h2f/schema';
 import { buildPlan } from '@h2f/figma-plugin/plan';
 import { KNOWN_FIGMA_FONTS } from '@h2f/figma-plugin/known-figma-fonts';
 import { planToSvg, type SvgResult } from '@h2f/figma-plugin/svg';
+import { stylesBoardSvg, type StylesBoardResult } from '@h2f/figma-plugin/styles';
 
 export function figmaSvg(doc: CaptureDocument, textLines: Record<string, string[]>): SvgResult {
   const plan = buildPlan(doc, KNOWN_FIGMA_FONTS);
   return planToSvg(plan, { lines: (id) => textLines[id] });
+}
+
+/** The page's colors and text styles as a board to paste next to the page (Phase 2). */
+export function figmaStylesSvg(doc: CaptureDocument): StylesBoardResult {
+  return stylesBoardSvg(buildPlan(doc, KNOWN_FIGMA_FONTS), doc.meta.title || doc.meta.sourceUrl);
 }
 
 /** Message after a successful copy: how to paste, plus what the SVG route can't carry. */
