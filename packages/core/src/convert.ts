@@ -288,6 +288,20 @@ function convertText(raw: RawText, parent: RawElement, ctx: Ctx, path: number[])
       ? `rgba(${Math.round(clip.r * 255)}, ${Math.round(clip.g * 255)}, ${Math.round(clip.b * 255)}, ${clip.a})`
       : undefined;
   const whiteSpace = parent.style['white-space'];
+  if (raw.ellipsis) {
+    // text-overflow: ellipsis (EXT-X-8): the visible part + "…", as editable text in the visible box.
+    const visible = normalizeWhitespace(raw.text.slice(0, raw.ellipsis.end), whiteSpace).trimEnd();
+    if (!visible || raw.ellipsis.rect.width <= 0) return [];
+    const node = textNode(
+      ctx,
+      `${visible}…`,
+      toDoc(ctx, raw.ellipsis.rect),
+      1,
+      parent.style,
+      override,
+    );
+    return [{ node, key: { layer: 1, z: 0, path } }];
+  }
   const characters = normalizeWhitespace(raw.text, whiteSpace);
   if (!characters) return [];
   const lines = usableLines(raw);
@@ -360,13 +374,20 @@ function controlText(el: RawElement, ctx: Ctx): TextNode | null {
       px(s['padding-bottom']),
   };
   const fontSize = px(s['font-size'], 16);
-  const lh = s['line-height'] === 'normal' ? fontSize * 1.2 : px(s['line-height'], fontSize * 1.2);
+  // Content area (ascent + descent) of the font: what a text node's rect covers, and what Figma's text box is
+  // aligned to. Measured by the collector; ~1.2 × font size when unknown.
+  const content = c.contentHeight ?? fontSize * 1.2;
+  const lh = s['line-height'] === 'normal' ? content : px(s['line-height'], content);
   const lines =
     c.kind === 'textarea'
       ? Math.max(1, Math.min(text.split('\n').length, Math.floor(cb.height / lh) || 1))
       : 1;
-  const height = lines === 1 ? lh : Math.min(cb.height, lines * lh);
-  const y = lines === 1 ? cb.y + (cb.height - lh) / 2 : cb.y;
+  // Single-line controls: Chrome centers the content area in the content box, whatever the line height (measured
+  // pixel-exact for Inter and Tajawal, line heights from normal to taller than the box). Textareas: lines from the
+  // top, each content area centered in its line box.
+  const singleLine = c.kind !== 'textarea';
+  const height = singleLine ? content : Math.min(cb.height, (lines - 1) * lh + content);
+  const y = singleLine ? cb.y + (cb.height - content) / 2 : cb.y + (lh - content) / 2;
   const characters = c.kind === 'textarea' ? text : text.replace(/\s+/g, ' ');
   return textNode(
     ctx,
@@ -448,6 +469,11 @@ function applyClipPath(el: RawElement, out: Emitted[], ctx: Ctx, key: OrderKey):
     children: sorted(out),
   };
   return [{ node: frame, key }];
+}
+
+/** Some text in the subtree was cut with "…" by the collector (EXT-X-8). */
+function hasEllipsisText(el: RawElement): boolean {
+  return el.children.some((c) => (c.kind === 'text' ? Boolean(c.ellipsis) : hasEllipsisText(c)));
 }
 
 /** Visible text (not an icon glyph) anywhere in the subtree. */
@@ -634,7 +660,7 @@ function convertBox(el: RawElement, ctx: Ctx, path: number[], key: OrderKey): Em
   if (unsupported) warn(ctx, 'BLEND_MODE_UNSUPPORTED', id, '', unsupported);
   if (el.pseudo?.before) warn(ctx, 'PSEUDO_ELEMENT_NOT_CAPTURED', id, '');
   if (el.pseudo?.after) warn(ctx, 'PSEUDO_ELEMENT_NOT_CAPTURED', id, '');
-  if (el.ellipsisTruncated) warn(ctx, 'TEXT_ELLIPSIS_NOT_APPLIED', id, '');
+  if (el.ellipsisTruncated && !hasEllipsisText(el)) warn(ctx, 'TEXT_ELLIPSIS_NOT_APPLIED', id, '');
   if (el.control?.kind === 'other') {
     warn(
       ctx,

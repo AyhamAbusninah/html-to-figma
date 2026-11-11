@@ -85,6 +85,11 @@ export interface RawControl {
   isPlaceholder: boolean;
   /** Computed ::placeholder color when the placeholder is shown. */
   placeholderColor: string;
+  /**
+   * Height of the font's content area (ascent + descent, px) for the control's font, measured with canvas
+   * TextMetrics. Chrome centers this box (not the line height) in a single-line control (EXT-X-6).
+   */
+  contentHeight?: number;
 }
 
 export interface RawElement {
@@ -159,6 +164,11 @@ export interface RawText {
   lines?: RawTextLine[];
   /** Icon-font glyph drawn by the collector (EXT-X-9): emitted as an IMAGE instead of a TEXT. */
   iconAssetId?: string;
+  /**
+   * text-overflow: ellipsis cut this text (EXT-X-8): the browser shows `text.slice(0, end)` followed by "…" in
+   * `rect` (viewport coordinates, "…" included). `end` ≤ the first visible character: nothing of it is shown.
+   */
+  ellipsis?: { end: number; rect: RawRect };
 }
 
 export interface RawTextLine {

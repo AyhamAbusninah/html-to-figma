@@ -92,7 +92,22 @@ function domTextSamples(page: Page) {
     const se = document.scrollingElement!;
     const ox = scrollX + (rtl ? Math.max(0, se.scrollWidth - se.clientWidth) : 0);
     type R = { x: number; y: number; width: number; height: number };
-    const out: { text: string; rect: R; lines: R[] }[] = [];
+    /** text-overflow: ellipsis cuts this line at `edge` (page x; the content-box end), EXT-X-8. */
+    type Cut = { edge: number; rtl: boolean; em: number };
+    const out: { text: string; rect: R; lines: R[]; cut?: Cut }[] = [];
+    const cutOf = (p: Element): Cut | undefined => {
+      let b: Element | null = p;
+      while (b && getComputedStyle(b).display.startsWith('inline')) b = b.parentElement;
+      if (!b) return undefined;
+      const bs = getComputedStyle(b);
+      if (bs.textOverflow !== 'ellipsis' || b.scrollWidth <= b.clientWidth) return undefined;
+      const br = b.getBoundingClientRect();
+      const rtl = bs.direction === 'rtl';
+      const edge = rtl
+        ? br.left + parseFloat(bs.borderLeftWidth) + parseFloat(bs.paddingLeft)
+        : br.right - parseFloat(bs.borderRightWidth) - parseFloat(bs.paddingRight);
+      return { edge: edge + ox, rtl, em: parseFloat(bs.fontSize) };
+    };
     const tw = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     while (tw.nextNode()) {
       const n = tw.currentNode as Text;
@@ -157,10 +172,12 @@ function domTextSamples(page: Page) {
           bb = Math.max(...b.map((x) => x.bottom));
         return { x: l + ox, y: t + scrollY, width: rr - l, height: bb - t };
       });
+      const cut = cutOf(p);
       out.push({
         text,
         rect: { x: x1 + ox, y: y1 + scrollY, width: x2 - x1, height: y2 - y1 },
         lines,
+        ...(cut ? { cut } : {}),
       });
     }
     return out;
@@ -301,10 +318,31 @@ async function runSlice(browser: Browser, name: string, url: string) {
       }
       return line === s.lines.length && chars.replace(/ /g, '') === s.text.replace(/ /g, '');
     };
+    // A line cut with "…" (EXT-X-8): a prefix of the DOM text + "…", starting where the text starts and ending
+    // within one font size of the truncating box's edge (never past it). Text wholly past the edge is not shown.
+    const cutMatch = (s: (typeof samples)[number], t: (typeof texts)[number]) => {
+      const c = s.cut!;
+      if (!t.characters.endsWith('…') || t.characters.length < 2) return false;
+      if (!s.text.startsWith(t.characters.slice(0, -1).trimEnd())) return false;
+      if (Math.abs(t.rect.y - s.rect.y) > 0.5 || Math.abs(t.rect.height - s.rect.height) > 0.5)
+        return false;
+      const start = c.rtl ? s.rect.x + s.rect.width : s.rect.x;
+      const tStart = c.rtl ? t.rect.x + t.rect.width : t.rect.x;
+      const tEnd = c.rtl ? t.rect.x : t.rect.x + t.rect.width;
+      const inside = c.rtl ? tEnd >= c.edge - 0.5 : tEnd <= c.edge + 0.5;
+      return Math.abs(tStart - start) <= 0.5 && inside && Math.abs(tEnd - c.edge) <= c.em;
+    };
+    const pastEdge = (s: (typeof samples)[number]) =>
+      s.cut && (s.cut.rtl ? s.rect.x + s.rect.width <= s.cut.edge : s.rect.x >= s.cut.edge);
     const missing = samples.filter(
       (s) =>
+        !pastEdge(s) &&
         !texts.some((t, i) =>
-          t.characters === s.text ? near(t.rect, s.rect) : s.lines.length > 1 && splitMatch(s, i),
+          t.characters === s.text
+            ? near(t.rect, s.rect)
+            : s.cut
+              ? cutMatch(s, t)
+              : s.lines.length > 1 && splitMatch(s, i),
         ),
     );
     expect(samples.length).toBeGreaterThan(5);

@@ -70,12 +70,27 @@ let jobs: AssetJob[] = [];
 /** position: fixed / sticky elements (headers, chat buttons…), hidden while Tier 3 screenshots are taken. */
 let pinned: Element[] = [];
 
+/**
+ * A line truncated with text-overflow: ellipsis (EXT-X-8): text ending past `limit` is cut so that its last visible
+ * character ends at `limit` ("…" goes after it). `done` once the cut happened: later text on that line is hidden.
+ */
+interface EllipsisCut {
+  rtl: boolean;
+  /** LTR: right edge the visible text must end before; RTL: left edge it must start after (viewport px). */
+  limit: number;
+  /** Width of "…" in the element's font. */
+  width: number;
+  done: boolean;
+}
+
 /** What an element passes down to its subtree during the walk. */
 interface Inherited {
   /** Mirroring by this element's and its ancestors' transforms (scaleX(-1)…): applied to drawn pixels. */
   flip: Flip | null;
   /** Inside an element that is captured as a screenshot (mix-blend-mode): no further raster jobs. */
   inRaster: boolean;
+  /** The single line being truncated with "…", for text in the element and its inline descendants. */
+  ellipsis?: EllipsisCut;
 }
 const ROOT: Inherited = { flip: null, inRaster: false };
 
@@ -179,6 +194,18 @@ function readControl(el: Element, tag: string): RawControl | undefined {
   return undefined;
 }
 
+let metricsContext: OffscreenCanvasRenderingContext2D | null = null;
+
+/** Ascent + descent of a font (px), as Chrome lays text out; undefined when canvas metrics are unavailable. */
+function contentHeightOf(cs: CSSStyleDeclaration, text: string): number | undefined {
+  metricsContext ??= new OffscreenCanvas(1, 1).getContext('2d');
+  if (!metricsContext) return undefined;
+  metricsContext.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+  const m = metricsContext.measureText(text || 'x');
+  const h = m.fontBoundingBoxAscent + m.fontBoundingBoxDescent;
+  return Number.isFinite(h) && h > 0 ? Math.round(h * 100) / 100 : undefined;
+}
+
 function control(
   kind: RawControl['kind'],
   inputType: string,
@@ -187,12 +214,15 @@ function control(
   el: Element,
 ): RawControl {
   const isPlaceholder = !value && Boolean(placeholder);
+  const text = isPlaceholder ? placeholder : value;
+  const contentHeight = contentHeightOf(getComputedStyle(el), text);
   return {
     kind,
     inputType,
-    text: isPlaceholder ? placeholder : value,
+    text,
     isPlaceholder,
     placeholderColor: isPlaceholder ? getComputedStyle(el, '::placeholder').color : '',
+    ...(contentHeight ? { contentHeight } : {}),
   };
 }
 
@@ -209,7 +239,59 @@ function isIconGlyph(text: string, fontFamily: string): boolean {
   return ICON_FONT_FAMILIES.some((re) => re.test(first));
 }
 
-function collectText(node: Text, cs: CSSStyleDeclaration, flip: Flip | null): RawText | null {
+/**
+ * Where text-overflow: ellipsis cuts this text node (EXT-X-8): the number of characters whose box ends before the
+ * limit (binary search on character rects; along a single line they move monotonically in the line's direction).
+ */
+function ellipsisCut(
+  node: Text,
+  start: number,
+  end: number,
+  rects: RawRect[],
+  cut: EllipsisCut,
+): RawText['ellipsis'] | undefined {
+  if (!rects.length) return undefined;
+  if (lineTops(rects).length > 1) return undefined; // wrapped text: not a one-line ellipsis
+  const first = rects[0]!;
+  const top = Math.min(...rects.map((r) => r.y));
+  const height = Math.max(...rects.map((r) => r.y + r.height)) - top;
+  if (cut.done) return { end: start, rect: { x: first.x, y: top, width: 0, height } };
+  const range = document.createRange();
+  const box = (i: number) => {
+    range.setStart(node, i);
+    range.setEnd(node, i + 1);
+    return range.getBoundingClientRect();
+  };
+  const fits = (i: number) => {
+    const b = box(i);
+    return b.width === 0 || (cut.rtl ? b.left >= cut.limit - 0.5 : b.right <= cut.limit + 0.5);
+  };
+  if (fits(end - 1)) return undefined; // the whole text is visible
+  cut.done = true;
+  let lo = start;
+  let hi = end; // first character that does not fit
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (fits(mid)) lo = mid + 1;
+    else hi = mid;
+  }
+  let k = lo;
+  while (k > start && /\s/.test(node.data[k - 1]!)) k--; // the "…" follows the last visible non-space
+  if (k > start && isLowSurrogate(node.data, k)) k--;
+  if (k <= start) return { end: start, rect: { x: first.x, y: top, width: 0, height } };
+  range.setStart(node, start);
+  range.setEnd(node, k);
+  const v = range.getBoundingClientRect();
+  const x = cut.rtl ? v.left - cut.width : v.left;
+  return { end: k, rect: { x, y: top, width: v.width + cut.width, height } };
+}
+
+function collectText(
+  node: Text,
+  cs: CSSStyleDeclaration,
+  flip: Flip | null,
+  cut?: EllipsisCut,
+): RawText | null {
   const whiteSpace = cs.whiteSpace;
   const text = node.nodeValue ?? '';
   const collapses = whiteSpace === 'normal' || whiteSpace === 'nowrap' || whiteSpace === 'pre-line';
@@ -248,6 +330,13 @@ function collectText(node: Text, cs: CSSStyleDeclaration, flip: Flip | null): Ra
       flip,
     });
     return raw;
+  }
+  if (cut) {
+    const e = ellipsisCut(node, start, end, rects, cut);
+    if (e) {
+      raw.ellipsis = e;
+      return raw; // one line, cut: no line ranges needed
+    }
   }
   const lines = collectLines(node, text, start, end, rects, collapses);
   if (lines) raw.lines = lines;
@@ -414,8 +503,24 @@ function collectElement(el: Element, inherited: Inherited): RawElement | null {
   const before = hasVisiblePseudo(el, '::before');
   const after = hasVisiblePseudo(el, '::after');
   if (before || after) raw.pseudo = { before, after };
-  if (cs.textOverflow === 'ellipsis' && el.scrollWidth > el.clientWidth)
+  let cut = inherited.ellipsis && cs.display.startsWith('inline') ? inherited.ellipsis : undefined;
+  if (cs.textOverflow === 'ellipsis' && el.scrollWidth > el.clientWidth) {
     raw.ellipsisTruncated = true;
+    // The line is cut at the content-box edge on the line's end side, with room left for "…".
+    const r = el.getBoundingClientRect();
+    const rtl = cs.direction === 'rtl';
+    metricsContext ??= new OffscreenCanvas(1, 1).getContext('2d');
+    let width = 0;
+    if (metricsContext) {
+      metricsContext.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+      width = metricsContext.measureText('…').width;
+    }
+    const edge = rtl
+      ? r.left + (parseFloat(cs.borderLeftWidth) || 0) + (parseFloat(cs.paddingLeft) || 0)
+      : r.right - (parseFloat(cs.borderRightWidth) || 0) - (parseFloat(cs.paddingRight) || 0);
+    cut = { rtl, limit: rtl ? edge + width : edge - width, width, done: false };
+  }
+  if (cut) down.ellipsis = cut; // inline descendants share the line (block ones start their own)
 
   // Form controls render their value, not their DOM children (<option>, textarea default text); <input> is void.
   if (tag === 'select' || tag === 'textarea' || tag === 'input') return raw;
@@ -425,7 +530,7 @@ function collectElement(el: Element, inherited: Inherited): RawElement | null {
       const c = collectElement(child as Element, down);
       if (c) children.push(c);
     } else if (child.nodeType === Node.TEXT_NODE) {
-      const t = collectText(child as Text, cs, flip);
+      const t = collectText(child as Text, cs, flip, cut);
       if (t) children.push(t);
     }
   }

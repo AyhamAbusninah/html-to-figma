@@ -441,7 +441,12 @@ describe('replaced content, controls, warnings', () => {
   });
 
   it('form controls: value text in the content box; password masked even if the collector failed to (EXT-X-6/7)', () => {
-    const input = (text: string, inputType: string, isPlaceholder = false) =>
+    const input = (
+      text: string,
+      inputType: string,
+      isPlaceholder = false,
+      contentHeight?: number,
+    ) =>
       el(
         'input',
         rect(0, 0, 200, 40),
@@ -459,13 +464,19 @@ describe('replaced content, controls, warnings', () => {
             text,
             isPlaceholder,
             placeholderColor: 'rgb(156, 163, 175)',
+            ...(contentHeight ? { contentHeight } : {}),
           },
         },
       );
-    const doc = build(page([input('secret-123', 'password'), input('Search…', 'search', true)]));
+    const doc = build(
+      page([input('secret-123', 'password', false, 18), input('Search…', 'search', true)]),
+    );
     const texts = all(doc.root).filter((n) => n.type === 'TEXT') as TextNode[];
     expect(texts.map((t) => t.characters)).toEqual(['••••••••••', 'Search…']);
-    expect(texts[0]!.rect).toMatchObject({ x: 11, y: 10, height: 20 });
+    // The font's content area (measured 18 px) is centered in the 40 px box; line-height 20px plays no part.
+    expect(texts[0]!.rect).toMatchObject({ x: 11, y: 11, height: 18 });
+    // Without a measurement: 1.2 × font size (16 px → 19.2).
+    expect(texts[1]!.rect).toMatchObject({ x: 11, y: 10.4, height: 19.2 });
     expect(texts[1]!.style.color).toEqual({ r: 0.6118, g: 0.6392, b: 0.6863, a: 1 });
     expect(JSON.stringify(doc)).not.toContain('secret-123');
   });
@@ -694,5 +705,63 @@ describe('page effects: clip-path inset, blended elements, mirroring (EXT-V-10, 
     expect(
       codes([el('span', rect(0, 0, 24, 24), flipped, [text('Back', rect(0, 0, 30, 20))])]),
     ).toContain('TRANSFORM_UNSUPPORTED');
+  });
+});
+
+describe('text-overflow: ellipsis and textarea text (EXT-X-8, EXT-X-6)', () => {
+  it('a cut text node becomes "visible part…" in the visible box; text past the edge is dropped; no warning', () => {
+    const doc = build(
+      page([
+        el(
+          'p',
+          rect(0, 0, 260, 24),
+          { 'text-overflow': 'ellipsis', 'white-space': 'nowrap', 'overflow-x': 'hidden' },
+          [
+            {
+              ...text('This single line is far too long ', rect(0, 2, 300, 20)),
+              ellipsis: { end: 26, rect: rect(0, 2, 258, 20) },
+            },
+            {
+              ...text('hidden', rect(300, 2, 50, 20)),
+              ellipsis: { end: 0, rect: rect(300, 2, 0, 20) },
+            },
+          ],
+          { ellipsisTruncated: true },
+        ),
+      ]),
+    );
+    const texts = all(doc.root).filter((n) => n.type === 'TEXT') as TextNode[];
+    expect(texts.map((t) => t.characters)).toEqual(['This single line is far to…']);
+    expect(texts[0]!.rect).toMatchObject({ x: 0, y: 2, width: 258, height: 20 });
+    expect(doc.meta.warnings.map((w) => w.code)).not.toContain('TEXT_ELLIPSIS_NOT_APPLIED');
+    // Without the collector's cut, the warning stays.
+    const plain = build(
+      page([
+        el('p', rect(0, 0, 260, 24), {}, [text('long', rect(0, 2, 300, 20))], {
+          ellipsisTruncated: true,
+        }),
+      ]),
+    );
+    expect(plain.meta.warnings.map((w) => w.code)).toContain('TEXT_ELLIPSIS_NOT_APPLIED');
+  });
+
+  it('textarea text starts at the top (one line too), not centered like an input', () => {
+    const area = (t: string) =>
+      el('textarea', rect(0, 0, 300, 100), { 'line-height': '24px', 'padding-top': '8px' }, [], {
+        control: {
+          kind: 'textarea',
+          inputType: '',
+          text: t,
+          isPlaceholder: false,
+          placeholderColor: '',
+          contentHeight: 20,
+        },
+      });
+    const [one, two] = [area('Write a comment…'), area('Line one\nLine two')].map(
+      (a) => all(build(page([a])).root).find((n) => n.type === 'TEXT') as TextNode,
+    );
+    // First line: padding 8 + half-leading (24 − 20) / 2 = 10.
+    expect(one!.rect).toMatchObject({ y: 10, height: 20 });
+    expect(two!.rect).toMatchObject({ y: 10, height: 44 });
   });
 });

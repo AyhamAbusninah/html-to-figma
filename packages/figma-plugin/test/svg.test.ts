@@ -293,3 +293,18 @@ describe('titleCase (text-transform: capitalize)', () => {
     expect(titleCase('\u200Fحقائب bags')).toBe('\u200Fحقائب Bags'); // scripts without case unchanged
   });
 });
+
+describe('hard line breaks', () => {
+  it('text with line feeds becomes one tspan per line (Figma turns a line feed into a space)', () => {
+    const t = text(
+      'n9',
+      { x: 10, y: 10, width: 200, height: 40 },
+      'First line\nSecond line',
+      2,
+      style({ lineHeight: 20 }),
+    );
+    const { svg } = planToSvg(buildPlan(doc([t]), MOCK_FONTS));
+    expect(svg).toMatch(/<tspan[^>]*>First line<\/tspan><tspan[^>]*>Second line<\/tspan>/);
+    expect(svg).not.toContain('First line\nSecond');
+  });
+});

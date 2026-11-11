@@ -215,10 +215,12 @@ export function planToSvg(plan: RenderPlan, options: SvgOptions = {}): SvgResult
     stats.texts++;
     const { weight, italic } = styleToCss(n.font.style);
     const pageLines = n.autoResize === 'HEIGHT' ? options.lines?.(n.sourceId) : undefined;
-    // Each line becomes its own Figma text layer, so each gets the planner's direction mark (PLG-RTL-2).
-    let lines: readonly string[] = pageLines?.map((l) => withDirectionMark(l, n.direction)) ?? [
-      n.characters,
-    ];
+    // Each line becomes its own Figma text layer, so each gets the planner's direction mark (PLG-RTL-2). Text with
+    // hard line breaks (textarea values, white-space: pre) is split on them: Figma's SVG import turns a line feed
+    // into a space (spikes/figma-svg/README.md, Phase 2 findings).
+    let lines: readonly string[] = (pageLines ?? n.characters.split('\n')).map((l) =>
+      withDirectionMark(l, n.direction),
+    );
     if (n.autoResize === 'HEIGHT' && lines.length < 2)
       skipped.add('some line breaks unknown (one long line)');
     if (n.textCase === 'UPPER') lines = lines.map((l) => l.toUpperCase());
