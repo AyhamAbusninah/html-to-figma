@@ -85,6 +85,16 @@ Board `media.html?board=editing` (`editing.mjs` → `out/editing.json`). Round 1
 | P5 | HTML in `<foreignObject>` | ❌ dropped entirely |
 | N | `<g id>`/`<text id>` with spaces, "·" and Arabic ("Card · New arrivals", "زر · أضف إلى السلة") | ✅ kept exactly as layer names |
 
-Round 2 (Q1–Q5: U+2028/U+2029 separators inside one tspan, with line-height hints) needs a user paste: the MCP
-Starter quota ran out after round 1.
+Round 2 (user's Ctrl+V paste, read back with the Figma REST API, node 31:7778): U+2028 and U+2029 inside one tspan
+are **stripped** (one 843 px line, no separator left in `characters`), and no line-height hint is read
+(`style="line-height"`, a `line-height` attribute, the `font` shorthand): line height stays the font's intrinsic
+value (Inter 16 → 19.36 px, Tajawal 18 → 21.6 px).
+
+**Conclusion:** Figma's SVG import cannot create a multi-line TEXT layer. Copy to Figma keeps one TEXT per line,
+grouped per paragraph (P0). A real multi-line paragraph needs the plugin route (figma.createText) or Figma's
+own capture path (CB-2).
+
+Measuring without the MCP quota: a read-only personal access token (File content: read) lets
+`GET https://api.figma.com/v1/files/<key>/nodes?ids=<id>` return every pasted layer (type, characters, box,
+line height); the token lives in a local file, never in the repo or the conversation.
 

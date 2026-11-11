@@ -54,3 +54,7 @@ past entries. Add new entries at the bottom, under a `## YYYY-MM-DD` heading for
 - **What changed:** Phase 2 start (branch feat/easier-editing): readable layer names from HTML semantics only (tag, ARIA role/label, alt/title, input type, visible text, readable class/id; hashed and utility classes skipped), e.g. "Button · Add to cart", "Nav · Main menu", "Image · Leather tote", "Product card". The CSS-style name moves to `domPath` (already optional in schema v1). Paragraph spike board: line feeds, dy, inline-size and foreignObject all fail in Figma's SVG import; separator test pending a paste.
 - **Hooks/Dependencies updated:** RawElement.attrs (role, aria-label, alt, title, type, img src) read by the collector; every element-derived node now sets domPath; tests that matched CSS names now match domPath. Schema unchanged.
 
+- **Feature/File modified:** `spikes/figma-svg/README.md`
+- **What changed:** Paragraph spike round 2 (user paste, read via Figma REST API): U+2028/U+2029 are stripped and line-height hints ignored, so Figma's SVG import cannot make a multi-line TEXT. Decision: Copy to Figma keeps grouped line layers.
+- **Hooks/Dependencies updated:** None in code. New measurement channel for real-Figma checks: REST API with a read-only personal access token kept in a local file.
+
