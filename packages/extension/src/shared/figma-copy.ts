@@ -8,9 +8,13 @@ import { KNOWN_FIGMA_FONTS } from '@h2f/figma-plugin/known-figma-fonts';
 import { planToSvg, type SvgResult } from '@h2f/figma-plugin/svg';
 import { stylesBoardSvg, type StylesBoardResult } from '@h2f/figma-plugin/styles';
 
-export function figmaSvg(doc: CaptureDocument, textLines: Record<string, string[]>): SvgResult {
+export function figmaSvg(
+  doc: CaptureDocument,
+  textLines: Record<string, string[]>,
+  matchLetterSpacing = false,
+): SvgResult {
   const plan = buildPlan(doc, KNOWN_FIGMA_FONTS);
-  return planToSvg(plan, { lines: (id) => textLines[id] });
+  return planToSvg(plan, { lines: (id) => textLines[id], matchLetterSpacing });
 }
 
 /** The page's colors and text styles as a board to paste next to the page (Phase 2). */

@@ -200,6 +200,8 @@ for (const variant of Object.keys(VARIANTS) as Variant[]) {
             w.__copied = [];
             navigator.clipboard.writeText = async (t: string) => void w.__copied.push(t);
           });
+          // "Match letter spacing" is on by default (hair spaces; Figma's SVG import has no letter-spacing).
+          await expect(popup.locator('#matchSpacing')).toBeChecked();
           await popup.locator('#copyFigma').click();
           await expect(popup.locator('#figmaNote')).toContainText('In Figma: click the canvas');
           const svg = await popup.evaluate(() => {
@@ -224,6 +226,15 @@ for (const variant of Object.keys(VARIANTS) as Variant[]) {
                 (t) => /[؀-ۿ]/.test(t.textContent ?? '') && t.getAttribute('text-anchor') === 'end',
               ).length,
               direction: texts.filter((t) => t.hasAttribute('direction')).length,
+              // Spaced text ("· tracking Npx" layers) carries hair spaces; Arabic never does (EXT-RTL-5).
+              tracked: texts.filter((t) => / · tracking \d/.test(t.id)).length,
+              trackedWithoutHair: texts.filter(
+                (t) => / · tracking \d/.test(t.id) && !(t.textContent ?? '').includes('\u200A'),
+              ).length,
+              arabicHair: texts.filter(
+                (t) =>
+                  /[؀-ۿ]/.test(t.textContent ?? '') && (t.textContent ?? '').includes('\u200A'),
+              ).length,
               psFonts: texts.every((t) =>
                 /^[^,\s]+-[^,\s]+, /.test(t.getAttribute('font-family') ?? ''),
               ),
@@ -237,8 +248,25 @@ for (const variant of Object.keys(VARIANTS) as Variant[]) {
             first: 'Background',
             direction: 0,
             psFonts: true,
+            trackedWithoutHair: 0,
+            arabicHair: 0,
           });
+          expect(svg.tracked).toBeGreaterThan(0);
           expect(svg.texts).toBeGreaterThan(5);
+          // Unticked: clean text, no hidden characters (the choice is remembered for the next copy).
+          await popup.locator('#matchSpacing').uncheck();
+          await popup.locator('#copyFigma').click();
+          await expect
+            .poll(() =>
+              popup.evaluate(() => (window as unknown as { __copied: string[] }).__copied.length),
+            )
+            .toBe(2);
+          expect(
+            await popup.evaluate(() =>
+              (window as unknown as { __copied: string[] }).__copied[1]!.includes('\u200A'),
+            ),
+          ).toBe(false);
+          await popup.locator('#matchSpacing').check();
           if (fixture === 'rtl-arabic.html') expect(svg.arabicRight).toBeGreaterThan(20);
 
           // Styles board (Phase 2): a second, separate SVG with named color swatches and text-style samples.
@@ -246,7 +274,7 @@ for (const variant of Object.keys(VARIANTS) as Variant[]) {
           await expect(popup.locator('#figmaNote')).toContainText('Copied the styles board');
           const board = await popup.evaluate(() => {
             const copied = (window as unknown as { __copied: string[] }).__copied;
-            const xml = new DOMParser().parseFromString(copied[1] ?? '', 'image/svg+xml');
+            const xml = new DOMParser().parseFromString(copied[2] ?? '', 'image/svg+xml');
             const ids = [...xml.querySelectorAll('[id]')].map((e) => e.getAttribute('id') ?? '');
             return {
               copies: copied.length,
@@ -255,7 +283,7 @@ for (const variant of Object.keys(VARIANTS) as Variant[]) {
               textStyles: ids.filter((i) => i.startsWith('Text style · ')).length,
             };
           });
-          expect(board).toMatchObject({ copies: 2, wellFormed: true });
+          expect(board).toMatchObject({ copies: 3, wellFormed: true });
           expect(board.colors).toBeGreaterThan(2);
           expect(board.textStyles).toBeGreaterThan(1);
         }

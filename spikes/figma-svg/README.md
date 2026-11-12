@@ -111,7 +111,18 @@ tracking: on the page it is 362 px wide, without tracking 284 px.
 | T2 | `<style>.ls6{letter-spacing:6px}</style>` + `class` | ❌ ignored (but the paste works: a `<style>` element does not break import) |
 | T3 | three U+200A hair spaces between letters | ✅ wider (~400 px; one hair space ≈ 3 px in Inter), but the text then holds invisible characters |
 
-**Conclusion (user's decision: clean text):** Figma's SVG import has no letter-spacing. Copy to Figma keeps clean,
-editable text: spaced text comes in a little tighter, centred and right-aligned lines keep their centre and right
-edge, and the layer is named "<text> · tracking 6px" so the designer can type the value into Figma's field. Hair
-spaces were rejected because retyping loses the spacing and the cursor steps over hidden characters.
+Round 3 (`spacing3.mjs`, one SVG per row, 2026-11-12): Figma's own export form (`style="white-space: pre"` +
+`letter-spacing="…em"`), the same in px, and one `x` per letter on a tspan were all ignored; one tspan per letter
+was merged into one TEXT with the word spaces lost ("THENEWSEASON"). Two hair spaces per gap matched the pink bar
+within ~1 px.
+
+Round 4 (`spacing4.mjs`, hair-space width per font, 50 px, 20 hair spaces, read from the pixels at 100 %): Figma
+draws the font's own U+200A glyph, so the width varies: Inter 0.091 em, Manrope 0.062, Cormorant Garamond 0.118,
+Roboto 0.103, Montserrat 0.100, Playfair Display 0.063. Google Fonts' `text=` subset measured in Chromium gives the
+same values within 0.001 em, so `scripts/gen-hair-spaces.mjs` builds the table for every Google family
+(`packages/figma-plugin/src/config/hair-spaces.ts`; the 1/16 em default for the rest).
+
+**Conclusion (user's decision, 2026-11-12):** the popup's "Match letter spacing" switch, on by default, writes
+letter spacing as hair spaces between characters (count per gap chosen so each letter stays within half a hair
+space of Chrome's position, width from the per-font table). Off: clean text. Both name the layer
+"<text> · tracking 6px". Arabic never gets spacing (EXT-RTL-5).

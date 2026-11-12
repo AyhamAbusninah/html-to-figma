@@ -28,6 +28,16 @@ let json = '';
 let captured: CaptureDocument | undefined;
 let textLines: Record<string, string[]> = {};
 
+/** "Match letter spacing" (on by default), remembered in this browser's popup storage (a per-user convenience). */
+const SPACING_KEY = 'h2f:matchLetterSpacing';
+const matchSpacing = () => ($('matchSpacing') as HTMLInputElement).checked;
+try {
+  const saved = localStorage.getItem(SPACING_KEY);
+  if (saved !== null) ($('matchSpacing') as HTMLInputElement).checked = saved === '1';
+} catch {
+  /* storage unavailable: keep the default */
+}
+
 async function init() {
   [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   $('page').textContent = tab?.title ? `${tab.title}` : (tab?.url ?? 'Unknown page');
@@ -174,7 +184,7 @@ async function copyToFigma() {
   if (!captured) return;
   const note = $('figmaNote');
   try {
-    const { svg, skipped } = figmaSvg(captured, textLines);
+    const { svg, skipped } = figmaSvg(captured, textLines, matchSpacing());
     await Promise.race([
       navigator.clipboard.writeText(svg),
       new Promise((_, reject) => setTimeout(() => reject(new Error('timed out')), 4000)),
@@ -205,6 +215,13 @@ async function copyStyles() {
 $('capture').addEventListener('click', () => void capture());
 $('copyFigma').addEventListener('click', () => void copyToFigma());
 $('copyStyles').addEventListener('click', () => void copyStyles());
+$('matchSpacing').addEventListener('change', () => {
+  try {
+    localStorage.setItem(SPACING_KEY, matchSpacing() ? '1' : '0');
+  } catch {
+    /* not remembered: fine */
+  }
+});
 $('allowImages').addEventListener('click', () => void allowImages());
 $('retry').addEventListener('click', () => show('idle'));
 $('download').addEventListener('click', () => void download());

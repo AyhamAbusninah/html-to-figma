@@ -3,7 +3,14 @@ import { describe, expect, it } from 'vitest';
 import type { CaptureDocument, FrameNode, TextNode } from '@h2f/schema';
 import { minimal } from '../../schema/test/samples.ts';
 import { buildPlan } from '../src/plan/plan.ts';
-import { fontFamilyList, planToSvg, styleToCss, titleCase } from '../src/svg/svg.ts';
+import {
+  hairSpaceEm,
+  fontFamilyList,
+  planToSvg,
+  spaceLetters,
+  styleToCss,
+  titleCase,
+} from '../src/svg/svg.ts';
 import { MOCK_FONTS } from './figma-mock.ts';
 
 const ink = { r: 0.0667, g: 0.0667, b: 0.0667, a: 1 };
@@ -376,5 +383,67 @@ describe('letter spacing (Figma SVG import drops it)', () => {
     const { svg, skipped } = planToSvg(buildPlan(doc([card]), MOCK_FONTS));
     expect(svg).not.toMatch(/<text id=/);
     expect(skipped.join()).not.toContain('letter spacing');
+  });
+});
+
+describe('Match letter spacing (hair spaces, the only spacing Figma keeps)', () => {
+  const H = '\u200A';
+  const count = (s: string) => [...s].filter((c) => c === H).length;
+
+  it('puts hair spaces between letters so each letter stays within half a hair space of Chrome', () => {
+    const size = 32;
+    const hair = hairSpaceEm('Inter') * size; // ≈ 2.9 px
+    const out = spaceLetters('THE NEW SEASON', 6, hair);
+    expect(out.replace(/\u200A/g, '')).toBe('THE NEW SEASON');
+    // Walk the output: before the i-th letter there must be ≈ i × 6 px of hair spaces (error ≤ half a hair).
+    let placed = 0;
+    let letter = 0;
+    for (const c of out) {
+      if (c === H) placed++;
+      else expect(Math.abs(placed * hair - letter++ * 6)).toBeLessThanOrEqual(hair / 2 + 1e-9);
+    }
+    expect(count(out)).toBe(Math.round((13 * 6) / hair)); // total width matches the page
+  });
+
+  it('keeps graphemes and a leading direction mark whole; no spacing when ls ≤ 0', () => {
+    expect(spaceLetters('\u200Eé👍🏽a', 6, 3).startsWith('\u200Eé')).toBe(true);
+    expect(spaceLetters('\u200Eé👍🏽a', 6, 3)).toContain('👍🏽');
+    expect(spaceLetters('Tight', -1, 1.5)).toBe('Tight');
+    expect(spaceLetters('Plain', 0, 1.5)).toBe('Plain');
+  });
+
+  it('planToSvg: on → hair spaces, off (default) → clean text; the layer name keeps the clean text', () => {
+    const t = text(
+      's',
+      { x: 0, y: 0, width: 200, height: 40 },
+      'WOMEN',
+      1,
+      style({ fontSize: 11.5, letterSpacing: 2.53 }),
+    );
+    const on = planToSvg(buildPlan(doc([t]), MOCK_FONTS), { matchLetterSpacing: true });
+    const off = planToSvg(buildPlan(doc([t]), MOCK_FONTS));
+    expect(on.svg).toContain('id="WOMEN · tracking 2.53px"');
+    expect(count(on.svg)).toBe(Math.round((4 * 2.53) / (hairSpaceEm('Inter') * 11.5))); // 4 gaps, ≈ 2.3 each
+    expect(on.skipped).toContain('letter spacing (as hair spaces)');
+    expect(count(off.svg)).toBe(0);
+    expect(off.skipped).toContain('letter spacing (value in the layer name)');
+  });
+});
+
+describe("hair space width per font (Figma draws the font's own glyph)", () => {
+  it('matches the widths measured in real Figma Web (spikes/figma-svg spacing4), default 1/16 em', () => {
+    // Real Figma Web, 50 px, 20 hair spaces: Inter 0.091, Manrope 0.062, Cormorant Garamond 0.118, Roboto 0.103,
+    // Montserrat 0.100, Playfair Display 0.063 (±0.001 em reading error).
+    const figma: Record<string, number> = {
+      Inter: 0.091,
+      Manrope: 0.062,
+      'Cormorant Garamond': 0.118,
+      Roboto: 0.103,
+      Montserrat: 0.1,
+      'Playfair Display': 0.063,
+    };
+    for (const [family, em] of Object.entries(figma))
+      expect(Math.abs(hairSpaceEm(family) - em), family).toBeLessThanOrEqual(0.0015);
+    expect(hairSpaceEm('Some Unknown Font')).toBe(0.0625);
   });
 });

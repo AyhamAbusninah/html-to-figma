@@ -24,12 +24,48 @@ import {
   type PlanText,
   type RenderPlan,
 } from '../plan/plan.ts';
+import { DEFAULT_HAIR_SPACE_EM, HAIR_SPACE_EM } from '../config/hair-spaces.ts';
 
 type Radii = NonNullable<PlanBox['radii']>;
 
 export interface SvgOptions {
   /** The page's line breaks for a multi-line text node, by its CaptureDocument id (PlanText.sourceId). */
   lines?: (sourceId: string) => readonly string[] | undefined;
+  /**
+   * Letter spacing as hair spaces (U+200A) between characters, the only form Figma's SVG import keeps
+   * (spikes/figma-svg/README.md, letter-spacing rounds 1–4). Looks like the page; the text then holds invisible
+   * characters. Off: clean text, the value only in the layer name.
+   */
+  matchLetterSpacing?: boolean;
+}
+
+/**
+ * Width of a hair space in Figma, in em, for a font family: Figma draws the font's own glyph (0.035–0.143 em,
+ * measured per family in scripts/gen-hair-spaces.mjs, checked in real Figma Web, spikes/figma-svg spacing4).
+ */
+export const hairSpaceEm = (family: string): number =>
+  HAIR_SPACE_EM[family] ?? DEFAULT_HAIR_SPACE_EM;
+const HAIR = '\u200A';
+const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+
+/**
+ * `line` with hair spaces between its characters so their sum follows `ls` px per gap: each gap gets the number
+ * that keeps the running total closest to gap × ls, so letters stay within half a hair space of Chrome's positions.
+ * `hair` is the hair space's width in px for this font and size.
+ * A leading direction mark stays first. Pure.
+ */
+export function spaceLetters(line: string, ls: number, hair: number): string {
+  if (!(ls > 0) || !(hair > 0)) return line;
+  const mark = /^[\u200e\u200f]/.test(line) ? line[0]! : '';
+  const chars = [...graphemes.segment(line.slice(mark.length))].map((g) => g.segment);
+  let placed = 0;
+  let out = chars[0] ?? '';
+  for (let i = 1; i < chars.length; i++) {
+    const n = Math.max(0, Math.round((i * ls) / hair) - placed);
+    placed += n;
+    out += HAIR.repeat(n) + chars[i];
+  }
+  return mark + out;
 }
 
 export interface SvgResult {
@@ -271,6 +307,7 @@ export function planToSvg(plan: RenderPlan, options: SvgOptions = {}): SvgResult
     // tighter. Its centre (or right edge) stays put; Chrome's box also holds the spacing after the last letter, so
     // the anchor moves back by that half (or whole) gap. The value goes into the layer name instead.
     const ls = n.letterSpacing.value;
+    const spaced = ls > 0 && options.matchLetterSpacing === true;
     const x =
       n.anchor === 'right'
         ? ax + n.width - ls
@@ -294,12 +331,16 @@ export function planToSvg(plan: RenderPlan, options: SvgOptions = {}): SvgResult
     // Figma puts the box top at y - font-size, so y = line top + font-size lands each box on its captured top.
     const body = lines
       .map(
-        (l, i) => `<tspan x="${num(x)}" y="${num(ay + i * pitch + n.fontSize)}">${esc(l)}</tspan>`,
+        (l, i) =>
+          `<tspan x="${num(x)}" y="${num(ay + i * pitch + n.fontSize)}">${esc(spaced ? spaceLetters(l, ls, hairSpaceEm(n.font.family) * n.fontSize) : l)}</tspan>`,
       )
       .join('');
     // Single line: no id, so Figma names the layer after its text. Several lines become a group named by line 1.
     // Spaced text is named "<text> · tracking 6px" so the designer can type the value into Figma's field.
-    if (ls) skipped.add('letter spacing (value in the layer name)');
+    if (ls)
+      skipped.add(
+        spaced ? 'letter spacing (as hair spaces)' : 'letter spacing (value in the layer name)',
+      );
     const tracking = ls ? ` · tracking ${num(ls)}px` : '';
     const name =
       L > 1 || ls
