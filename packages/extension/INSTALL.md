@@ -59,6 +59,13 @@ The extension sends nothing anywhere. The file stays on your machine.
 - **Form fields:** text inside inputs, selects and buttons sits where it does on the page (it was a few pixels high);
   textarea text starts at the top and keeps its line breaks.
 - **"…" truncation:** text the page cuts with an ellipsis comes in as the visible part followed by "…", editable.
+- **Google fonts kept:** pages using any Google font (Manrope, Jost, Cormorant Garamond…) keep it in Figma with the
+  exact weight, instead of falling back to Inter.
+- **Letter spacing:** Figma's paste ignores letter spacing, so **Match letter spacing** (on by default, under Copy to
+  Figma) recreates it with invisible hair spaces sized for each font. Untick it for clean text that is easier to
+  retype. Spaced layers are named with their value, e.g. "THE NEW SEASON · tracking 5.88px".
+- **Videos and canvases** that read back blank (hardware-decoded video, WebGL) use the poster or a screenshot instead
+  of an empty image. Thin outlines drawn with `box-shadow` (outlined buttons, focus rings) come in as borders.
 
 ## Changes in 0.4.0
 
@@ -94,7 +101,10 @@ The extension sends nothing anywhere. The file stays on your machine.
   layer.
 - Images taller than four windows or wider than the window can't be cropped from screenshots; allow images from other
   sites to download them instead.
-- Carousels and scroll-linked effects are copied as they look at the top of the page.
+- Carousels and scroll-linked effects are copied as they look at the top of the page. Hover states, open menus and
+  popups aren't captured yet.
+- Sections sized from the window (e.g. a hero as tall as the screen) keep the size of the window you captured in.
+- With **Match letter spacing** on, spaced text contains invisible hair spaces: retyping a word removes its spacing.
 - Blocks that use CSS blend modes come in as pictures, not editable layers.
 - Pages Chrome protects can't be captured: `chrome://` pages, the Chrome Web Store, the built-in PDF viewer.
   Local `file://` pages need **Details → Allow access to file URLs** on the extension card.
